@@ -1,0 +1,218 @@
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background-image: linear-gradient(to right, #6100fd, #2b2d9e);
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  max-width: 900px;
+  margin: 60px auto;
+  padding: 100px;
+  background: rgb(255, 255, 255);
+  border-radius: 12px;
+  box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.logo {
+  width: 95px;
+  height: 95px;
+  border-radius: 10px;
+  margin-right: 15px;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+}
+
+h1 {
+  color: #444;
+  font-size: 1.8rem;
+  font-weight: bold;
+}
+
+#buscar {
+  width: 95%;
+  padding: 20px 10px;
+  font-size: 16px;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  transition: border-color 0.3s;
+  margin-top: 5%;
+}
+
+#buscar:focus {
+  outline: none;
+  border-color: #329c2f;
+}
+
+#resultados > div {
+  background-color: #f0f0ff;
+  padding: 12px 16px;
+  margin: 8px 0;
+  border-left: 5px solid #1e258b;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+#resultados > div:hover {
+  background-color: #e4e4ff;
+}
+
+h2 {
+  margin-top: 30px;
+  color: #333;
+}
+
+#lista {
+  list-style: none;
+  padding: 0;
+}
+
+#lista li {
+  padding: 10px;
+  border-bottom: 1px solid #ccc;
+}
+
+/* Modal estilo*/
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: none;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  background: white;
+  padding: 30px;
+  border-radius: 10px;
+  width: 300px;
+  text-align: center;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+}
+
+.modal-content input {
+  width: 100%;
+  padding: 10px;
+  margin: 15px 0;
+  font-size: 16px;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+}
+
+.modal-buttons button {
+  padding: 10px 20px;
+  margin: 5px;
+  border: none;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+#btnAgregarCantidad {
+  background-color: #7d3cff;
+  color: white;
+}
+
+#btnAgregarCantidad:hover {
+  background-color: #5a29cc;
+}
+
+#btnCancelarModal {
+  background-color: #ddd;
+}
+
+#btnCancelarModal:hover {
+  background-color: #bbb;
+}
+
+#btnImprimir{
+  background-color: #a328a7;
+  color: white;
+  width: 20%;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+}
+#btnImprimir:hover {
+  background-color: #8a1f8a;
+}
+
+.inventario {
+  margin-left: 8.5rem;
+}
+
+.btn-inventario {
+  background-color: #8a1f8a;
+  color: rgb(255, 255, 255);
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 1rem;
+  font-weight: bold;
+  box-shadow: 2 4px 8px rgba(0, 0, 0, 0.1);
+  display: inline-block;
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-inventario:hover {
+  background-color: #6f1a6f;
+}
+
+@keyframes rebote {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-6px); }
+  100% { transform: translateY(0); }
+}
+
+.btn-inventario:hover {
+  animation: rebote 0.4s ease;
+}
+
+.orden-del-dia {
+  margin-left: 4rem;
+}
+
+.btn-orden {
+  background-color: #8a1f8a;
+  color: rgb(255, 255, 255);
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 1rem;
+  font-weight: bold;
+  box-shadow: 2 4px 8px rgba(0, 0, 0, 0.1);
+  display: inline-block;
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-orden:hover {
+  background-color: #6f1a6f;
+}
+
+@keyframes rebote {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-6px); }
+  100% { transform: translateY(0); }
+}
+
+.btn-orden:hover {
+  animation: rebote 0.6s ease;
+}

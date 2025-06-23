@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario-okproducciones</title>
+    <link rel="stylesheet" href="/css/style-inventario.css">
+
+</head>
+<body>
+  <div class="container">
+    
+    <!-- ENCABEZADO -->
+    <div class="header">
+      <img src="/img/logo.jpg" alt="Logo de la empresa" class="logo">
+      <h1>Inventario</h1>
+
+      <!-- VOLVER A MENU -->
+      <div class="volver-menu">
+        <a class="btn-volver" href="/html/index.html">Volver</a>
+      </div>
+    </div>
+
+    <!-- BÚSQUEDA -->
+    <div class="search-box">
+      <input type="text" id="buscar" placeholder="Buscar producto..." />
+    <h1>Listado</h1>
+    <div id="lista"></div>
+    </div>
+
+    <!-- RESULTADOS -->
+    <div id="resultados" class="resultados"></div>
+
+    <!-- LISTA DE ÍTEMS SELECCIONADOS -->
+    <div class="lista">
+      <h2>Lista seleccionada</h2>
+      <ul id="lista"></ul>
+      <button id="btnImprimir">Imprimir lista</button>
+    </div>
+
+  </div>
+  <script src="/js/logica.js"></script>
+</body>
+</html>
+
+<script>
+   fetch('http://localhost:3000/api/productoSubproceso')
+      .then(res => res.json())
+      .then(data => {
+        const lista = document.getElementById('lista');
+        const agrupado = {};
+        // Agrupar por subproceso
+        data.forEach(item => {
+          if (!agrupado[item.subproceso]) {
+            agrupado[item.subproceso] = [];
+          }
+          agrupado[item.subproceso].push(item);
+        });
+
+        for (const subproceso in agrupado) {
+          const liSubproceso = document.createElement('li');
+          liSubproceso.innerHTML = `<strong>${subproceso}</strong>`;
+
+          const ulProductos = document.createElement('ul');
+
+          agrupado[subproceso].forEach(item => {
+            const liProducto = document.createElement('li');
+            liProducto.textContent = `${item.producto} - Cantidad: ${item.cantidad}`;
+            ulProductos.appendChild(liProducto);
+          });
+
+          liSubproceso.appendChild(ulProductos);
+          lista.appendChild(liSubproceso);
+        }
+      })
+      .catch(error => {
+        console.error('Error al obtener los datos:', error);
+      });
+  </script>
