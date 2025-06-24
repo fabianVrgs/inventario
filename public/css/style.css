@@ -1,6 +1,6 @@
 body {
   font-family: 'Segoe UI', sans-serif;
-  background-image: linear-gradient(to right, #6100fd, #2b2d9e);
+  background-image: linear-gradient(to right, #ae3592, #363435);
   margin: 0;
   padding: 0;
 }
@@ -47,7 +47,7 @@ h1 {
 
 #buscar:focus {
   outline: none;
-  border-color: #329c2f;
+  border-color:#ae3592;
 }
 
 #resultados > div {
@@ -149,19 +149,23 @@ h2 {
   background-color: #8a1f8a;
 }
 
-.inventario {
-  margin-left: 8.5rem;
+.botones-menu {
+  display: flex;
+  gap: 20px; 
+  margin-left: 15rem; 
 }
+
 
 .btn-inventario {
   background-color: #8a1f8a;
+  width: 160px;
   color: rgb(255, 255, 255);
   padding: 10px 20px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s;
-  font-size: 1rem;
+  font-size: 1.3rem;
   font-weight: bold;
   box-shadow: 2 4px 8px rgba(0, 0, 0, 0.1);
   display: inline-block;
@@ -183,19 +187,17 @@ h2 {
   animation: rebote 0.4s ease;
 }
 
-.orden-del-dia {
-  margin-left: 4rem;
-}
 
 .btn-orden {
   background-color: #8a1f8a;
   color: rgb(255, 255, 255);
   padding: 10px 20px;
+  width: 160px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s;
-  font-size: 1rem;
+  font-size: 1.3rem;
   font-weight: bold;
   box-shadow: 2 4px 8px rgba(0, 0, 0, 0.1);
   display: inline-block;

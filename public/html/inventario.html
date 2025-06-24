@@ -6,78 +6,151 @@
   <link rel="stylesheet" href="/css/style-inventario.css" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </head>
+
 <body>
-  <div class="container">
-    <!-- Encabezado -->
-    <div class="header">
-      <img src="/img/logo.jpg" alt="Logo" class="logo" />
-      <h1>Productos</h1>
+<div class="container">
 
-      <div class="header-buttons">
-        <button class="btn-item">Nuevo Item</button>
+  <div class="header">
+    <div class="header-left">
+      <!-- Botón para volver a la página anterior o al menú -->
+      <a href="index.html" class="btn-volver">&lt;</a>
+
+      <!-- Logo de la empresa -->
+      <div class="logo"> <img class="logo" src="/img/logo.jpg" alt="logo de la empresa"></div>
+
+      <!-- Título principal -->
+      <h1>Inventario</h1>
+    </div>
+
+    <!-- Botones del lado derecho del encabezado -->
+    <div class="header-buttons">
+      <!-- Botón para descargar el inventario en formato CSV -->
+      <button class="btn-secondary" id="btnDescargarCSV">Descargar Cambios</button>
+      <!-- Botón para abrir el modal de "Agregar Nuevo Ítem" -->
+      <button class="btn-primary" id="btnNuevoItem">Agregar Item</button>
+    </div>
+  </div>
+
+  <!-- 🟦 SECCIÓN DE BÚSQUEDA -->
+  <div class="search-section">
+    <div class="search-box">
+      <!-- Input de búsqueda para filtrar productos -->
+      <input type="text" id="buscar" placeholder="Buscar productos...">
+    </div>
+  </div>
+
+  <!-- 🟩 TABLA DE INVENTARIO -->
+  <div class="table-container">
+    <div class="table-header">
+      <!-- Título de la tabla -->
+      <h2 class="table-title">Inventario de Equipos</h2>
+    </div>
+
+    <!-- Tabla con encabezados -->
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Marca</th>
+          <th>Descripción</th>
+          <th>Cantidad</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+
+      <!-- Cuerpo de la tabla donde se cargan los ítems dinámicamente con JS -->
+      <tbody id="tablaInventario">
+        <!-- JS insertará aquí las filas -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 🔶 MODAL PARA AGREGAR O EDITAR UN ÍTEM -->
+<div id="modalItem" class="modal">
+  <div class="modal-content">
+    <!-- Título que cambia dinámicamente: "Agregar" o "Editar" -->
+    <h3 id="modalTitle">Agregar Nuevo Item</h3>
+
+    <!-- Formulario para agregar o editar ítems -->
+    <form id="formItem">
+      <!-- Campo: Nombre -->
+      <div class="form-group">
+        <label for="itemNombre">Nombre del producto:</label>
+        <input type="text" id="itemNombre" required>
       </div>
 
-    </div>
+      <!-- Campo: Marca -->
+      <div class="form-group">
+        <label for="itemMarca">Marca:</label>
+        <input type="text" id="itemMarca" required>
+      </div>
 
-    <!-- Búsqueda -->
-    <div class="caja-busqueda">
-      <input type="text" id="buscar" placeholder="Buscar un ítem..." />
-    </div>
+      <!-- Campo: Descripción -->
+      <div class="form-group">
+        <label for="itemDescripcion">Descripción:</label>
+        <textarea id="itemDescripcion" rows="3" required></textarea>
+      </div>
 
-    <!-- Resultados -->
-    <div id="resultados" class="resultados"></div>
+      <!-- Campo: Cantidad -->
+      <div class="form-group">
+        <label for="itemCantidad">Cantidad:</label>
+        <input type="number" id="itemCantidad" min="0" required>
+      </div>
 
-    <!-- Lista seleccionada -->
-    <div class="lista">
-      <h2>Lista seleccionada</h2>
-      <ul id="lista"></ul>
-      <button id="btnImprimir" class="imprimir">Imprimir lista</button>
-    </div>
+      <div class="form-group">
+        <label for="itemestado">Estado:</label>
+        <select name="estado" id="itemestado" required>
+          <option value="">Elige el estado</option>
+          <option value="Disponible">Disponible</option>
+          <option value="No-disponible">No disponible</option>
+        </select>
+      </div>
 
-
-  <!-- Modal de cantidad -->
-  <div id="modalCantidad" class="modal">
-    <div class="modal-content">
-      <h3 id="modalItemNombre">Nombre del ítem</h3>
-      <label for="cantidadInput">Agregar Cantidad:</label>
-      <input type="number" id="cantidadInput" min="1" value="1" />
+      <!-- Botones del formulario -->
       <div class="modal-buttons">
-        <button id="btnAgregarCantidad">Agregar</button>
-        <button id="btnCancelarModal">Cancelar</button>
+        <!-- Botón para cerrar el modal sin guardar -->
+        <button type="button" class="btn-modal btn-modal-secondary" id="btnCancelar">Cancelar</button>
+        <!-- Botón para guardar el nuevo ítem -->
+        <button type="submit" class="btn-modal btn-modal-primary">Guardar</button>
       </div>
+    </form>
+  </div>
+</div>
+
+    <!-- 🔍 MODAL DE DETALLE DE ITEM -->
+<div id="modalDetalle" class="modal">
+  <div class="modal-content">
+    <h3 style="margin-bottom: 10px; color: #ae3592;">Detalles del Producto</h3>
+
+    <p><strong>Nombre:</strong> <span id="detalleNombre"></span></p>
+    <p><strong>Marca:</strong> <span id="detalleMarca"></span></p>
+    <p><strong>Descripción:</strong> <span id="detalleDescripcion"></span></p>
+    <p><strong>Cantidad:</strong> <span id="detalleCantidad"></span></p>
+    <p><strong>Estado:</strong> <span id="detalleEstado"></span></p>
+
+    <div class="modal-buttons" style="justify-content: center;">
+      <button type="button" class="btn-modal btn-modal-secondary" onclick="cerrarModalDetalle()">Cerrar</button>
     </div>
   </div>
+</div>
 
-  <!-- Modal de eliminación -->
-  <div id="modalEliminar" class="modal">
-    <div class="modal-content">
-      <h3 id="modalEliminarTexto">¿Estás seguro de eliminar este ítem?</h3>
-      <div class="modal-buttons">
-        <button id="btnConfirmarEliminar">Sí, eliminar</button>
-        <button id="btnCancelarEliminar">Cancelar</button>
-      </div>
+    <!-- ❌ MODAL DE CONFIRMACIÓN DE ELIMINACIÓN -->
+<div id="modalEliminar" class="modal">
+  <div class="modal-content">
+    <h3 style="margin-bottom: 15px; color: #c82333;">¿Eliminar ítem?</h3>
+    <p id="textoConfirmacionEliminar">¿Estás seguro de eliminar este ítem?</p>
+    <div class="modal-buttons">
+      <button class="btn-modal btn-modal-secondary" onclick="cerrarModalEliminar()">Cancelar</button>
+      <button class="btn-modal btn-modal-primary" onclick="confirmarEliminar()">Sí, eliminar</button>
     </div>
   </div>
+</div>
 
 
-  <!-- Modal de detalle -->
-  <div id="modalDetalle" class="modal">
-    <div class="modal-content">
-      <h3 id="detalleNombre" style="color: #ae3592;"></h3>
-      <img id="detalleImagen" src="" alt="Imagen del producto" style="max-width: 100%; border-radius: 8px;" />
-      <p id="detalleDescripcion"></p>
-      <p><strong style="color: #ae3592;">Marca:</strong> <span id="detalleMarca"></span></p>
-
-      <button id="btnCerrarDetalle" style="width: 10rem ; color: blueviolet; font-size: 18px; font-family: 'Courier New', Courier, monospace; border-radius: 5px 3px 3px;" onclick="cerrarModalDetalle()">Cerrar</button>
-    </div>
-  </div>
-
-
-
-
-
-
-  <!-- JS -->
-  <script src="/js/edit.js"></script>
+<!-- 🧠 ENLACE AL ARCHIVO DE LÓGICA JS -->
+<script src="/js/edit.js"></script>
 </body>
 </html>
