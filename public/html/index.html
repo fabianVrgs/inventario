@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Ok-producciones-almacen</title>
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 
@@ -14,25 +15,19 @@
     <div class="header">
       <img src="/img/logo.jpg" alt="Logo de la empresa" class="logo">
       <h1>Inventario</h1>
-
-          <!-- NAVEGACIÓN -->
-      <div class="inventario">
-        <a class="btn-inventario" href="/html/inventario.html">Inventario</a>
+      <div class="header-buttons">
+        <div class="botones-menu">
+          <a class="btn-inventario" href="inventario.html">Inventario</a>
+          <a class="btn-orden" href="orden_del_dia.html">Orden del Día</a>
+        </div>
       </div>
-          <!-- ORDEN DEL DIA -->
-      <div class="orden-del-dia">
-        <a class="btn-orden" href="orden_del_dia.html">Orden del dia</a>
-      </div>
-    </div>
-
-
+    </div> 
 
     <!-- BÚSQUEDA -->
     <div class="search-box">
       <input type="text" id="buscar" placeholder="Buscar producto..." />
-    <h1>Listado</h1>
-    <div id="lista"></div>
-      
+      <h1>Listado</h1>
+      <div id="lista"></div>
     </div>
 
     <!-- RESULTADOS -->
@@ -45,7 +40,7 @@
       <button id="btnImprimir">Imprimir lista</button>
     </div>
 
-  </div>
+  </div> 
 
   <!-- MODAL PARA SELECCIONAR CANTIDAD -->
   <div id="modalCantidad" class="modal">
@@ -62,17 +57,17 @@
     </div>
   </div>
 
-  <!-- LÓGICA JS -->
+  <!-- LÓGICA PRINCIPAL -->
   <script src="/js/logica.js"></script>
-</body>
-</html>
- 
- <script>
-   fetch('http://localhost:3000/api/productoSubproceso')
+
+  <!-- 🔁 API: Subprocesos desde backend -->
+  <script>
+    fetch('http://localhost:3000/api/productoSubproceso')
       .then(res => res.json())
       .then(data => {
         const lista = document.getElementById('lista');
         const agrupado = {};
+
         // Agrupar por subproceso
         data.forEach(item => {
           if (!agrupado[item.subproceso]) {
@@ -101,3 +96,5 @@
         console.error('Error al obtener los datos:', error);
       });
   </script>
+</body>
+</html>
