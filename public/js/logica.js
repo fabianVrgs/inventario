@@ -173,6 +173,19 @@ function guardarSeleccion() {
 // descarta lo que ya no existe y se recorta lo que ya no alcanza, en vez de
 // arrastrar una selección imposible hasta el 409 de la impresión.
 function restaurarSeleccion() {
+  // Una orden ya aplicada está consumida: su material salió del almacén y su
+  // descuento ya se hizo. Rehidratarla aquí la metería de nuevo en la siguiente
+  // orden y se descontaría dos veces. La clave `ordenSeleccion` se deja intacta
+  // a propósito, para que Orden del día pueda reimprimir el mismo papel sin
+  // volver a descontar; lo que arranca en limpio es la Principal.
+  let aplicada;
+  try {
+    aplicada = sessionStorage.getItem("ordenAplicada") === "true";
+  } catch (e) {
+    aplicada = false;
+  }
+  if (aplicada) return { ajustada: false };
+
   let crudo;
   try {
     crudo = sessionStorage.getItem("ordenSeleccion");
