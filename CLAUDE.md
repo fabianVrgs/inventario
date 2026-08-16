@@ -99,6 +99,13 @@ invariante: **quien escriba `ordenSeleccion` debe borrar `ordenAplicada`.** Si l
 cambia, la orden es otra y su descuento está pendiente; dejar la clave en `"true"` hace que
 Orden del día imprima sin llamar a `/api/ordenes` — papel por material nunca descontado.
 
+La otra mitad: **la Principal no rehidrata una selección cuya orden ya se aplicó.**
+Si `ordenAplicada` es `"true"` al cargar, arranca en limpio en vez de recuperar
+`ordenSeleccion` — esa orden ya está consumida y volver a mostrarla la
+descontaría dos veces si se reenvía. `ordenSeleccion` se deja en
+`sessionStorage` a propósito pese a esto: es lo que permite a Orden del día
+reimprimir el mismo papel sin volver a llamar a `/api/ordenes`.
+
 **`POST /api/ordenes` es el único camino que escribe stock.** Valida todo antes de tocar
 nada, agrupa las líneas repetidas del mismo producto **antes** de comparar contra el stock
 (si no, dos pedidos que caben por separado dejarían la cantidad en negativo), y aplica los
@@ -113,5 +120,6 @@ descontar si algo no alcanza.
 - La columna `observaciones` de la tabla puente se perdió en la migración 001. Tenía 4
   valores (`blinder`, `parcot`, `bt3`, `array`) que no cuadraban con su producto; siguen
   recuperables desde `db/inventario.db3.bak`.
-- No hay `.gitignore`: `node_modules/` está versionado. Evita commits que arrastren
-  cambios masivos de dependencias.
+- Sí hay `.gitignore`: excluye `node_modules/`, `docs/`, `.claude/`,
+  `.playwright-mcp/` y los `*.bak`. `db/inventario.db3` **sí** se versiona a
+  propósito, porque trae los datos de arranque del almacén.
