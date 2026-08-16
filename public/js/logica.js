@@ -157,9 +157,65 @@ function renderLista() {
   });
 }
 
-// ✅ Guarda la selección en sessionStorage para que "Orden del día" la recoja
+// ✅ Guarda la selección en sessionStorage para que "Orden del día" la recoja.
+// Borrar `ordenAplicada` es parte del contrato, no un extra: esa clave dice
+// "el descuento de ESTA orden ya se hizo". Si la selección cambia, la orden
+// es otra y su descuento está pendiente. Sin este borrado, Orden del día
+// imprimiría papel por material que nunca se descontó.
 function guardarSeleccion() {
   sessionStorage.setItem("ordenSeleccion", JSON.stringify(seleccion));
+  sessionStorage.removeItem("ordenAplicada");
+}
+
+// ✅ Recupera la selección guardada, ajustándola al stock que hay AHORA.
+// La selección puede llevar horas en sessionStorage: un producto pudo
+// desactivarse, borrarse o quedarse sin existencias mientras tanto. Se
+// descarta lo que ya no existe y se recorta lo que ya no alcanza, en vez de
+// arrastrar una selección imposible hasta el 409 de la impresión.
+function restaurarSeleccion() {
+  let crudo;
+  try {
+    crudo = sessionStorage.getItem("ordenSeleccion");
+  } catch (e) {
+    return { ajustada: false };
+  }
+  if (!crudo) return { ajustada: false };
+
+  let datos;
+  try {
+    datos = JSON.parse(crudo);
+  } catch (e) {
+    return { ajustada: false };
+  }
+  if (!Array.isArray(datos)) return { ajustada: false };
+
+  let ajustada = false;
+
+  datos.forEach(item => {
+    if (!item || typeof item.id_producto !== "number" || typeof item.cantidad !== "number") {
+      ajustada = true;
+      return;
+    }
+
+    const producto = productos.find(p => Number(p.id_producto) === item.id_producto);
+    if (!producto) {
+      // Se desactivó o se borró del catálogo desde que se seleccionó.
+      ajustada = true;
+      return;
+    }
+
+    const cantidad = Math.min(item.cantidad, producto.cantidadDisponible);
+    if (cantidad !== item.cantidad) ajustada = true;
+    if (cantidad <= 0) {
+      ajustada = true;
+      return;
+    }
+
+    producto.cantidadDisponible -= cantidad;
+    agregarASeleccion(producto, cantidad);
+  });
+
+  return { ajustada };
 }
 
 // ✅ Cargar datos desde la API al cargar la página
@@ -168,7 +224,19 @@ window.addEventListener("DOMContentLoaded", () => {
     .then(res => res.json())
     .then(data => {
       productos = data.map(p => ({ ...p, cantidadDisponible: p.cantidad }));
+
+      const { ajustada } = restaurarSeleccion();
+
       mostrarResultados();
+      renderLista();
+
+      if (ajustada) {
+        // Sólo se reescribe si algo cambió: guardarSeleccion() borra
+        // `ordenAplicada`, y una recarga sin cambios no debe invalidar
+        // un descuento que ya se aplicó.
+        guardarSeleccion();
+        alert("Algunos productos de tu selección ya no están disponibles y se ajustaron a lo que hay en inventario.");
+      }
     })
     .catch(err => {
       resultados.innerHTML = `<p style="color:red;">Error cargando datos: ${err.message}</p>`;
