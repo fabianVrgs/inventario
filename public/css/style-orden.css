@@ -1,0 +1,287 @@
+/* Estilos de la pantalla "Orden del Día" (formato imprimible).
+   Se inspira en la paleta de style.css (morado/blanco) sin editarlo. */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background-image: linear-gradient(to right, #ae3592, #363435);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* ---------- Barra de acciones (pantalla) ---------- */
+
+.barra-acciones {
+  max-width: 700px;
+  margin: 30px auto 0;
+  padding: 0 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-volver {
+  color: #fff;
+  text-decoration: none;
+  font-weight: bold;
+  background-color: rgba(255, 255, 255, 0.15);
+  padding: 10px 16px;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.btn-volver:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.btn-imprimir {
+  background-color: #a328a7;
+  color: white;
+  padding: 10px 22px;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-imprimir:hover {
+  background-color: #8a1f8a;
+}
+
+.btn-imprimir:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---------- Estado vacío ---------- */
+
+.estado-vacio {
+  max-width: 500px;
+  margin: 100px auto;
+  padding: 40px;
+  background: #fff;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.estado-vacio p {
+  color: #444;
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+}
+
+.btn-volver-vacio {
+  display: inline-block;
+  background-color: #a328a7;
+  color: #fff;
+  text-decoration: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.btn-volver-vacio:hover {
+  background-color: #8a1f8a;
+}
+
+/* ---------- Aviso de faltantes / errores (409, 400, etc.) ---------- */
+
+.aviso-faltantes {
+  max-width: 700px;
+  margin: 20px auto 0;
+  padding: 16px 20px;
+  background-color: #fff3f3;
+  border-left: 5px solid #c0392b;
+  border-radius: 6px;
+  color: #7a1f1f;
+}
+
+.aviso-faltantes p {
+  margin: 0 0 8px;
+  font-weight: bold;
+}
+
+.aviso-faltantes ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+/* ---------- Hoja / formato imprimible ---------- */
+
+.hoja {
+  max-width: 700px;
+  margin: 30px auto 60px;
+  padding: 50px 60px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.15);
+  color: #222;
+}
+
+.encabezado {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.logo-orden {
+  width: 80px;
+  height: 80px;
+  border-radius: 10px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.titulo-encabezado h1 {
+  margin: 0 0 8px;
+  color: #444;
+  font-size: 1.6rem;
+  letter-spacing: 1px;
+}
+
+.linea-dato {
+  margin: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.etiqueta {
+  font-weight: bold;
+  color: #555;
+}
+
+.valor-impreso {
+  color: #222;
+}
+
+.solo-impresion {
+  display: none;
+}
+
+.campo-editable {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  min-width: 220px;
+}
+
+.campo-editable:focus {
+  outline: none;
+  border-color: #ae3592;
+}
+
+.separador {
+  border: none;
+  border-top: 2px solid #333;
+  margin: 20px 0;
+}
+
+.contenido-areas {
+  min-height: 100px;
+}
+
+.seccion-area {
+  margin-bottom: 18px;
+}
+
+.titulo-area {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  color: #ae3592;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 4px;
+}
+
+.linea-producto {
+  display: flex;
+  align-items: baseline;
+  padding: 3px 0;
+  font-size: 0.98rem;
+}
+
+.nombre-prod {
+  white-space: nowrap;
+}
+
+.puntos {
+  flex: 1;
+  margin: 0 6px;
+  border-bottom: 1px dotted #999;
+  height: 0.8em;
+}
+
+.cantidad-prod {
+  font-weight: bold;
+  min-width: 2.5em;
+  text-align: right;
+}
+
+.pie-firma {
+  display: flex;
+  justify-content: space-between;
+  gap: 30px;
+  margin-top: 30px;
+}
+
+.campo-firma {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.raya-firma {
+  flex: 1;
+  border-bottom: 1px solid #333;
+  height: 1.4em;
+}
+
+/* ---------- Impresión ---------- */
+
+@media print {
+  /* Todo lo que no es el formato desaparece. */
+  .no-imprimir,
+  .barra-acciones,
+  .aviso-faltantes {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    margin: 0;
+  }
+
+  .hoja {
+    box-shadow: none;
+    border-radius: 0;
+    margin: 0;
+    padding: 20px 10px;
+    max-width: 100%;
+  }
+
+  /* Los valores tecleados se ven como texto, no como cajas de formulario. */
+  .campo-editable {
+    display: none;
+  }
+
+  .solo-impresion {
+    display: inline;
+  }
+
+  /* Tamaño carta, vertical. */
+  @page {
+    size: letter portrait;
+    margin: 1.5cm;
+  }
+}

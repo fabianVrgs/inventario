@@ -237,6 +237,16 @@ h1 {
     transform: translateY(-1px);
 }
 
+.btn-toggle {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-toggle:hover {
+    background-color: #545b62;
+    transform: translateY(-1px);
+}
+
 .badge {
     padding: 4px 8px;
     border-radius: 12px;

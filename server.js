@@ -4,10 +4,11 @@ const cors = require('cors');
 const path = require('path');
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // Base de datos SQLite
-const db = new sqlite3.Database('./db/inventario.db3', (err) => {
+const dbPath = process.env.DB_PATH || './db/inventario.db3';
+const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('❌ Error al conectar a la base de datos:', err.message);
   } else {
@@ -18,9 +19,6 @@ const db = new sqlite3.Database('./db/inventario.db3', (err) => {
 // Ruta principal
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/public/html/index.html');
-});
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/public/html/inventario.html');
 });
 
 
@@ -35,35 +33,31 @@ app.use((err, req, res, next) => {
   res.status(500).send('Error interno del servidor');
 });
 
-//Iniciar servidor
-app.listen(port, () => {
-  console.log(`Servidor Express corriendo en http://localhost:${port}`);
-});
-
-// API subproceso
-app.get('/api/productoSubproceso', (req, res) => {
-  const sql = `
-    SELECT 
-      s.nombre AS subproceso,
-      p.nombre AS producto,
-      d.cantidad,
-      d.marca,
-
-    FROM detalle_inventario d
-    JOIN productos p ON d.id_producto = p.id_producto
-    JOIN subprocesos s ON d.id_subproceso = s.id_subproceso
-    ORDER BY s.nombre;
-  `;
-
-  db.all(sql, [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+// Iniciar servidor solo al ejecutar `node server.js`.
+// Al importarse (tests) se exporta la app sin abrir puerto.
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Servidor Express corriendo en http://localhost:${port}`);
   });
-});
+}
 
 // API Read
 app.get('/api/productos', (req, res) => {
-  db.all('SELECT * FROM productos', [], (err, rows) => {
+  const { activo } = req.query;
+
+  let sql = `
+    SELECT p.*, a.nombre AS area
+    FROM productos p
+    LEFT JOIN areas a ON p.id_area = a.id_area
+  `;
+  const params = [];
+
+  if (activo !== undefined) {
+    sql += ' WHERE p.activo = ?';
+    params.push(activo);
+  }
+
+  db.all(sql, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -78,17 +72,29 @@ app.get('/api/productos/:id', (req, res) => {
   });
 });
 
+// Valida los campos comunes de POST/PUT. Devuelve un mensaje de error o null.
+function validarProducto({ nombre, cantidad }) {
+  if (!nombre) {
+    return 'El nombre del producto es obligatorio.';
+  }
+  if (cantidad !== undefined && (typeof cantidad !== 'number' || cantidad < 0)) {
+    return 'La cantidad no puede ser negativa.';
+  }
+  return null;
+}
+
 // API Create
 app.post('/api/productos', (req, res) => {
-  const { nombre, descripcion } = req.body;
+  const { nombre, marca, descripcion, cantidad, id_area } = req.body;
 
-  if (!nombre) {
-    return res.status(400).json({ error: 'El nombre del producto es obligatorio.' });
+  const errorValidacion = validarProducto(req.body);
+  if (errorValidacion) {
+    return res.status(400).json({ error: errorValidacion });
   }
 
-  const sql = `INSERT INTO productos (nombre, descripcion) VALUES (?, ?)`;
+  const sql = `INSERT INTO productos (nombre, marca, descripcion, cantidad, activo, id_area) VALUES (?, ?, ?, ?, 1, ?)`;
 
-  db.run(sql, [nombre, descripcion], function(err) {
+  db.run(sql, [nombre, marca, descripcion, cantidad ?? 0, id_area ?? null], function(err) {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -97,7 +103,10 @@ app.post('/api/productos', (req, res) => {
       mensaje: 'Producto creado exitosamente',
       id: this.lastID,
       nombre,
-      descripcion
+      marca,
+      descripcion,
+      cantidad: cantidad ?? 0,
+      id_area: id_area ?? null,
     });
   });
 });
@@ -105,15 +114,16 @@ app.post('/api/productos', (req, res) => {
 // API Update
 app.put('/api/productos/:id', (req, res) => {
   const id = req.params.id;
-  const { nombre, descripcion } = req.body;
+  const { nombre, marca, descripcion, cantidad, id_area } = req.body;
 
-  if (!nombre) {
-    return res.status(400).json({ error: 'El nombre del producto es obligatorio.' });
+  const errorValidacion = validarProducto(req.body);
+  if (errorValidacion) {
+    return res.status(400).json({ error: errorValidacion });
   }
 
-  const sql = `UPDATE productos SET nombre = ?, descripcion = ? WHERE id_producto = ?`;
+  const sql = `UPDATE productos SET nombre = ?, marca = ?, descripcion = ?, cantidad = ?, id_area = ? WHERE id_producto = ?`;
 
-  db.run(sql, [nombre, descripcion, id], function (err) {
+  db.run(sql, [nombre, marca, descripcion, cantidad ?? 0, id_area ?? null, id], function (err) {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -126,6 +136,121 @@ app.put('/api/productos/:id', (req, res) => {
   });
 });
 
+// API Activar/Desactivar
+app.patch('/api/productos/:id/activo', (req, res) => {
+  const id = req.params.id;
+  const { activo } = req.body;
+
+  const sql = `UPDATE productos SET activo = ? WHERE id_producto = ?`;
+
+  db.run(sql, [activo ? 1 : 0, id], function (err) {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Producto no encontrado' });
+    }
+
+    res.json({ mensaje: 'Estado actualizado correctamente' });
+  });
+});
+
+// API Areas
+app.get('/api/areas', (req, res) => {
+  db.all('SELECT * FROM areas', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// API Ordenes: descuenta stock de forma atómica (todo o nada).
+app.post('/api/ordenes', (req, res) => {
+  const { lineas } = req.body;
+
+  if (!Array.isArray(lineas) || lineas.length === 0) {
+    return res.status(400).json({ error: 'La orden debe incluir al menos una línea.' });
+  }
+
+  for (const linea of lineas) {
+    const { id_producto, cantidad } = linea || {};
+    if (
+      typeof id_producto !== 'number' ||
+      typeof cantidad !== 'number' ||
+      !Number.isInteger(cantidad) ||
+      cantidad <= 0
+    ) {
+      return res.status(400).json({ error: 'Cada línea debe tener id_producto y una cantidad entera positiva.' });
+    }
+  }
+
+  db.serialize(() => {
+    db.run('BEGIN', (errBegin) => {
+      if (errBegin) return res.status(500).json({ error: errBegin.message });
+
+      // Relee las cantidades actuales: nunca confiar en lo que manda el navegador.
+      const ids = lineas.map((l) => l.id_producto);
+      const marcadores = ids.map(() => '?').join(',');
+
+      db.all(
+        `SELECT id_producto, cantidad FROM productos WHERE id_producto IN (${marcadores})`,
+        ids,
+        (errSelect, filas) => {
+          if (errSelect) {
+            return db.run('ROLLBACK', () => res.status(500).json({ error: errSelect.message }));
+          }
+
+          const disponiblePorId = new Map(filas.map((f) => [f.id_producto, f.cantidad]));
+
+          // Un mismo producto puede llegar en varias líneas. Se suman ANTES de
+          // validar: si se comparara línea por línea, dos pedidos que caben por
+          // separado podrían dejar el stock en negativo entre los dos.
+          const pedidoPorId = new Map();
+          for (const { id_producto, cantidad } of lineas) {
+            pedidoPorId.set(id_producto, (pedidoPorId.get(id_producto) || 0) + cantidad);
+          }
+
+          const faltantes = [];
+          for (const [id_producto, pedido] of pedidoPorId) {
+            const disponible = disponiblePorId.has(id_producto) ? disponiblePorId.get(id_producto) : 0;
+            if (!disponiblePorId.has(id_producto) || pedido > disponible) {
+              faltantes.push({ id_producto, pedido, disponible });
+            }
+          }
+
+          if (faltantes.length > 0) {
+            return db.run('ROLLBACK', () => res.status(409).json({ faltantes }));
+          }
+
+          // Un UPDATE por producto, con el total ya sumado.
+          let pendientes = pedidoPorId.size;
+          let fallo = null;
+
+          pedidoPorId.forEach((cantidad, id_producto) => {
+            db.run(
+              'UPDATE productos SET cantidad = cantidad - ? WHERE id_producto = ?',
+              [cantidad, id_producto],
+              (errUpdate) => {
+                if (errUpdate && !fallo) fallo = errUpdate;
+                pendientes -= 1;
+
+                if (pendientes === 0) {
+                  if (fallo) {
+                    return db.run('ROLLBACK', () => res.status(500).json({ error: fallo.message }));
+                  }
+                  db.run('COMMIT', (errCommit) => {
+                    if (errCommit) return res.status(500).json({ error: errCommit.message });
+                    res.json({ mensaje: 'Orden aplicada correctamente' });
+                  });
+                }
+              }
+            );
+          });
+        }
+      );
+    });
+  });
+});
 
 // API Delete
 app.delete('/api/productos/:id', (req, res) => {
@@ -145,3 +270,6 @@ app.delete('/api/productos/:id', (req, res) => {
     res.json({ mensaje: 'Producto eliminado correctamente' });
   });
 });
+// Expuesta para que los tests puedan cerrar la conexión en el teardown.
+app.locals.db = db;
+module.exports = app;
