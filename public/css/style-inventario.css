@@ -387,3 +387,13 @@ h1 {
         min-width: 800px;
     }
 }
+
+/* Fila de un producto desactivado: sigue siendo editable y reactivable,
+   pero se distingue de un vistazo de lo que sí está disponible. */
+.table tbody tr.fila-inactiva {
+    opacity: 0.55;
+}
+
+.table tbody tr.fila-inactiva td strong {
+    text-decoration: line-through;
+}

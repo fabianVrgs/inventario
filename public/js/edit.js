@@ -57,10 +57,13 @@ async function cargarAreas() {
     }
 }
 
-// 🌐 Carga los productos activos desde la API y refresca la tabla
+// 🌐 Carga TODO el catálogo desde la API y refresca la tabla.
+// Sin filtro `?activo=1` a propósito: el CRUD es la única pantalla desde
+// donde se puede reactivar un producto desactivado. Filtrar aquí lo
+// volvería invisible para siempre. El filtro es de la Principal.
 async function cargarProductos() {
     try {
-        const res = await fetch('/api/productos?activo=1');
+        const res = await fetch('/api/productos');
         productos = await manejarRespuesta(res);
         productosFiltrados = [...productos];
         renderizarTabla();
@@ -91,6 +94,7 @@ function renderizarTabla(datos = productosFiltrados) {
     datos.forEach(item => {
         const row = document.createElement('tr');
         const activo = Number(item.activo) === 1;
+        if (!activo) row.classList.add('fila-inactiva');
 
         row.innerHTML = `
             <td>${item.id_producto}</td>
@@ -106,7 +110,9 @@ function renderizarTabla(datos = productosFiltrados) {
                 <div class="actions">
                     <button class="btn-action btn-detail" onclick="verDetalle(${item.id_producto})">👁️</button>
                     <button class="btn-action btn-edit" onclick="editarItem(${item.id_producto})">✏️</button>
-                    <button class="btn-action btn-toggle" onclick="desactivarItem(${item.id_producto})">🔌</button>
+                    <button class="btn-action btn-toggle" title="${
+                          activo ? 'Desactivar' : 'Reactivar'
+                    }" onclick="alternarActivo(${item.id_producto})">${activo ? '🔌' : '⚡'}</button>
                     <button class="btn-action btn-delete" onclick="eliminarItem(${item.id_producto})">🗑️</button>
                 </div>
             </td>
@@ -180,12 +186,21 @@ function cerrarModalDetalle() {
   modalDetalle.style.display = 'none';
 }
 
-// 🔌 Activar/Desactivar un ítem (no lo borra, solo lo saca de la pantalla principal)
-async function desactivarItem(id) {
+// 🔌 Alterna activo/inactivo. No borra nada: `activo` sólo decide si el
+// producto aparece en la Principal. Manda lo contrario de lo que tiene hoy,
+// así el mismo botón sirve para desactivar y para reactivar.
+async function alternarActivo(id) {
     const item = productos.find(i => i.id_producto === id);
     if (!item) return;
 
-    if (!confirm(`¿Desactivar "${item.nombre}"? Dejará de aparecer en el inventario.`)) {
+    const estabaActivo = Number(item.activo) === 1;
+    const nuevoValor = estabaActivo ? 0 : 1;
+
+    const pregunta = estabaActivo
+        ? `¿Desactivar "${item.nombre}"? Dejará de aparecer en la pantalla principal, pero seguirá en el inventario.`
+        : `¿Reactivar "${item.nombre}"? Volverá a aparecer en la pantalla principal.`;
+
+    if (!confirm(pregunta)) {
         return;
     }
 
@@ -193,13 +208,13 @@ async function desactivarItem(id) {
         const res = await fetch(`/api/productos/${id}/activo`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ activo: 0 })
+            body: JSON.stringify({ activo: nuevoValor })
         });
         await manejarRespuesta(res);
-        alert('Item desactivado correctamente');
+        alert(estabaActivo ? 'Item desactivado correctamente' : 'Item reactivado correctamente');
         await cargarProductos();
     } catch (error) {
-        alert('No se pudo desactivar el item: ' + error.message);
+        alert('No se pudo cambiar el estado del item: ' + error.message);
     }
 }
 
