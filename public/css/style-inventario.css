@@ -1,399 +1,527 @@
+/* ============================================================================
+   Pantalla de inventario (CRUD real: alta, edición, activar/desactivar,
+   borrado, export CSV). Requiere base.css cargado antes.
+
+   Contrato con edit.js — no renombrar, lo emite el JS:
+     .no-results, .no-results--error, .fila-inactiva, .badge, .badge-success,
+     .badge-danger, .actions, .btn-action, .btn-detail, .btn-edit,
+     .btn-toggle, .btn-delete
+   Los tres modales se abren con `style.display = "flex"` inline (edit.js:139,
+   144, 181, 186, 231, 237): .modal se queda en `display:none`.
+
+   Prioridad de esta pantalla: escritorio. En móvil no debe romperse, pero la
+   densidad de la tabla se conserva donde hay sitio.
+   ============================================================================ */
+
 body {
-    font-family: 'Segoe UI', sans-serif;
-    background: linear-gradient(to right, #ae3592, #363435);
-    margin: 0;
-    padding: 20px;
-    color: #333;
+  padding: var(--esp-4);
+  background-color: var(--gris-50);
 }
 
 .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    background: white;
-    border-radius: 12px;
-    padding: 30px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  max-width: var(--ancho-tabla);
+  margin: 0 auto;
+  padding: var(--esp-pagina);
+  background: var(--superficie);
+  border-radius: var(--radio-xl);
+  box-shadow: var(--sombra-2);
 }
 
+/* ---------- Encabezado ---------- */
+
 .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 30px;
-    padding-bottom: 20px;
-    border-bottom: 2px solid #f0f0f0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esp-4);
+  margin-bottom: var(--esp-6);
+  padding-bottom: var(--esp-5);
+  border-bottom: 1px solid var(--borde);
 }
 
 .header-left {
-    display: flex;
-    align-items: center;
+  display: flex;
+  align-items: center;
+  gap: var(--esp-4);
 }
 
 .btn-volver {
-    display: inline-block;
-    font-size: 24px;
-    text-decoration: none;
-    color: white;
-    background-color: #ae3592;
-    padding: 10px 18px;
-    border-radius: 50%;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    transition: background 0.3s;
-    font-weight: bold;
-    margin-right: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--objetivo-tactil);
+  height: var(--objetivo-tactil);
+  flex-shrink: 0;
+  font-size: var(--texto-xl);
+  font-weight: var(--peso-negrita);
+  line-height: 1;
+  text-decoration: none;
+  color: var(--morado-600);
+  background-color: var(--morado-50);
+  border-radius: var(--radio-full);
+  transition: background-color var(--trans-media) var(--curva),
+              color var(--trans-media) var(--curva);
 }
 
 .btn-volver:hover {
-    background-color: #5a29cc;
+  background-color: var(--morado-500);
+  color: var(--texto-inverso);
 }
 
 .logo {
-    width: 60px;
-    height: 60px;
-    border-radius: 8px;
-    margin-right: 15px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    background: #ae3592;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-1);
+  flex-shrink: 0;
 }
 
-h1 {
-    color: #333;
-    font-size: 2.2rem;
-    font-weight: bold;
-    margin: 0;
+.header h1 {
+  font-size: var(--texto-3xl);
+  font-weight: var(--peso-negrita);
+  color: var(--gris-900);
 }
 
 .header-buttons {
-    display: flex;
-    gap: 15px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-3);
+}
+
+/* Antes: verde #28a745 (2.7:1 con texto blanco) y azul #007bff (3.1:1).
+   Ninguno llegaba a AA. Ahora la acción principal es la de marca y la
+   secundaria es neutra, que además ordena la jerarquía. */
+.btn-primary,
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-2) var(--esp-5);
+  border-radius: var(--radio-md);
+  font-size: var(--texto-base);
+  font-weight: var(--peso-fuerte);
+  text-decoration: none;
+  transition: background-color var(--trans-media) var(--curva),
+              box-shadow var(--trans-media) var(--curva);
 }
 
 .btn-primary {
-    background-color: #28a745;
-    color: white;
-    padding: 12px 24px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 16px;
-    font-weight: 600;
-    transition: all 0.3s;
-    text-decoration: none;
-    display: inline-block;
+  background-color: var(--morado-500);
+  color: var(--texto-inverso);
 }
 
 .btn-primary:hover {
-    background-color: #218838;
-    transform: translateY(-1px);
+  background-color: var(--morado-600);
+}
+
+.btn-primary:active {
+  background-color: var(--morado-700);
 }
 
 .btn-secondary {
-    background-color: #007bff;
-    color: white;
-    padding: 12px 24px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 16px;
-    font-weight: 600;
-    transition: all 0.3s;
+  background-color: var(--superficie);
+  color: var(--morado-600);
+  box-shadow: inset 0 0 0 1px var(--morado-200);
 }
 
 .btn-secondary:hover {
-    background-color: #0056b3;
-    transform: translateY(-1px);
+  background-color: var(--morado-50);
+  box-shadow: inset 0 0 0 1px var(--morado-300);
 }
+
+/* ---------- Búsqueda ---------- */
 
 .search-section {
-    margin-bottom: 30px;
+  margin-bottom: var(--esp-6);
 }
 
-.search-box {
-    position: relative;
-    max-width: 1100px;
-}
-
-#buscar {
-    width: 100%;
-    padding: 15px 20px;
-    font-size: 16px;
-    border: 2px solid #ddd;
-    border-radius: 8px;
-    transition: border-color 0.3s;
-}
-
-#buscar:focus {
-    outline: none;
-    border-color: #ae3592;
-    box-shadow: 0 0 0 3px rgba(174, 53, 146, 0.1);
-}
+/* ---------- Tabla ---------- */
 
 .table-container {
-    background: white;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-    border: 1px solid #e9ecef;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 .table-header {
-    background: #f8f9fa;
-    padding: 20px;
-    border-bottom: 2px solid #dee2e6;
+  padding: var(--esp-4) var(--esp-5);
+  background: var(--superficie-alt);
+  border-bottom: 1px solid var(--borde);
 }
 
 .table-title {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: #333;
-    margin: 0;
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-fuerte);
+  color: var(--gris-900);
 }
 
 .table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--superficie);
 }
 
 .table thead {
-    background: #343a40;
-    color: white;
+  background: var(--superficie-alt);
+}
+
+.table th {
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-fuerte);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--texto-suave);
+  white-space: nowrap;
 }
 
 .table th,
 .table td {
-    padding: 15px 12px;
-    text-align: left;
-    border-bottom: 1px solid #dee2e6;
+  padding: var(--esp-3) var(--esp-4);
+  text-align: left;
+  border-bottom: 1px solid var(--borde);
 }
 
-.table th {
-    font-weight: 600;
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+.table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .table tbody tr {
-    transition: background-color 0.2s;
-}
-
-.table tbody tr:hover {
-    background-color: #f8f9fa;
+  transition: background-color var(--trans-rapida) var(--curva);
 }
 
 .table tbody tr:nth-child(even) {
-    background-color: #f8f9fa;
+  background-color: var(--gris-50);
 }
 
-.table tbody tr:nth-child(even):hover {
-    background-color: #e9ecef;
+.table tbody tr:hover {
+  background-color: var(--morado-50);
 }
 
-.actions {
-    display: flex;
-    gap: 8px;
+/* La columna ID en cifras tabulares: no baila al ordenar ni al filtrar. */
+.table tbody td:first-child {
+  font-family: var(--fuente-mono);
+  font-size: var(--texto-sm);
+  color: var(--texto-tenue);
 }
 
-.btn-action {
-    padding: 8px 12px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.2s;
-    text-decoration: none;
-    display: inline-block;
+.table tbody td strong {
+  font-weight: var(--peso-fuerte);
+  color: var(--gris-900);
 }
 
-.btn-edit {
-    background-color: #ffc107;
-    color: #212529;
+/* Fila de un producto desactivado: sigue siendo editable y reactivable, pero
+   se distingue de un vistazo. Antes era solo `opacity:.55`, que hunde el
+   contraste del texto por debajo del mínimo; ahora la señal es doble
+   (fondo + tachado) y ninguna depende de la opacidad. */
+.table tbody tr.fila-inactiva {
+  background-color: var(--gris-100);
+  /* --texto-suave y no --texto-tenue: sobre este fondo el tenue se queda en
+     4.4:1, por debajo del mínimo AA. Lo que marca el estado es el fondo y el
+     tachado, no atenuar el texto hasta que cueste leerlo. */
+  color: var(--texto-suave);
 }
 
-.btn-edit:hover {
-    background-color: #e0a800;
-    transform: translateY(-1px);
+.table tbody tr.fila-inactiva td strong {
+  text-decoration: line-through;
+  color: var(--texto-suave);
 }
 
-.btn-delete {
-    background-color: #dc3545;
-    color: white;
+/* ---------- Estados vacío y error de la tabla ---------- */
+
+.no-results {
+  padding: var(--esp-7) var(--esp-4);
+  text-align: center;
+  color: var(--texto-tenue);
 }
 
-.btn-delete:hover {
-    background-color: #c82333;
-    transform: translateY(-1px);
+.no-results--error {
+  color: var(--peligro-texto);
+  background-color: var(--peligro-bg);
+  font-weight: var(--peso-medio);
 }
 
-.btn-detail {
-    background-color: #17a2b8;
-    color: white;
-}
-
-.btn-detail:hover {
-    background-color: #138496;
-    transform: translateY(-1px);
-}
-
-.btn-toggle {
-    background-color: #6c757d;
-    color: white;
-}
-
-.btn-toggle:hover {
-    background-color: #545b62;
-    transform: translateY(-1px);
-}
-
-.badge {
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 600;
-}
+/* ---------- Etiquetas de estado ---------- */
 
 .badge-success {
-    background-color: #d4edda;
-    color: #155724;
-}
-
-.badge-warning {
-    background-color: #fff3cd;
-    color: #856404;
+  background-color: var(--exito-bg);
+  color: var(--exito-texto);
 }
 
 .badge-danger {
-    background-color: #f8d7da;
-    color: #721c24;
+  background-color: var(--peligro-bg);
+  color: var(--peligro-texto);
 }
 
-.no-results {
-    text-align: center;
-    padding: 40px;
-    color: #6c757d;
-    font-style: italic;
+/* ---------- Botones de acción de cada fila ----------
+   Cuatro colores saturados distintos (amarillo, cian, gris, rojo) en una
+   tabla de 8 columnas era ruido y ninguno llegaba a contraste AA. Ahora son
+   botones-icono neutros y solo el destructivo se colorea, y solo al enfocarlo
+   o pasar por encima. */
+
+.actions {
+  display: flex;
+  gap: var(--esp-2);
 }
+
+.btn-action {
+  display: grid;
+  place-items: center;
+  min-width: var(--objetivo-tactil);
+  min-height: var(--objetivo-tactil);
+  padding: 0;
+  color: var(--texto-suave);
+  background-color: transparent;
+  border-radius: var(--radio-md);
+  transition: background-color var(--trans-rapida) var(--curva),
+              color var(--trans-rapida) var(--curva);
+}
+
+.btn-action:hover {
+  background-color: var(--gris-200);
+  color: var(--gris-900);
+}
+
+.btn-detail:hover,
+.btn-edit:hover,
+.btn-toggle:hover {
+  background-color: var(--morado-100);
+  color: var(--morado-700);
+}
+
+.btn-delete:hover {
+  background-color: var(--peligro-bg);
+  color: var(--peligro-fuerte);
+}
+
+/* ---------- Modales ----------
+   `display:none` es contrato con edit.js. El fondo oscuro sigue siendo .modal
+   y .modal-content un hijo estrictamente menor: edit.js cierra comparando
+   `e.target === modal` en los tres modales. */
 
 .modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.5);
-    justify-content: center;
-    align-items: center;
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  padding: var(--esp-4);
+  background-color: rgba(26, 23, 31, .55);
 }
 
 .modal-content {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    width: 90%;
-    max-width: 500px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  width: min(100%, 520px);
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: var(--esp-6);
+  background: var(--superficie);
+  border-radius: var(--radio-xl);
+  box-shadow: var(--sombra-modal);
+  animation: entrada-modal var(--trans-media) var(--curva);
 }
 
-.modal h3 {
-    margin-top: 0;
-    color: #ae3592;
+@keyframes entrada-modal {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+.modal h3,
+.modal-titulo {
+  margin-bottom: var(--esp-4);
+  font-size: var(--texto-xl);
+  font-weight: var(--peso-fuerte);
+  color: var(--morado-600);
+}
+
+.modal-titulo--peligro {
+  color: var(--peligro-fuerte);
+}
+
+/* Modal de detalle: pares etiqueta/valor. */
+.modal-content p {
+  padding: var(--esp-2) 0;
+  border-bottom: 1px solid var(--borde);
+}
+
+.modal-content p:last-of-type {
+  border-bottom: 0;
+}
+
+.modal-content p strong {
+  color: var(--texto-suave);
+  font-weight: var(--peso-medio);
 }
 
 .form-group {
-    margin-bottom: 20px;
+  margin-bottom: var(--esp-5);
 }
 
 .form-group label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 600;
-    color: #333;
+  display: block;
+  margin-bottom: var(--esp-2);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  color: var(--texto-suave);
 }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
-    width: 100%;
-    padding: 12px;
-    border: 2px solid #ddd;
-    border-radius: 6px;
-    font-size: 16px;
-    transition: border-color 0.3s;
-    box-sizing: border-box;
+  width: 100%;
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-3) var(--esp-4);
+  font-size: 16px;
+  color: var(--texto);
+  background-color: var(--superficie);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-md);
+  transition: border-color var(--trans-media) var(--curva),
+              box-shadow var(--trans-media) var(--curva);
+}
+
+.form-group textarea {
+  min-height: 0;
+  resize: vertical;
 }
 
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
-    outline: none;
-    border-color: #ae3592;
+  outline: none;
+  border-color: var(--morado-500);
+  box-shadow: var(--anillo-foco);
 }
 
 .modal-buttons {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-    margin-top: 30px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-3);
+  justify-content: flex-end;
+  margin-top: var(--esp-6);
+}
+
+.modal-buttons--centrado {
+  justify-content: center;
 }
 
 .btn-modal {
-    padding: 12px 24px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.3s;
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-2) var(--esp-5);
+  border-radius: var(--radio-md);
+  font-weight: var(--peso-fuerte);
+  transition: background-color var(--trans-media) var(--curva),
+              box-shadow var(--trans-media) var(--curva);
 }
 
 .btn-modal-primary {
-    background-color: #ae3592;
-    color: white;
+  background-color: var(--morado-500);
+  color: var(--texto-inverso);
 }
 
 .btn-modal-primary:hover {
-    background-color: #8e2a75;
+  background-color: var(--morado-600);
 }
 
 .btn-modal-secondary {
-    background-color: #6c757d;
-    color: white;
+  background-color: var(--gris-100);
+  color: var(--texto);
 }
 
 .btn-modal-secondary:hover {
-    background-color: #545b62;
+  background-color: var(--gris-200);
 }
 
-@media (max-width: 768px) {
-    .container {
-        padding: 15px;
-        margin: 10px;
-    }
-
-    .header {
-        flex-direction: column;
-        gap: 20px;
-        align-items: flex-start;
-    }
-
-    .table-container {
-        overflow-x: auto;
-    }
-
-    .table {
-        min-width: 800px;
-    }
+/* Confirmar un borrado es destructivo: se declara como tal en vez de usar el
+   mismo morado que "Guardar". */
+.btn-modal-peligro {
+  background-color: var(--peligro);
+  color: var(--texto-inverso);
 }
 
-/* Fila de un producto desactivado: sigue siendo editable y reactivable,
-   pero se distingue de un vistazo de lo que sí está disponible. */
-.table tbody tr.fila-inactiva {
-    opacity: 0.55;
+.btn-modal-peligro:hover {
+  background-color: var(--peligro-fuerte);
 }
 
-.table tbody tr.fila-inactiva td strong {
-    text-decoration: line-through;
+/* ============================================================================
+   Tabla en pantallas estrechas.
+
+   Se ocultan las columnas de menor valor en vez de dejar 800px de scroll
+   horizontal. No se pierde información: el botón "Ver detalle" abre un modal
+   con los seis campos completos.
+
+   TRAMPA: las filas de estado vacío y de error son un solo
+   `<td colspan="8" class="no-results">`, es decir la celda es :nth-child(1).
+   Sin el `:not(.no-results)` de abajo, ocultar la columna ID haría
+   desaparecer los mensajes "No se encontraron productos" y "Error al cargar
+   el inventario", y la tabla se quedaría muda. No quitar el :not().
+   ============================================================================ */
+
+/* Descripción (col. 4): texto largo, es lo primero que sobra. */
+@media (max-width: 900px) {
+  .table thead th:nth-child(4),
+  .table tbody td:nth-child(4):not(.no-results) {
+    display: none;
+  }
+}
+
+/* ID (col. 1), Marca (col. 3) y Área (col. 5): quedan Nombre · Cantidad ·
+   Estado · Acciones, que es lo mínimo para que la columna de acciones entre
+   en pantalla sin obligar a hacer scroll horizontal para alcanzarla. */
+@media (max-width: 640px) {
+  /* Cada píxel de marco es un píxel que le falta a la tabla. */
+  body {
+    padding: var(--esp-2);
+  }
+
+  .container {
+    padding: var(--esp-3);
+  }
+
+  .table thead th:nth-child(1),
+  .table thead th:nth-child(3),
+  .table thead th:nth-child(5),
+  .table tbody td:nth-child(1):not(.no-results),
+  .table tbody td:nth-child(3):not(.no-results),
+  .table tbody td:nth-child(5):not(.no-results) {
+    display: none;
+  }
+
+  .table th,
+  .table td {
+    padding: var(--esp-2) var(--esp-1);
+  }
+
+  /* Los cuatro botones en rejilla 2×2: la celda de acciones pasa de ~200px
+     de ancho a ~96px, que es lo que de verdad estrangula la tabla. El alto de
+     fila que gana se compensa de sobra con no tener que buscar los botones
+     desplazando la tabla a mano. */
+  .actions {
+    display: grid;
+    grid-template-columns: repeat(2, var(--objetivo-tactil));
+    gap: var(--esp-1);
+  }
+
+  /* La celda de acciones no debe encogerse: es la que hay que poder pulsar. */
+  .table thead th:last-child,
+  .table tbody td:last-child:not(.no-results) {
+    width: 1%;
+    white-space: nowrap;
+  }
+
+  .badge {
+    padding: var(--esp-1) var(--esp-2);
+  }
+
+  .header-buttons {
+    width: 100%;
+  }
+
+  .header-buttons .btn-primary,
+  .header-buttons .btn-secondary {
+    flex: 1;
+  }
 }

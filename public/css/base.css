@@ -1,0 +1,369 @@
+/* ============================================================================
+   base.css — capa compartida por las tres pantallas.
+   Se carga SIEMPRE antes de la hoja de cada página.
+
+   Contiene solo tokens, reset y primitivas. Nada específico de una pantalla.
+   Sin build step: son custom properties de CSS, las lee el navegador tal cual.
+
+   OJO al editar: las custom properties NO funcionan dentro de @media, así que
+   los breakpoints van escritos a mano. La convención del proyecto es
+   mobile-first con min-width: 640px (móvil grande) y 1024px (escritorio).
+   ============================================================================ */
+
+:root {
+  /* ---- Marca -------------------------------------------------------------
+     Rampa derivada del morado de Ok-producciones (#ae3592), que se queda
+     clavado en el 500. Los contrastes están medidos sobre blanco.           */
+  --morado-50:  #fbf3fa;
+  --morado-100: #f5e0f0;
+  --morado-200: #ecc1e2;
+  --morado-300: #dd92cc;
+  --morado-400: #cd5bb2;
+  --morado-500: #ae3592;  /* 5.6:1 — texto blanco encima cumple AA */
+  --morado-600: #902c79;  /* 7.4:1 — hover */
+  --morado-700: #752462;  /* 9.6:1 — active, foco, enlaces */
+  --morado-800: #5a1c4b;
+  --morado-900: #3e1334;
+
+  /* ---- Neutros ----------------------------------------------------------
+     Ligeramente tintados de morado para que convivan con la marca en vez de
+     chocar con ella como los grises de Bootstrap que había antes.           */
+  --gris-50:  #f8f7f9;
+  --gris-100: #f1eff3;
+  --gris-200: #e3e0e7;
+  --gris-300: #c9c4cf;
+  --gris-400: #9a93a3;
+  --gris-500: #736c7d;  /* 5.0:1 — mínimo para texto tenue */
+  --gris-600: #575162;  /* ~7:1 */
+  --gris-700: #423d4b;  /* 10.5:1 — texto de cuerpo */
+  --gris-800: #2c2833;
+  --gris-900: #1a171f;
+
+  /* ---- Semánticos --------------------------------------------------------
+     Sustituyen a los colores sueltos de Bootstrap, que no llegaban a AA:
+     #28a745 (2.7:1) y #dc3545 (3.9:1) eran fondos de botón con texto blanco.
+     El azul #007bff y el cian #17a2b8 desaparecen del proyecto: cuatro
+     botones saturados distintos en una tabla de 8 columnas es ruido.        */
+  --exito:          #15803d;  /* 5.0:1 */
+  --exito-fuerte:   #166534;
+  --exito-bg:       #dcfce7;
+  --exito-texto:    #14532d;
+
+  --peligro:        #b91c1c;  /* 6.5:1 */
+  --peligro-fuerte: #991b1b;
+  --peligro-bg:     #fee2e2;
+  --peligro-texto:  #7f1d1d;
+
+  --aviso-bg:       #fef3c7;
+  --aviso-texto:    #92400e;
+
+  /* ---- Roles (nombrados por función, no por color) ---------------------- */
+  --superficie:         #ffffff;
+  --superficie-alt:     var(--gris-50);
+  --superficie-hundida: var(--gris-100);
+  --borde:              var(--gris-200);
+  --borde-fuerte:       var(--gris-300);
+  --texto:              var(--gris-700);
+  --texto-suave:        var(--gris-600);
+  --texto-tenue:        var(--gris-500);
+  --texto-inverso:      #ffffff;
+
+  /* ---- Espaciado (escala 4/8) ------------------------------------------- */
+  --esp-1: 0.25rem;
+  --esp-2: 0.5rem;
+  --esp-3: 0.75rem;
+  --esp-4: 1rem;
+  --esp-5: 1.5rem;
+  --esp-6: 2rem;
+  --esp-7: 3rem;
+  --esp-8: 4rem;
+  /* Padding de página: sustituye al padding:100px fijo que rompía el móvil. */
+  --esp-pagina: clamp(var(--esp-4), 4vw, var(--esp-7));
+
+  --ancho-contenido: 900px;
+  --ancho-tabla:     1200px;
+  --ancho-hoja:      700px;
+  --objetivo-tactil: 44px;
+
+  /* ---- Tipografía --------------------------------------------------------
+     Sin webfont a propósito: esto corre en un almacén y no debe depender de
+     la red para renderizar texto legible.                                   */
+  --fuente: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fuente-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --texto-xs:   0.75rem;
+  --texto-sm:   0.875rem;
+  --texto-base: 1rem;
+  --texto-lg:   1.125rem;
+  --texto-xl:   1.25rem;
+  --texto-2xl:  1.5rem;
+  --texto-3xl:  clamp(1.5rem, 1.1rem + 1.6vw, 2rem);
+
+  --peso-normal:  400;
+  --peso-medio:   500;
+  --peso-fuerte:  600;
+  --peso-negrita: 700;
+
+  --interlineado:        1.5;
+  --interlineado-titulo: 1.2;
+
+  /* ---- Forma y profundidad ---------------------------------------------- */
+  --radio-sm:   4px;
+  --radio-md:   6px;
+  --radio-lg:   10px;
+  --radio-xl:   14px;
+  --radio-full: 9999px;
+
+  --sombra-1: 0 1px 2px rgba(26, 23, 31, .06), 0 1px 3px rgba(26, 23, 31, .10);
+  --sombra-2: 0 2px 4px rgba(26, 23, 31, .06), 0 4px 12px rgba(26, 23, 31, .08);
+  --sombra-3: 0 8px 24px rgba(26, 23, 31, .16);
+  --sombra-modal: 0 16px 48px rgba(26, 23, 31, .28);
+
+  --anillo-foco:         0 0 0 3px rgba(174, 53, 146, .35);
+  --anillo-foco-inverso: 0 0 0 3px rgba(255, 255, 255, .65);
+
+  /* ---- Movimiento -------------------------------------------------------- */
+  --trans-rapida: 120ms;
+  --trans-media:  200ms;
+  --trans-lenta:  320ms;
+  --curva: cubic-bezier(.2, .8, .2, 1);
+
+  /* ---- Capas -------------------------------------------------------------- */
+  --z-base: 0;
+  --z-tabla-sticky: 10;
+  --z-barra: 100;
+  --z-modal: 1000;
+}
+
+/* ============================================================================
+   RESET
+   ============================================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* OBLIGATORIO. orden.js (líneas 120-128) muestra y oculta #formatoOrden,
+   #estadoVacio, #avisoFaltantes y .barra-acciones con el atributo `hidden`.
+   Cualquier `display` de autor le gana a la hoja del navegador y deja el
+   atributo sin efecto — que es justo lo que pasaba con .barra-acciones, que
+   tenía `display:flex` y por eso NUNCA se ocultaba en el estado vacío.
+   Es el único !important justificado del proyecto. No quitar. */
+[hidden] {
+  display: none !important;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--fuente);
+  font-size: var(--texto-base);
+  line-height: var(--interlineado);
+  color: var(--texto);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* El espaciado vertical lo ponen los componentes, no los márgenes por defecto. */
+h1, h2, h3, h4, h5, h6,
+p, ul, ol, figure {
+  margin: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  line-height: var(--interlineado-titulo);
+  text-wrap: balance;
+}
+
+/* Solo las listas con clase pierden las viñetas. Las <ul> sin clase que
+   genera orden.js dentro de .aviso-faltantes SÍ deben conservarlas. */
+ul[class],
+ol[class] {
+  list-style: none;
+  padding: 0;
+}
+
+img,
+svg {
+  max-width: 100%;
+  display: block;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+/* ---- Foco visible ---------------------------------------------------------
+   Antes solo los <input> tenían :focus. Navegar con teclado era imposible
+   de seguir en las tres pantallas. */
+:focus-visible {
+  outline: 2px solid var(--morado-700);
+  outline-offset: 2px;
+  border-radius: var(--radio-sm);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Sobre el degradado de marca el morado no se ve; ahí el anillo va en blanco. */
+.barra-acciones :focus-visible {
+  outline-color: #fff;
+}
+
+/* Texto solo para lectores de pantalla. */
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
+   PRIMITIVAS
+
+   Las clases que emite el JS (.btn-action, .badge-success, .btn-quitar…) NO se
+   renombran: son el contrato entre CSS y JS. Cada hoja de página las declara
+   como alias que heredan de estas primitivas.
+   ============================================================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--esp-2);
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-2) var(--esp-5);
+  border-radius: var(--radio-md);
+  font-size: var(--texto-base);
+  font-weight: var(--peso-fuerte);
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--trans-media) var(--curva),
+              color var(--trans-media) var(--curva),
+              box-shadow var(--trans-media) var(--curva);
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.btn--primario {
+  background-color: var(--morado-500);
+  color: var(--texto-inverso);
+}
+
+.btn--primario:hover:not(:disabled) {
+  background-color: var(--morado-600);
+}
+
+.btn--primario:active:not(:disabled) {
+  background-color: var(--morado-700);
+}
+
+.btn--secundario {
+  background-color: var(--superficie);
+  color: var(--morado-600);
+  box-shadow: inset 0 0 0 1px var(--morado-200);
+}
+
+.btn--secundario:hover:not(:disabled) {
+  background-color: var(--morado-50);
+  box-shadow: inset 0 0 0 1px var(--morado-300);
+}
+
+.btn--fantasma {
+  background-color: transparent;
+  color: var(--texto-suave);
+}
+
+.btn--fantasma:hover:not(:disabled) {
+  background-color: var(--gris-100);
+  color: var(--texto);
+}
+
+.btn--peligro {
+  background-color: var(--peligro);
+  color: var(--texto-inverso);
+}
+
+.btn--peligro:hover:not(:disabled) {
+  background-color: var(--peligro-fuerte);
+}
+
+/* Botón cuadrado que solo contiene un icono. */
+.btn--icono {
+  min-width: var(--objetivo-tactil);
+  padding: 0;
+}
+
+/* ---- Campos de formulario ------------------------------------------------
+   font-size 16px a propósito: por debajo de eso iOS hace zoom automático al
+   enfocar el campo, y esto se usa desde el teléfono en el almacén. */
+.campo {
+  width: 100%;
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-3) var(--esp-4);
+  font-size: 16px;
+  color: var(--texto);
+  background-color: var(--superficie);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-md);
+  transition: border-color var(--trans-media) var(--curva),
+              box-shadow var(--trans-media) var(--curva);
+}
+
+.campo::placeholder {
+  color: var(--texto-tenue);
+}
+
+.campo:focus {
+  outline: none;
+  border-color: var(--morado-500);
+  box-shadow: var(--anillo-foco);
+}
+
+/* ---- Etiquetas de estado -------------------------------------------------- */
+.badge {
+  display: inline-block;
+  padding: var(--esp-1) var(--esp-3);
+  border-radius: var(--radio-full);
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-fuerte);
+  line-height: 1.4;
+  white-space: nowrap;
+}

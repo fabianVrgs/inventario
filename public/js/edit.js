@@ -71,11 +71,27 @@ async function cargarProductos() {
         alert('No se pudieron cargar los productos: ' + error.message);
         tablaInventario.innerHTML = `
             <tr>
-                <td colspan="8" class="no-results">Error al cargar el inventario</td>
+                <td colspan="8" class="no-results no-results--error">Error al cargar el inventario</td>
             </tr>
         `;
     }
 }
+
+// 🎨 Iconos SVG en línea, estilo Lucide: trazo 2px, heredan currentColor.
+// Antes eran emoji (👁️ ✏️ 🔌 ⚡ 🗑️). Como eran el único contenido del botón,
+// los cuatro botones de acción no tenían nombre accesible, y además cada
+// sistema operativo los dibujaba distinto. Van en línea a propósito: este
+// proyecto no tiene build step ni debe depender de la red para pintar iconos.
+const svgIcono = (trazos) =>
+    `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${trazos}</svg>`;
+
+const ICONOS = {
+    ver: svgIcono('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>'),
+    editar: svgIcono('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
+    desactivar: svgIcono('<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>'),
+    reactivar: svgIcono('<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>'),
+    eliminar: svgIcono('<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>')
+};
 
 // 📋 Renderiza la tabla con los datos del inventario
 function renderizarTabla(datos = productosFiltrados) {
@@ -108,12 +124,14 @@ function renderizarTabla(datos = productosFiltrados) {
             }">${activo ? 'Activo' : 'Inactivo'}</span></td>
             <td>
                 <div class="actions">
-                    <button class="btn-action btn-detail" onclick="verDetalle(${item.id_producto})">👁️</button>
-                    <button class="btn-action btn-edit" onclick="editarItem(${item.id_producto})">✏️</button>
+                    <button class="btn-action btn-detail" title="Ver detalle" aria-label="Ver detalle" onclick="verDetalle(${item.id_producto})">${ICONOS.ver}</button>
+                    <button class="btn-action btn-edit" title="Editar" aria-label="Editar" onclick="editarItem(${item.id_producto})">${ICONOS.editar}</button>
                     <button class="btn-action btn-toggle" title="${
                           activo ? 'Desactivar' : 'Reactivar'
-                    }" onclick="alternarActivo(${item.id_producto})">${activo ? '🔌' : '⚡'}</button>
-                    <button class="btn-action btn-delete" onclick="eliminarItem(${item.id_producto})">🗑️</button>
+                    }" aria-label="${
+                          activo ? 'Desactivar' : 'Reactivar'
+                    }" onclick="alternarActivo(${item.id_producto})">${activo ? ICONOS.desactivar : ICONOS.reactivar}</button>
+                    <button class="btn-action btn-delete" title="Eliminar" aria-label="Eliminar" onclick="eliminarItem(${item.id_producto})">${ICONOS.eliminar}</button>
                 </div>
             </td>
         `;

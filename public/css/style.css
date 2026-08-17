@@ -1,241 +1,373 @@
+/* ============================================================================
+   Pantalla principal: catálogo disponible + selección para la orden del día.
+   Requiere base.css cargado antes (tokens, reset, primitivas).
+
+   Contrato con logica.js — no renombrar, lo emite el JS:
+     .grupo-area, .titulo-area, .producto, .disponible,
+     .mensaje-vacio, .mensaje-error, .btn-quitar
+   Y el modal se abre con `style.display = "flex"` inline desde JS, así que
+   .modal se queda en `display:none` y deja que el inline gane. No migrar a
+   clases: rompería logica.js.
+   ============================================================================ */
+
 body {
-  font-family: 'Segoe UI', sans-serif;
-  background-image: linear-gradient(to right, #ae3592, #363435);
-  margin: 0;
-  padding: 0;
+  background-color: var(--gris-50);
 }
 
 .container {
-  max-width: 900px;
-  margin: 60px auto;
-  padding: 100px;
-  background: rgb(255, 255, 255);
-  border-radius: 12px;
-  box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.08);
+  max-width: var(--ancho-contenido);
+  margin: var(--esp-5) auto;
+  padding: var(--esp-pagina);
+  background: var(--superficie);
+  border-radius: var(--radio-xl);
+  box-shadow: var(--sombra-2);
 }
+
+/* ---------- Encabezado ---------- */
 
 .header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 20px;
+  gap: var(--esp-4);
+  padding-bottom: var(--esp-5);
+  margin-bottom: var(--esp-5);
+  border-bottom: 1px solid var(--borde);
 }
 
 .logo {
-  width: 95px;
-  height: 95px;
-  border-radius: 10px;
-  margin-right: 15px;
-  box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-1);
+  flex-shrink: 0;
 }
 
-h1 {
-  color: #444;
-  font-size: 1.8rem;
-  font-weight: bold;
+.header h1 {
+  font-size: var(--texto-3xl);
+  font-weight: var(--peso-negrita);
+  color: var(--gris-900);
+  /* Empuja los botones al extremo derecho. Antes esto se hacía con un
+     `margin-left: 15rem` en .botones-menu, que reventaba en móvil. */
+  margin-inline-end: auto;
 }
 
-#buscar {
-  width: 95%;
-  padding: 20px 10px;
-  font-size: 16px;
-  border: 2px solid #ccc;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  transition: border-color 0.3s;
-  margin-top: 5%;
-}
-
-#buscar:focus {
-  outline: none;
-  border-color:#ae3592;
-}
-
-#resultados > div {
-  background-color: #f0f0ff;
-  padding: 12px 16px;
-  margin: 8px 0;
-  border-left: 5px solid #1e258b;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-#resultados > div:hover {
-  background-color: #e4e4ff;
-}
-
-h2 {
-  margin-top: 30px;
-  color: #333;
-}
-
-#lista {
-  list-style: none;
-  padding: 0;
-}
-
-#lista li {
-  padding: 10px;
-  border-bottom: 1px solid #ccc;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.btn-quitar {
-  background: none;
-  border: none;
-  color: #a328a7;
-  font-weight: bold;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background-color 0.2s, color 0.2s;
-}
-
-.btn-quitar:hover {
-  background-color: #f0e0f0;
-  color: #6f1a6f;
-}
-
-/* Modal estilo*/
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: none;
-  justify-content: center;
-  align-items: center;
-}
-
-.modal-content {
-  background: white;
-  padding: 30px;
-  border-radius: 10px;
-  width: 300px;
-  text-align: center;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-}
-
-.modal-content input {
-  width: 100%;
-  padding: 10px;
-  margin: 15px 0;
-  font-size: 16px;
-  border: 2px solid #ccc;
-  border-radius: 6px;
-}
-
-.modal-buttons button {
-  padding: 10px 20px;
-  margin: 5px;
-  border: none;
-  font-weight: bold;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-#btnAgregarCantidad {
-  background-color: #7d3cff;
-  color: white;
-}
-
-#btnAgregarCantidad:hover {
-  background-color: #5a29cc;
-}
-
-#btnCancelarModal {
-  background-color: #ddd;
-}
-
-#btnCancelarModal:hover {
-  background-color: #bbb;
-}
-
-#btnImprimir{
-  background-color: #a328a7;
-  color: white;
-  width: 20%;
-  padding: 10px;
-  border: none;
-  border-radius: 6px;
-}
-#btnImprimir:hover {
-  background-color: #8a1f8a;
+.header-buttons {
+  display: contents;
 }
 
 .botones-menu {
   display: flex;
-  gap: 20px; 
-  margin-left: 15rem; 
+  flex-wrap: wrap;
+  gap: var(--esp-3);
 }
 
+.btn-inventario,
+.btn-orden {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-2) var(--esp-5);
+  border-radius: var(--radio-md);
+  font-size: var(--texto-base);
+  font-weight: var(--peso-fuerte);
+  text-align: center;
+  text-decoration: none;
+  transition: background-color var(--trans-media) var(--curva),
+              box-shadow var(--trans-media) var(--curva);
+}
 
 .btn-inventario {
-  background-color: #8a1f8a;
-  width: 160px;
-  color: rgb(255, 255, 255);
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  font-size: 1.3rem;
-  font-weight: bold;
-  box-shadow: 2 4px 8px rgba(0, 0, 0, 0.1);
-  display: inline-block;
-  text-decoration: none;
-  text-align: center;
+  background-color: var(--superficie);
+  color: var(--morado-600);
+  box-shadow: inset 0 0 0 1px var(--morado-200);
 }
 
 .btn-inventario:hover {
-  background-color: #6f1a6f;
+  background-color: var(--morado-50);
+  box-shadow: inset 0 0 0 1px var(--morado-300);
 }
-
-@keyframes rebote {
-  0%   { transform: translateY(0); }
-  50%  { transform: translateY(-6px); }
-  100% { transform: translateY(0); }
-}
-
-.btn-inventario:hover {
-  animation: rebote 0.4s ease;
-}
-
 
 .btn-orden {
-  background-color: #8a1f8a;
-  color: rgb(255, 255, 255);
-  padding: 10px 20px;
-  width: 160px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  font-size: 1.3rem;
-  font-weight: bold;
-  box-shadow: 2 4px 8px rgba(0, 0, 0, 0.1);
-  display: inline-block;
-  text-decoration: none;
+  background-color: var(--morado-500);
+  color: var(--texto-inverso);
+}
+
+.btn-orden:hover {
+  background-color: var(--morado-600);
+}
+
+.btn-orden:active {
+  background-color: var(--morado-700);
+}
+
+/* ---------- Búsqueda ---------- */
+
+.search-box h2 {
+  font-size: var(--texto-xl);
+  font-weight: var(--peso-fuerte);
+  color: var(--gris-900);
+  margin-bottom: var(--esp-3);
+}
+
+#buscar {
+  margin-bottom: var(--esp-5);
+}
+
+/* ---------- Resultados ----------
+   Estructura que genera logica.js:
+     #resultados > .grupo-area > h3.titulo-area + button.producto*
+   Antes el fondo lila se aplicaba al GRUPO entero vía `#resultados > div`,
+   así que los ítems clicables no tenían ninguna afordancia visual. Ahora la
+   tarjeta es el producto, que es lo que de verdad se pulsa. */
+
+.resultados {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-5);
+}
+
+.grupo-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+}
+
+.titulo-area {
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-fuerte);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--morado-600);
+  padding-bottom: var(--esp-2);
+  border-bottom: 1px solid var(--morado-200);
+}
+
+.producto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--esp-1) var(--esp-3);
+  width: 100%;
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-3) var(--esp-4);
+  text-align: left;
+  font-size: var(--texto-base);
+  color: var(--texto);
+  background-color: var(--morado-50);
+  border-left: 4px solid var(--morado-500);
+  border-radius: var(--radio-md);
+  transition: background-color var(--trans-rapida) var(--curva),
+              transform var(--trans-rapida) var(--curva);
+}
+
+.producto strong {
+  font-weight: var(--peso-fuerte);
+  color: var(--gris-900);
+}
+
+.producto .disponible {
+  font-size: var(--texto-sm);
+  color: var(--texto-tenue);
+}
+
+.producto:hover {
+  background-color: var(--morado-100);
+  transform: translateX(2px);
+}
+
+.producto:active {
+  transform: translateX(0);
+}
+
+/* Estados vacío y de error de la búsqueda. */
+.mensaje-vacio,
+.mensaje-error {
+  padding: var(--esp-5);
   text-align: center;
+  border-radius: var(--radio-md);
 }
 
-.btn-orden:hover {
-  background-color: #6f1a6f;
+.mensaje-vacio {
+  color: var(--texto-tenue);
+  background-color: var(--gris-50);
+  border: 1px dashed var(--borde-fuerte);
 }
 
-@keyframes rebote {
-  0%   { transform: translateY(0); }
-  50%  { transform: translateY(-6px); }
-  100% { transform: translateY(0); }
+.mensaje-error {
+  color: var(--peligro-texto);
+  background-color: var(--peligro-bg);
+  border: 1px solid var(--peligro);
+  font-weight: var(--peso-medio);
 }
 
-.btn-orden:hover {
-  animation: rebote 0.6s ease;
+/* ---------- Lista seleccionada ---------- */
+
+.lista {
+  margin-top: var(--esp-7);
+}
+
+.lista h2 {
+  font-size: var(--texto-xl);
+  font-weight: var(--peso-fuerte);
+  color: var(--gris-900);
+  margin-bottom: var(--esp-3);
+}
+
+#lista li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esp-3);
+  padding: var(--esp-3) 0;
+  border-bottom: 1px solid var(--borde);
+}
+
+#lista li:last-child {
+  border-bottom: 0;
+}
+
+.btn-quitar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--objetivo-tactil);
+  min-height: var(--objetivo-tactil);
+  font-size: var(--texto-lg);
+  font-weight: var(--peso-negrita);
+  line-height: 1;
+  color: var(--texto-tenue);
+  border-radius: var(--radio-md);
+  transition: background-color var(--trans-rapida) var(--curva),
+              color var(--trans-rapida) var(--curva);
+}
+
+/* Quitar es destructivo: en hover se declara como tal. */
+.btn-quitar:hover {
+  background-color: var(--peligro-bg);
+  color: var(--peligro-texto);
+}
+
+/* ---------- Modal de cantidad ----------
+   `display:none` es contrato con logica.js:64/92. El centrado queda preparado
+   para cuando el JS ponga `display:flex` inline. */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  padding: var(--esp-4);
+  background-color: rgba(26, 23, 31, .55);
+}
+
+/* El fondo oscuro DEBE seguir siendo .modal y el contenido un hijo menor:
+   logica.js:96 cierra comparando `event.target === modal`. Si .modal-content
+   cubriera todo el overlay, el cierre al pulsar fuera dejaría de funcionar. */
+.modal-content {
+  width: min(100%, 380px);
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: var(--esp-6);
+  text-align: center;
+  background: var(--superficie);
+  border-radius: var(--radio-xl);
+  box-shadow: var(--sombra-modal);
+  /* Al pasar de display:none a flex los descendientes se renderizan de nuevo,
+     así que la animación se dispara en cada apertura sin una línea de JS. */
+  animation: entrada-modal var(--trans-media) var(--curva);
+}
+
+@keyframes entrada-modal {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+.modal-content h3 {
+  font-size: var(--texto-xl);
+  font-weight: var(--peso-fuerte);
+  color: var(--gris-900);
+  margin-bottom: var(--esp-4);
+}
+
+.modal-content label {
+  display: block;
+  margin-bottom: var(--esp-2);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  color: var(--texto-suave);
+  text-align: left;
+}
+
+.modal-content input {
+  width: 100%;
+  min-height: var(--objetivo-tactil);
+  margin-bottom: var(--esp-5);
+  padding: var(--esp-3) var(--esp-4);
+  font-size: 16px;
+  color: var(--texto);
+  background-color: var(--superficie);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-md);
+  transition: border-color var(--trans-media) var(--curva),
+              box-shadow var(--trans-media) var(--curva);
+}
+
+.modal-content input:focus {
+  outline: none;
+  border-color: var(--morado-500);
+  box-shadow: var(--anillo-foco);
+}
+
+.modal-buttons {
+  display: flex;
+  gap: var(--esp-3);
+}
+
+.modal-buttons button {
+  flex: 1;
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-2) var(--esp-4);
+  border-radius: var(--radio-md);
+  font-weight: var(--peso-fuerte);
+  transition: background-color var(--trans-media) var(--curva);
+}
+
+#btnAgregarCantidad {
+  background-color: var(--morado-500);
+  color: var(--texto-inverso);
+}
+
+#btnAgregarCantidad:hover {
+  background-color: var(--morado-600);
+}
+
+#btnCancelarModal {
+  background-color: var(--gris-100);
+  color: var(--texto);
+}
+
+#btnCancelarModal:hover {
+  background-color: var(--gris-200);
+}
+
+/* ---------- Escritorio ---------- */
+
+@media (min-width: 640px) {
+  .container {
+    margin: var(--esp-7) auto;
+  }
+
+  .logo {
+    width: 72px;
+    height: 72px;
+  }
+
+  .producto {
+    align-items: center;
+  }
 }

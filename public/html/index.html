@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Ok-producciones-almacen</title>
+  <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 
@@ -25,8 +25,9 @@
 
     <!-- BÚSQUEDA -->
     <div class="search-box">
-      <input type="text" id="buscar" placeholder="Buscar producto..." />
-      <h1>Listado</h1>
+      <h2>Listado</h2>
+      <label class="visualmente-oculto" for="buscar">Buscar producto</label>
+      <input type="search" id="buscar" class="campo" placeholder="Buscar producto..." autocomplete="off" />
     </div>
 
     <!-- RESULTADOS -->

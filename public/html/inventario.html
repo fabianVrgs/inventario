@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Inventario</title>
+  <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/style-inventario.css" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </head>
@@ -13,10 +14,10 @@
   <div class="header">
     <div class="header-left">
       <!-- Botón para volver a la página anterior o al menú -->
-      <a href="/" class="btn-volver">&lt;</a>
+      <a href="/" class="btn-volver" aria-label="Volver al inicio">&lt;</a>
 
       <!-- Logo de la empresa -->
-      <div class="logo"> <img class="logo" src="/img/logo.jpg" alt="logo de la empresa"></div>
+      <img class="logo" src="/img/logo.jpg" alt="logo de la empresa">
 
       <!-- Título principal -->
       <h1>Inventario</h1>
@@ -35,7 +36,8 @@
   <div class="search-section">
     <div class="search-box">
       <!-- Input de búsqueda para filtrar productos -->
-      <input type="text" id="buscar" placeholder="Buscar productos...">
+      <label class="visualmente-oculto" for="buscar">Buscar productos</label>
+      <input type="search" id="buscar" class="campo" placeholder="Buscar productos..." autocomplete="off">
     </div>
   </div>
 
@@ -123,7 +125,7 @@
     <!-- 🔍 MODAL DE DETALLE DE ITEM -->
 <div id="modalDetalle" class="modal">
   <div class="modal-content">
-    <h3 style="margin-bottom: 10px; color: #ae3592;">Detalles del Producto</h3>
+    <h3 class="modal-titulo">Detalles del Producto</h3>
 
     <p><strong>Nombre:</strong> <span id="detalleNombre"></span></p>
     <p><strong>Marca:</strong> <span id="detalleMarca"></span></p>
@@ -132,7 +134,7 @@
     <p><strong>Cantidad:</strong> <span id="detalleCantidad"></span></p>
     <p><strong>Estado:</strong> <span id="detalleEstado"></span></p>
 
-    <div class="modal-buttons" style="justify-content: center;">
+    <div class="modal-buttons modal-buttons--centrado">
       <button type="button" class="btn-modal btn-modal-secondary" onclick="cerrarModalDetalle()">Cerrar</button>
     </div>
   </div>
@@ -141,11 +143,11 @@
     <!-- ❌ MODAL DE CONFIRMACIÓN DE ELIMINACIÓN -->
 <div id="modalEliminar" class="modal">
   <div class="modal-content">
-    <h3 style="margin-bottom: 15px; color: #c82333;">¿Eliminar ítem?</h3>
+    <h3 class="modal-titulo modal-titulo--peligro">¿Eliminar ítem?</h3>
     <p id="textoConfirmacionEliminar">¿Estás seguro de eliminar este ítem?</p>
     <div class="modal-buttons">
       <button class="btn-modal btn-modal-secondary" onclick="cerrarModalEliminar()">Cancelar</button>
-      <button class="btn-modal btn-modal-primary" onclick="confirmarEliminar()">Sí, eliminar</button>
+      <button class="btn-modal btn-modal-peligro" onclick="confirmarEliminar()">Sí, eliminar</button>
     </div>
   </div>
 </div>

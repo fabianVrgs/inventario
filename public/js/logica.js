@@ -38,11 +38,17 @@ function mostrarResultados() {
 
     if (items.length > 0) {
       const filtrar = document.createElement("div");
-      filtrar.innerHTML = `<h3>🔹 ${area}</h3>`;
+      filtrar.className = "grupo-area";
+      filtrar.innerHTML = `<h3 class="titulo-area">${area}</h3>`;
 
       items.forEach(item => {
-        const div = document.createElement("div");
-        div.innerHTML = `<strong>${item.nombre}</strong> - Cantidad disponible: ${item.cantidadDisponible}`;
+        // Es un <button> y no un <div>: la tarjeta abre un modal, así que
+        // tiene que ser alcanzable con Tab y activable con Enter/Espacio.
+        // Como <div> con listener de clic la pantalla era inoperable sin ratón.
+        const div = document.createElement("button");
+        div.type = "button";
+        div.className = "producto";
+        div.innerHTML = `<strong>${item.nombre}</strong> <span class="disponible">Cantidad disponible: ${item.cantidadDisponible}</span>`;
         div.addEventListener("click", () => mostrarModal(item));
         filtrar.appendChild(div);
       });
@@ -52,7 +58,7 @@ function mostrarResultados() {
   }
 
   if (resultados.innerHTML.trim() === "") {
-    resultados.innerHTML = "<div>No se encontraron resultados</div>";
+    resultados.innerHTML = '<p class="mensaje-vacio">No se encontraron resultados</p>';
   }
 }
 
@@ -252,7 +258,7 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     })
     .catch(err => {
-      resultados.innerHTML = `<p style="color:red;">Error cargando datos: ${err.message}</p>`;
+      resultados.innerHTML = `<p class="mensaje-error">Error cargando datos: ${err.message}</p>`;
     });
 });
 
