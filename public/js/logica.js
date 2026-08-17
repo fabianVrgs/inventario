@@ -1,112 +1,225 @@
+// Pantalla principal: elegir qué sale hoy del almacén y en qué cantidad.
+//
+// La cantidad se ajusta con un contador EN LA PROPIA FILA (− n +). Antes esto
+// era un modal que solo servía para capturar un número: tres toques y una capa
+// encima de la pantalla para escribir "2". El contador en línea deja el estado
+// visible donde está el producto y no tapa el resto de la lista.
+//
+// El DOM de los resultados se construye una sola vez por búsqueda; los +/−
+// parchean la fila afectada en vez de repintar todo. Eso no es una optimización
+// prematura: repintar movería el foco del teclado a <body> en cada pulsación.
+
 const buscarInput = document.getElementById("buscar");
 const resultados = document.getElementById("resultados");
 const lista = document.getElementById("lista");
+const listaVacia = document.getElementById("listaVacia");
+const barraSeleccion = document.getElementById("barraSeleccion");
+const ctaOrden = document.getElementById("ctaOrden");
+// El mismo recuento se pinta en dos sitios: el panel lateral (escritorio) y la
+// barra inferior (móvil). Solo uno de los dos es visible en cada tamaño.
+const resumenes = document.querySelectorAll("[data-resumen]");
 
-const modal = document.getElementById("modalCantidad");
-const modalItemNombre = document.getElementById("modalItemNombre");
-const cantidadInput = document.getElementById("cantidadInput");
-const btnAgregarCantidad = document.getElementById("btnAgregarCantidad");
-const btnCancelarModal = document.getElementById("btnCancelarModal");
+let productos = [];  // catálogo activo tal como viene de la API (+ cantidadDisponible)
+let seleccion = [];  // [{ id_producto, nombre, marca, area, cantidad }] — números, no strings
 
-let itemSeleccionado = null; // producto sobre el que está abierto el modal
-let productos = [];          // productos disponibles, tal como vienen de la API (+ cantidadDisponible visual)
-let seleccion = [];          // lista seleccionada: [{ id_producto, nombre, marca, area, cantidad }]
+// ---------------------------------------------------------------------------
+// Consultas sobre el estado
+// ---------------------------------------------------------------------------
 
-// ✅ Agrupar los productos por área
+function cantidadSeleccionada(idProducto) {
+  const item = seleccion.find(i => i.id_producto === Number(idProducto));
+  return item ? item.cantidad : 0;
+}
+
+// Un producto sale de la Principal si no hay nada que pedir. Se queda si ya
+// está en la selección aunque su disponible haya llegado a cero: si no, la
+// fila desaparecería bajo el dedo justo al tomar la última unidad y no habría
+// forma de devolverla desde aquí.
+function hayQueMostrar(item) {
+  return item.cantidadDisponible > 0 || cantidadSeleccionada(item.id_producto) > 0;
+}
+
 function agruparPorArea(data) {
   const agrupado = {};
   data.forEach(item => {
-    if (!agrupado[item.area]) {
-      agrupado[item.area] = [];
-    }
-    agrupado[item.area].push(item);
+    const area = item.area || "Sin área";
+    if (!agrupado[area]) agrupado[area] = [];
+    agrupado[area].push(item);
   });
   return agrupado;
 }
 
-// ✅ Mostrar resultados agrupados por área
+// ---------------------------------------------------------------------------
+// Pintado de resultados
+// ---------------------------------------------------------------------------
+
 function mostrarResultados() {
-  const texto = buscarInput.value.toLowerCase();
-  resultados.innerHTML = "";
+  const consulta = buscarInput.value.trim();
+  const texto = consulta.toLowerCase();
+  resultados.replaceChildren();
 
-  const agrupado = agruparPorArea(productos);
+  const agrupado = agruparPorArea(productos.filter(hayQueMostrar));
+  let encontrados = 0;
 
-  for (const area in agrupado) {
-    const items = agrupado[area].filter(p =>
-      p.nombre.toLowerCase().includes(texto)
-    );
+  Object.keys(agrupado)
+    .sort((a, b) => a.localeCompare(b, "es"))
+    .forEach(area => {
+      const items = agrupado[area].filter(p => p.nombre.toLowerCase().includes(texto));
+      if (items.length === 0) return;
+      encontrados += items.length;
+      resultados.appendChild(construirGrupo(area, items));
+    });
 
-    if (items.length > 0) {
-      const filtrar = document.createElement("div");
-      filtrar.innerHTML = `<h3>🔹 ${area}</h3>`;
-
-      items.forEach(item => {
-        const div = document.createElement("div");
-        div.innerHTML = `<strong>${item.nombre}</strong> - Cantidad disponible: ${item.cantidadDisponible}`;
-        div.addEventListener("click", () => mostrarModal(item));
-        filtrar.appendChild(div);
-      });
-
-      resultados.appendChild(filtrar);
-    }
-  }
-
-  if (resultados.innerHTML.trim() === "") {
-    resultados.innerHTML = "<div>No se encontraron resultados</div>";
+  if (encontrados === 0) {
+    const aviso = document.createElement("p");
+    aviso.className = "mensaje-vacio";
+    // textContent y no innerHTML: la consulta la escribe el usuario.
+    aviso.textContent = consulta
+      ? `Ningún producto disponible coincide con "${consulta}".`
+      : "No hay productos disponibles en este momento.";
+    resultados.appendChild(aviso);
   }
 }
 
-// ✅ Modal
-function mostrarModal(item) {
-  itemSeleccionado = item;
-  modalItemNombre.textContent = item.nombre;
-  cantidadInput.value = 1;
-  modal.style.display = "flex";
+function construirGrupo(area, items) {
+  const grupo = document.createElement("section");
+  grupo.className = "grupo-area";
+
+  const titulo = document.createElement("h3");
+  titulo.className = "titulo-area";
+  titulo.textContent = area;
+  grupo.appendChild(titulo);
+
+  const rejilla = document.createElement("ul");
+  rejilla.className = "rejilla-productos";
+  items.forEach(item => rejilla.appendChild(construirProducto(item)));
+  grupo.appendChild(rejilla);
+
+  return grupo;
 }
 
-btnAgregarCantidad.addEventListener("click", () => {
-  const cantidadElegida = parseInt(cantidadInput.value, 10);
+function construirProducto(item) {
+  const fila = document.createElement("li");
+  fila.className = "producto";
+  fila.dataset.id = String(item.id_producto);
 
-  const esValida =
-    Number.isInteger(cantidadElegida) &&
-    cantidadElegida > 0 &&
-    cantidadElegida <= itemSeleccionado.cantidadDisponible;
+  const info = document.createElement("div");
+  info.className = "producto__info";
 
-  if (!esValida) {
-    alert("Cantidad no válida");
+  const nombre = document.createElement("span");
+  nombre.className = "producto__nombre";
+  nombre.textContent = item.nombre;
+
+  const meta = document.createElement("span");
+  meta.className = "producto__meta";
+  if (item.marca) {
+    const marca = document.createElement("span");
+    marca.className = "producto__marca";
+    marca.textContent = item.marca;
+    meta.append(marca, document.createTextNode(" · "));
+  }
+  const disponible = document.createElement("span");
+  disponible.className = "producto__disponible cifra";
+  meta.appendChild(disponible);
+
+  info.append(nombre, meta);
+
+  const contador = document.createElement("div");
+  contador.className = "contador";
+
+  const menos = construirPaso("−", `Quitar una unidad de ${item.nombre}`);
+  const mas = construirPaso("+", `Agregar una unidad de ${item.nombre}`);
+
+  // Campo escribible para no obligar a 25 pulsaciones cuando hacen falta 25.
+  const campo = document.createElement("input");
+  campo.type = "number";
+  campo.className = "contador__campo cifra";
+  campo.min = "0";
+  campo.step = "1";
+  campo.inputMode = "numeric";
+  campo.setAttribute("aria-label", `Cantidad de ${item.nombre}`);
+
+  contador.append(menos, campo, mas);
+  fila.append(info, contador);
+
+  menos.addEventListener("click", () => fijarCantidad(item, cantidadSeleccionada(item.id_producto) - 1));
+  mas.addEventListener("click", () => fijarCantidad(item, cantidadSeleccionada(item.id_producto) + 1));
+  campo.addEventListener("change", () => fijarCantidad(item, parseInt(campo.value, 10)));
+
+  sincronizarProducto(item, fila);
+  return fila;
+}
+
+function construirPaso(signo, etiqueta) {
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "contador__btn";
+  boton.textContent = signo;
+  boton.setAttribute("aria-label", etiqueta);
+  return boton;
+}
+
+// Deja la fila coherente con el estado sin volver a construirla, para no
+// perder el foco del teclado en cada pulsación del contador.
+function sincronizarProducto(item, nodo) {
+  const fila = nodo || resultados.querySelector(`.producto[data-id="${item.id_producto}"]`);
+  if (!fila) return;
+
+  const elegida = cantidadSeleccionada(item.id_producto);
+  const tope = item.cantidadDisponible + elegida;
+
+  const campo = fila.querySelector(".contador__campo");
+  const pasos = fila.querySelectorAll(".contador__btn");
+  const disponible = fila.querySelector(".producto__disponible");
+
+  campo.value = String(elegida);
+  campo.max = String(tope);
+  pasos[0].disabled = elegida === 0;
+  pasos[1].disabled = item.cantidadDisponible === 0;
+
+  disponible.textContent = item.cantidadDisponible === 1
+    ? "1 disponible"
+    : `${item.cantidadDisponible} disponibles`;
+
+  fila.classList.toggle("producto--elegido", elegida > 0);
+}
+
+// ---------------------------------------------------------------------------
+// Selección
+// ---------------------------------------------------------------------------
+
+// Fija la cantidad de un producto en un valor absoluto, recortada a lo que hay.
+function fijarCantidad(item, solicitada) {
+  const actual = cantidadSeleccionada(item.id_producto);
+  const tope = item.cantidadDisponible + actual;
+
+  let nueva = Number.isFinite(solicitada) ? Math.trunc(solicitada) : actual;
+  nueva = Math.max(0, Math.min(nueva, tope));
+
+  if (nueva === actual) {
+    sincronizarProducto(item);  // revierte lo tecleado si estaba fuera de rango
     return;
   }
 
-  itemSeleccionado.cantidadDisponible -= cantidadElegida;
-  agregarASeleccion(itemSeleccionado, cantidadElegida);
+  item.cantidadDisponible = tope - nueva;
+  escribirEnSeleccion(item, nueva);
 
-  cerrarModal();
-  mostrarResultados();
+  sincronizarProducto(item);
   renderLista();
+  actualizarResumen();
   guardarSeleccion();
-});
-
-btnCancelarModal.addEventListener("click", cerrarModal);
-
-function cerrarModal() {
-  modal.style.display = "none";
-  itemSeleccionado = null;
 }
 
-modal.addEventListener("click", (event) => {
-  if (event.target === modal) {
-    cerrarModal();
-  }
-});
-
-// ✅ Agrega un producto a la lista seleccionada, sumando cantidades si ya estaba
-function agregarASeleccion(producto, cantidad) {
+function escribirEnSeleccion(producto, cantidad) {
   const idProducto = Number(producto.id_producto);
-  const existente = seleccion.find(i => i.id_producto === idProducto);
+  const index = seleccion.findIndex(i => i.id_producto === idProducto);
 
-  if (existente) {
-    existente.cantidad += Number(cantidad);
-  } else {
+  if (cantidad <= 0) {
+    if (index !== -1) seleccion.splice(index, 1);
+    return;
+  }
+
+  if (index === -1) {
     seleccion.push({
       id_producto: idProducto,
       nombre: producto.nombre,
@@ -114,50 +227,84 @@ function agregarASeleccion(producto, cantidad) {
       area: producto.area,
       cantidad: Number(cantidad)
     });
+  } else {
+    seleccion[index].cantidad = Number(cantidad);
   }
 }
 
-// ✅ Quita un producto de la lista seleccionada y le devuelve la cantidad a lo disponible
+// Suma cantidades sobre lo que ya hubiera. La usa restaurarSeleccion().
+function agregarASeleccion(producto, cantidad) {
+  escribirEnSeleccion(producto, cantidadSeleccionada(producto.id_producto) + Number(cantidad));
+}
+
+// Quita un producto entero y le devuelve la cantidad a lo disponible.
 function quitarDeSeleccion(idProducto) {
   const index = seleccion.findIndex(i => i.id_producto === idProducto);
   if (index === -1) return;
 
   const item = seleccion[index];
   const producto = productos.find(p => Number(p.id_producto) === idProducto);
-  if (producto) {
-    producto.cantidadDisponible += item.cantidad;
-  }
+  if (producto) producto.cantidadDisponible += item.cantidad;
 
   seleccion.splice(index, 1);
 
+  if (producto) sincronizarProducto(producto);
   renderLista();
-  mostrarResultados();
+  actualizarResumen();
   guardarSeleccion();
 }
 
-// ✅ Pinta la lista seleccionada
+// ---------------------------------------------------------------------------
+// Resumen de la selección
+// ---------------------------------------------------------------------------
+
 function renderLista() {
-  lista.innerHTML = "";
+  lista.replaceChildren();
 
   seleccion.forEach(item => {
     const li = document.createElement("li");
 
-    const texto = document.createElement("span");
-    texto.textContent = `${item.nombre} - Cantidad: ${item.cantidad}`;
+    const nombre = document.createElement("span");
+    nombre.className = "lista__nombre";
+    nombre.textContent = item.nombre;
 
-    const btnQuitar = document.createElement("button");
-    btnQuitar.type = "button";
-    btnQuitar.className = "btn-quitar";
-    btnQuitar.textContent = "✕";
-    btnQuitar.addEventListener("click", () => quitarDeSeleccion(item.id_producto));
+    const cantidad = document.createElement("span");
+    cantidad.className = "lista__cantidad cifra";
+    cantidad.textContent = String(item.cantidad);
 
-    li.appendChild(texto);
-    li.appendChild(btnQuitar);
+    const quitar = document.createElement("button");
+    quitar.type = "button";
+    quitar.className = "btn-quitar";
+    quitar.textContent = "✕";
+    quitar.setAttribute("aria-label", `Quitar ${item.nombre} de la selección`);
+    quitar.addEventListener("click", () => quitarDeSeleccion(item.id_producto));
+
+    li.append(nombre, cantidad, quitar);
     lista.appendChild(li);
   });
+
+  listaVacia.hidden = seleccion.length > 0;
 }
 
-// ✅ Guarda la selección en sessionStorage para que "Orden del día" la recoja.
+function actualizarResumen() {
+  const unidades = seleccion.reduce((total, i) => total + i.cantidad, 0);
+  const nProductos = seleccion.length;
+
+  const texto =
+    `${nProductos} ${nProductos === 1 ? "producto" : "productos"} · ` +
+    `${unidades} ${unidades === 1 ? "unidad" : "unidades"}`;
+
+  resumenes.forEach(nodo => { nodo.textContent = texto; });
+
+  const vacia = nProductos === 0;
+  barraSeleccion.hidden = vacia;
+  ctaOrden.hidden = vacia;
+}
+
+// ---------------------------------------------------------------------------
+// sessionStorage — contrato con "Orden del día"
+// ---------------------------------------------------------------------------
+
 // Borrar `ordenAplicada` es parte del contrato, no un extra: esa clave dice
 // "el descuento de ESTA orden ya se hizo". Si la selección cambia, la orden
 // es otra y su descuento está pendiente. Sin este borrado, Orden del día
@@ -167,7 +314,7 @@ function guardarSeleccion() {
   sessionStorage.removeItem("ordenAplicada");
 }
 
-// ✅ Recupera la selección guardada, ajustándola al stock que hay AHORA.
+// Recupera la selección guardada, ajustándola al stock que hay AHORA.
 // La selección puede llevar horas en sessionStorage: un producto pudo
 // desactivarse, borrarse o quedarse sin existencias mientras tanto. Se
 // descarta lo que ya no existe y se recorta lo que ya no alcanza, en vez de
@@ -231,17 +378,25 @@ function restaurarSeleccion() {
   return { ajustada };
 }
 
-// ✅ Cargar datos desde la API al cargar la página
+// ---------------------------------------------------------------------------
+// Arranque
+// ---------------------------------------------------------------------------
+
 window.addEventListener("DOMContentLoaded", () => {
   fetch("/api/productos?activo=1")
     .then(res => res.json())
     .then(data => {
-      productos = data.map(p => ({ ...p, cantidadDisponible: p.cantidad }));
+      productos = data.map(p => ({
+        ...p,
+        id_producto: Number(p.id_producto),
+        cantidadDisponible: Number(p.cantidad)
+      }));
 
       const { ajustada } = restaurarSeleccion();
 
       mostrarResultados();
       renderLista();
+      actualizarResumen();
 
       if (ajustada) {
         // Sólo se reescribe si algo cambió: guardarSeleccion() borra
@@ -252,9 +407,11 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     })
     .catch(err => {
-      resultados.innerHTML = `<p style="color:red;">Error cargando datos: ${err.message}</p>`;
+      const aviso = document.createElement("p");
+      aviso.className = "mensaje-error";
+      aviso.textContent = `Error cargando datos: ${err.message}`;
+      resultados.replaceChildren(aviso);
     });
 });
 
-// Buscar mientras escribes
 buscarInput.addEventListener("input", mostrarResultados);

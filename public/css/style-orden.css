@@ -1,166 +1,166 @@
-/* Estilos de la pantalla "Orden del Día" (formato imprimible).
-   Se inspira en la paleta de style.css (morado/blanco) sin editarlo. */
+/* ============================================================================
+   Pantalla "Orden del día" (formato imprimible). Requiere base.css antes.
 
-* {
-  box-sizing: border-box;
-}
+   Esta pantalla NO es solo una pantalla: es el papel que se entrega al equipo
+   de montaje. El bloque @media print del final es contrato funcional, no
+   decoración — orden.js llama a window.print() en las líneas 183 y 205.
+
+   Es también la única superficie del sistema que se gana parecer una hoja
+   levantada del escritorio, porque de verdad lo es.
+
+   Contrato con orden.js — no renombrar, lo emite o lo consulta el JS:
+     .barra-acciones (querySelector), .seccion-area, .titulo-area,
+     .linea-producto, .nombre-prod, .puntos, .cantidad-prod
+   Y orden.js muestra/oculta con el atributo `hidden`, no con style.display.
+   base.css define `[hidden]{display:none!important}` justo por eso: sin él,
+   el `display:flex` de .barra-acciones ganaba y la barra NUNCA se ocultaba
+   en el estado vacío.
+   ============================================================================ */
 
 body {
-  font-family: 'Segoe UI', sans-serif;
-  background-image: linear-gradient(to right, #ae3592, #363435);
-  margin: 0;
-  padding: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
-/* ---------- Barra de acciones (pantalla) ---------- */
+/* ---------- Barra de acciones (solo pantalla) ---------- */
 
 .barra-acciones {
-  max-width: 700px;
-  margin: 30px auto 0;
-  padding: 0 20px;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-barra);
+  background-color: var(--superficie);
+  border-bottom: 1px solid var(--filete);
+  /* El fondo ocupa todo el ancho, pero los botones se alinean con los bordes
+     de la hoja. El padding calculado evita tener que meter un <div> envoltorio
+     dentro de .barra-acciones, que es el elemento que orden.js localiza con
+     querySelector. */
+  padding: var(--esp-2) max(var(--esp-pagina), calc((100% - var(--ancho-hoja)) / 2));
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-3);
   justify-content: space-between;
   align-items: center;
 }
 
 .btn-volver {
-  color: #fff;
-  text-decoration: none;
-  font-weight: bold;
-  background-color: rgba(255, 255, 255, 0.15);
-  padding: 10px 16px;
-  border-radius: 6px;
-  transition: background-color 0.2s;
+  color: var(--tinta-suave);
 }
 
-.btn-volver:hover {
-  background-color: rgba(255, 255, 255, 0.3);
-}
-
-.btn-imprimir {
-  background-color: #a328a7;
-  color: white;
-  padding: 10px 22px;
-  border: none;
-  border-radius: 6px;
-  font-size: 1rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.btn-imprimir:hover {
-  background-color: #8a1f8a;
-}
-
+/* Único estado de carga real del proyecto: orden.js deshabilita el botón
+   mientras el POST a /api/ordenes está en vuelo. */
 .btn-imprimir:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  cursor: progress;
 }
 
 /* ---------- Estado vacío ---------- */
 
 .estado-vacio {
-  max-width: 500px;
-  margin: 100px auto;
-  padding: 40px;
-  background: #fff;
-  border-radius: 12px;
+  max-width: 32rem;
+  margin: var(--esp-8) auto;
+  padding: var(--esp-7) var(--esp-5);
   text-align: center;
-  box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .estado-vacio p {
-  color: #444;
-  font-size: 1.2rem;
-  margin-bottom: 20px;
+  color: var(--tinta-tenue);
+  margin-bottom: var(--esp-5);
 }
 
 .btn-volver-vacio {
-  display: inline-block;
-  background-color: #a328a7;
-  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-2) var(--esp-5);
+  background-color: var(--tinta-fuerte);
+  color: var(--superficie);
   text-decoration: none;
-  padding: 10px 20px;
-  border-radius: 6px;
-  font-weight: bold;
-  transition: background-color 0.2s;
+  border-radius: var(--radio-md);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-fuerte);
+  transition: background-color var(--dur-media) var(--curva);
 }
 
 .btn-volver-vacio:hover {
-  background-color: #8a1f8a;
+  background-color: var(--tinta);
 }
 
 /* ---------- Aviso de faltantes / errores (409, 400, etc.) ---------- */
 
 .aviso-faltantes {
-  max-width: 700px;
-  margin: 20px auto 0;
-  padding: 16px 20px;
-  background-color: #fff3f3;
-  border-left: 5px solid #c0392b;
-  border-radius: 6px;
-  color: #7a1f1f;
+  max-width: var(--ancho-hoja);
+  margin: var(--esp-4) auto 0;
+  padding: var(--esp-4);
+  background-color: var(--peligro-lavado);
+  border-radius: var(--radio-md);
+  color: var(--peligro-texto);
+  font-size: var(--texto-sm);
 }
 
 .aviso-faltantes p {
-  margin: 0 0 8px;
-  font-weight: bold;
+  margin: 0 0 var(--esp-2);
+  font-weight: var(--peso-fuerte);
 }
 
+/* Estas <ul> las genera orden.js sin clase, así que conservan sus viñetas
+   (base.css solo se las quita a las listas CON clase). */
 .aviso-faltantes ul {
   margin: 0;
-  padding-left: 20px;
+  padding-left: var(--esp-5);
 }
 
-/* ---------- Hoja / formato imprimible ---------- */
+/* ---------- La hoja ---------- */
 
 .hoja {
-  max-width: 700px;
-  margin: 30px auto 60px;
-  padding: 50px 60px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.15);
-  color: #222;
+  max-width: var(--ancho-hoja);
+  margin: var(--esp-5) auto var(--esp-8);
+  /* En papel el margen real lo pone @page, no este padding. */
+  padding: clamp(var(--esp-5), 5vw, var(--esp-7)) clamp(var(--esp-4), 6vw, var(--esp-7));
+  background-color: var(--superficie);
+  border: 1px solid var(--filete);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-hoja);
+  color: var(--tinta-fuerte);
 }
 
 .encabezado {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 20px;
+  gap: var(--esp-4);
 }
 
 .logo-orden {
-  width: 80px;
-  height: 80px;
-  border-radius: 10px;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radio-md);
+  box-shadow: inset 0 0 0 1px var(--filete);
   flex-shrink: 0;
 }
 
 .titulo-encabezado h1 {
-  margin: 0 0 8px;
-  color: #444;
-  font-size: 1.6rem;
-  letter-spacing: 1px;
+  margin: 0 0 var(--esp-2);
+  font-size: var(--texto-headline);
+  letter-spacing: 0.1em;
 }
 
 .linea-dato {
-  margin: 4px 0;
+  margin: var(--esp-1) 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--esp-2);
+  font-size: var(--texto-sm);
 }
 
 .etiqueta {
-  font-weight: bold;
-  color: #555;
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-etiqueta);
+  text-transform: uppercase;
+  color: var(--tinta-tenue);
 }
 
 .valor-impreso {
-  color: #222;
+  color: var(--tinta-fuerte);
 }
 
 .solo-impresion {
@@ -169,85 +169,109 @@ body {
 
 .campo-editable {
   font-family: inherit;
-  font-size: 1rem;
-  padding: 4px 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  min-width: 220px;
+  /* 16px: por debajo, iOS hace zoom automático al enfocar. */
+  font-size: 16px;
+  /* 44px de objetivo táctil: se rellena de pie, con el teléfono en la mano.
+     En impresión da igual, ahí este campo es display:none. */
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-1) var(--esp-2);
+  color: var(--tinta);
+  background-color: var(--superficie);
+  border: 1px solid var(--borde-control);
+  border-radius: var(--radio-sm);
+  min-width: 14rem;
+  max-width: 100%;
+  transition: border-color var(--dur-media) var(--curva),
+              box-shadow var(--dur-media) var(--curva);
 }
 
 .campo-editable:focus {
   outline: none;
-  border-color: #ae3592;
+  border-color: var(--marca);
+  box-shadow: var(--anillo-foco);
 }
 
 .separador {
   border: none;
-  border-top: 2px solid #333;
-  margin: 20px 0;
+  border-top: 1px solid var(--tinta-fuerte);
+  margin: var(--esp-5) 0;
 }
 
 .contenido-areas {
-  min-height: 100px;
+  min-height: 6rem;
 }
 
 .seccion-area {
-  margin-bottom: 18px;
+  margin-bottom: var(--esp-5);
 }
 
+/* orden.js:91 ya emite el nombre con .toUpperCase(); no se duplica aquí con
+   text-transform para no engañar al siguiente que lea esto. */
 .titulo-area {
-  margin: 0 0 6px;
-  font-size: 1.05rem;
-  color: #ae3592;
-  border-bottom: 1px solid #ddd;
-  padding-bottom: 4px;
+  margin: 0 0 var(--esp-2);
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-etiqueta);
+  color: var(--marca-fuerte);
+  border-bottom: 1px solid var(--filete-fuerte);
+  padding-bottom: var(--esp-1);
 }
 
 .linea-producto {
   display: flex;
   align-items: baseline;
-  padding: 3px 0;
-  font-size: 0.98rem;
+  padding: var(--esp-1) 0;
+  font-size: var(--texto-sm);
 }
 
 .nombre-prod {
   white-space: nowrap;
 }
 
+/* CRÍTICO: orden.js:102 crea este <span> SIEMPRE VACÍO. La línea de puntos
+   que guía el ojo del nombre a la cantidad en el papel es 100% CSS. Si esta
+   regla desaparece, el formato impreso se queda sin guiado. */
 .puntos {
   flex: 1;
-  margin: 0 6px;
-  border-bottom: 1px dotted #999;
+  margin: 0 var(--esp-2);
+  border-bottom: 1px dotted var(--borde-control);
   height: 0.8em;
 }
 
 .cantidad-prod {
-  font-weight: bold;
+  font-weight: var(--peso-fuerte);
   min-width: 2.5em;
   text-align: right;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .pie-firma {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 30px;
-  margin-top: 30px;
+  gap: var(--esp-5);
+  margin-top: var(--esp-6);
+  font-size: var(--texto-sm);
 }
 
 .campo-firma {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  flex: 1;
+  gap: var(--esp-2);
+  flex: 1 1 15rem;
 }
 
 .raya-firma {
   flex: 1;
-  border-bottom: 1px solid #333;
+  min-width: 7.5rem;
+  border-bottom: 1px solid var(--tinta-fuerte);
   height: 1.4em;
 }
 
-/* ---------- Impresión ---------- */
+/* ============================================================================
+   Impresión — esto define el papel que sale de la impresora. No "modernizar".
+   ============================================================================ */
 
 @media print {
   /* Todo lo que no es el formato desaparece. */
@@ -260,10 +284,12 @@ body {
   body {
     background: #fff;
     margin: 0;
+    min-height: 0;
   }
 
   .hoja {
     box-shadow: none;
+    border: 0;
     border-radius: 0;
     margin: 0;
     padding: 20px 10px;

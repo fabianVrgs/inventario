@@ -1,0 +1,548 @@
+/* ============================================================================
+   base.css — capa compartida por las tres pantallas.
+   Se carga SIEMPRE antes de la hoja de cada página.
+
+   Solo tokens, reset y primitivas. Nada específico de una pantalla.
+   Sin build step: son custom properties, las lee el navegador tal cual.
+
+   El sistema está descrito en DESIGN.md ("La hoja de despacho"). Resumen para
+   quien edite sin abrirlo:
+     · Tinta sobre papel. La acción primaria va en tinta, no en morado.
+     · El morado #ae3592 es marca, estado y foco. Nunca relleno de botón.
+     · La estructura la llevan filetes de 1px y espacio. Nada de sombras
+       bajo contenedores: solo modal, barra fija y la hoja imprimible.
+     · Toda cantidad va en cifra tabular.
+
+   OJO al editar: las custom properties NO funcionan dentro de la condición de
+   un @media, así que los breakpoints van escritos a mano. La convención es
+   mobile-first con min-width 640px (móvil grande) y 1024px (escritorio).
+   ============================================================================ */
+
+:root {
+  /* ---- Color -------------------------------------------------------------
+     Canónico en OKLCH: es perceptualmente uniforme, así que bajar L un paso
+     baja el brillo lo mismo en el morado que en el rojo. Todos los neutros
+     llevan el tono 338 de la marca con croma mínimo — grises puros junto a un
+     magenta se ven sucios. Los contrastes en comentario están medidos, no
+     estimados (scripts en el commit); no subir ninguna L sin volver a medir. */
+
+  /* Papel y superficies */
+  --papel:          oklch(98.2% 0.0035 338);  /* fondo de la app */
+  --papel-hundido:  oklch(96.2% 0.005  338);  /* cabecera de tabla, fila inactiva */
+  --superficie:     oklch(99.6% 0.0015 338);  /* hoja, modal, fila */
+
+  /* Filetes: toda la estructura del sistema sale de aquí */
+  --filete:         oklch(91.2% 0.006  338);
+  --filete-fuerte:  oklch(84.5% 0.009  338);
+  /* Borde de input. Más oscuro que un filete a propósito: WCAG 1.4.11 pide
+     3:1 en el borde que es la única señal de que algo es un campo. 3.28:1. */
+  --borde-control:  oklch(64.5% 0.013  338);
+
+  /* Tinta */
+  --tinta-tenue:    oklch(52.8% 0.016  338);  /* 5.09:1 sobre papel — al filo, no aclarar */
+  --tinta-suave:    oklch(47.5% 0.017  338);  /* 6.39:1 */
+  --tinta:          oklch(32%   0.02   338);  /* 12.14:1 — texto de cuerpo */
+  --tinta-fuerte:   oklch(20.5% 0.021  338);  /* 17.08:1 — títulos y botón primario */
+
+  /* Marca: el morado del logo (#ae3592) al bit */
+  --marca:          oklch(53.9% 0.186  338);  /* 5.35:1 sobre papel */
+  --marca-fuerte:   oklch(46%   0.17   338);  /* 7.76:1 — hover, active */
+  --marca-lavado:   oklch(96%   0.022  338);  /* fondo del estado seleccionado */
+  --marca-filete:   oklch(88%   0.06   338);  /* borde del estado seleccionado */
+
+  /* Semánticos. Nunca van solos: siempre acompañados de texto. */
+  --peligro:        oklch(50.5% 0.185   27);  /* 6.39:1 */
+  --peligro-fuerte: oklch(43.5% 0.165   27);
+  --peligro-lavado: oklch(95.2% 0.019   27);
+  --peligro-texto:  oklch(37.5% 0.14    27);  /* 9.46:1 sobre su lavado */
+  --exito:          oklch(52%   0.13   152);
+  --exito-lavado:   oklch(96%   0.035  152);
+  --exito-texto:    oklch(39%   0.1    152);  /* 8.26:1 sobre su lavado */
+  --aviso-lavado:   oklch(95.2% 0.03    75);
+  --aviso-texto:    oklch(44%   0.083   75);  /* 6.83:1 sobre su lavado */
+
+  /* ---- Espaciado (escala 4/8) ------------------------------------------- */
+  --esp-1: 0.25rem;
+  --esp-2: 0.5rem;
+  --esp-3: 0.75rem;
+  --esp-4: 1rem;
+  --esp-5: 1.5rem;
+  --esp-6: 2rem;
+  --esp-7: 3rem;
+  --esp-8: 4rem;
+  --esp-pagina: clamp(var(--esp-4), 3vw, var(--esp-6));
+
+  --ancho-contenido: 940px;
+  --ancho-tabla:     1280px;
+  --ancho-hoja:      700px;
+  --objetivo-tactil: 44px;
+  /* Alto de .barra-app cuando NO envuelve: esp-2 arriba + esp-2 abajo + los
+     44px del enlace más alto. Lo consume el thead sticky de la tabla, que
+     tiene que pararse justo debajo. Solo es fiable a partir de 1024px. */
+  --alto-barra: 60px;
+
+  /* ---- Tipografía --------------------------------------------------------
+     Sin webfont a propósito: esto corre en un almacén y el texto no debe
+     depender de la red para dibujarse. Una sola familia; el peso y la escala
+     llevan toda la jerarquía. Escala FIJA en rem, no fluida: el usuario mira
+     a DPI constante y un clamp() en un título de herramienta solo produce
+     tamaños que nadie eligió. Razón entre pasos ≈1.15-1.2. */
+  --fuente: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+            'Helvetica Neue', Arial, sans-serif;
+  --fuente-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --texto-etiqueta: 0.75rem;    /* 12px, mayúsculas, tracking abierto */
+  --texto-sm:       0.875rem;   /* 14px */
+  --texto-base:     1rem;       /* 16px */
+  --texto-titulo:   1.125rem;   /* 18px */
+  --texto-headline: 1.3125rem;  /* 21px */
+  --texto-display:  1.5rem;     /* 24px */
+
+  --peso-normal: 400;
+  --peso-medio:  500;
+  --peso-fuerte: 600;
+
+  --interlineado:        1.55;
+  --interlineado-titulo: 1.2;
+  --tracking-titulo:     -0.012em;
+  --tracking-etiqueta:    0.07em;
+
+  /* ---- Forma ------------------------------------------------------------
+     "Ligeramente redondeados". Nada por encima de 8px: a partir de ahí la
+     herramienta empieza a parecer una app de consumo. */
+  --radio-sm:   3px;
+  --radio-md:   5px;
+  --radio-lg:   8px;
+  --radio-full: 9999px;
+
+  /* ---- Elevación ---------------------------------------------------------
+     Solo tres, y las tres son para cosas que de verdad flotan. Contenedores,
+     secciones y filas van planos: los separa el filete, no la sombra. */
+  --sombra-fija:  0 -1px 0 var(--filete), 0 -8px 24px oklch(20.5% 0.021 338 / .05);
+  --sombra-hoja:  0 1px 2px oklch(20.5% 0.021 338 / .04),
+                  0 8px 24px oklch(20.5% 0.021 338 / .05);
+  --sombra-modal: 0 16px 48px oklch(20.5% 0.021 338 / .22);
+
+  --anillo-foco: 0 0 0 3px oklch(53.9% 0.186 338 / .3);
+  --velo-modal:  oklch(20.5% 0.021 338 / .45);
+
+  /* ---- Movimiento --------------------------------------------------------
+     ease-out-quart. Sin rebote ni elástico: esto informa de un cambio de
+     estado, no entretiene. */
+  --dur-rapida: 120ms;
+  --dur-media:  180ms;
+  --dur-lenta:  260ms;
+  --curva: cubic-bezier(.25, 1, .5, 1);
+
+  /* ---- Capas ------------------------------------------------------------- */
+  --z-tabla-sticky: 10;
+  --z-barra:       100;
+  --z-modal:      1000;
+}
+
+/* ----------------------------------------------------------------------------
+   Respaldo para navegadores sin OKLCH (anteriores a Chrome 111 / Safari 15.4).
+   Sin esto, en un WebView viejo TODAS las declaraciones de color serían
+   inválidas de golpe y la interfaz caería a negro sobre blanco. Esto no es
+   celo: la pantalla principal se usa desde el teléfono que haya en el almacén.
+
+   Son los mismos colores resueltos a sRGB, no una segunda paleta. Si cambias
+   un token de arriba, recalcula su hex aquí.
+   ---------------------------------------------------------------------------- */
+@supports not (color: oklch(0% 0 0)) {
+  :root {
+    --papel:          #fbf8fa;
+    --papel-hundido:  #f5f1f4;
+    --superficie:     #fefdfe;
+    --filete:         #e5e0e3;
+    --filete-fuerte:  #d0cace;
+    --borde-control:  #938b90;
+    --tinta-tenue:    #72686e;
+    --tinta-suave:    #635960;
+    --tinta:          #3a2f36;
+    --tinta-fuerte:   #1e131a;
+    --marca:          #ae3593;
+    --marca-fuerte:   #8f2378;
+    --marca-lavado:   #fcecf7;
+    --marca-filete:   #f3c9e5;
+    --peligro:        #b72121;
+    --peligro-fuerte: #971316;
+    --peligro-lavado: #fcebe8;
+    --peligro-texto:  #7b1011;
+    --exito:          #137d41;
+    --exito-lavado:   #e1f9e6;
+    --exito-texto:    #055428;
+    --aviso-lavado:   #fbedda;
+    --aviso-texto:    #6d4b13;
+
+    --sombra-fija:  0 -1px 0 #e5e0e3, 0 -8px 24px rgba(30, 19, 26, .05);
+    --sombra-hoja:  0 1px 2px rgba(30, 19, 26, .04), 0 8px 24px rgba(30, 19, 26, .05);
+    --sombra-modal: 0 16px 48px rgba(30, 19, 26, .22);
+    --anillo-foco:  0 0 0 3px rgba(174, 53, 147, .3);
+    --velo-modal:   rgba(30, 19, 26, .45);
+  }
+}
+
+/* ============================================================================
+   RESET
+   ============================================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* OBLIGATORIO. orden.js (líneas 120-128) muestra y oculta #formatoOrden,
+   #estadoVacio, #avisoFaltantes y .barra-acciones con el atributo `hidden`.
+   Cualquier `display` de autor le gana a la hoja del navegador y deja el
+   atributo sin efecto — que es justo lo que pasaba con .barra-acciones, que
+   tenía `display:flex` y por eso NUNCA se ocultaba en el estado vacío.
+   Es el único !important justificado del proyecto. No quitar. */
+[hidden] {
+  display: none !important;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--fuente);
+  font-size: var(--texto-base);
+  line-height: var(--interlineado);
+  color: var(--tinta);
+  background-color: var(--papel);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* El espaciado vertical lo ponen los componentes, no los márgenes por defecto. */
+h1, h2, h3, h4, h5, h6,
+p, ul, ol, figure {
+  margin: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  line-height: var(--interlineado-titulo);
+  letter-spacing: var(--tracking-titulo);
+  color: var(--tinta-fuerte);
+  font-weight: var(--peso-fuerte);
+  text-wrap: balance;
+}
+
+/* Solo las listas con clase pierden las viñetas. Las <ul> sin clase que
+   genera orden.js dentro de .aviso-faltantes SÍ deben conservarlas. */
+ul[class],
+ol[class] {
+  list-style: none;
+  padding: 0;
+}
+
+img,
+svg {
+  max-width: 100%;
+  display: block;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+a {
+  color: var(--marca-fuerte);
+}
+
+/* ---- Foco visible ---------------------------------------------------------
+   Un solo anillo para todo el sistema. Antes solo los <input> tenían :focus y
+   navegar con teclado era imposible de seguir en las tres pantallas. */
+:focus-visible {
+  outline: 2px solid var(--marca);
+  outline-offset: 2px;
+  border-radius: var(--radio-sm);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Texto solo para lectores de pantalla. */
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
+   PRIMITIVAS
+
+   Las clases que emite el JS (.btn-action, .badge-activo, .btn-quitar…) NO se
+   renombran: son el contrato entre CSS y JS. Cada hoja de página las declara
+   como alias que heredan de estas primitivas.
+   ============================================================================ */
+
+/* ---- Tipografía de uso ---------------------------------------------------- */
+
+/* El elemento que más carácter de documento aporta: rótulo de área, cabecera
+   de tabla, badge de estado. */
+.etiqueta-sistema {
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-etiqueta);
+  text-transform: uppercase;
+  color: var(--tinta-tenue);
+}
+
+/* Toda cantidad. Sin tabular-nums las columnas bailan al actualizarse y el
+   usuario deja de confiar en lo que lee. */
+.cifra {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ---- Botones -------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--esp-2);
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-2) var(--esp-4);
+  border-radius: var(--radio-md);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-fuerte);
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--dur-media) var(--curva),
+              color var(--dur-media) var(--curva),
+              box-shadow var(--dur-media) var(--curva);
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* Primario = tinta, no morado. Uno por pantalla. */
+.btn--primario {
+  background-color: var(--tinta-fuerte);
+  color: var(--superficie);
+}
+
+.btn--primario:hover:not(:disabled) { background-color: var(--tinta); }
+.btn--primario:active:not(:disabled) { background-color: var(--tinta-fuerte); }
+
+/* El borde va en box-shadow inset y no en border para que no desplace el
+   layout cuando aparece o cambia de grosor. */
+.btn--secundario {
+  background-color: var(--superficie);
+  color: var(--tinta);
+  box-shadow: inset 0 0 0 1px var(--filete-fuerte);
+}
+
+.btn--secundario:hover:not(:disabled) {
+  background-color: var(--papel-hundido);
+  box-shadow: inset 0 0 0 1px var(--borde-control);
+}
+
+.btn--fantasma {
+  background-color: transparent;
+  color: var(--tinta-suave);
+}
+
+.btn--fantasma:hover:not(:disabled) {
+  background-color: var(--papel-hundido);
+  color: var(--tinta-fuerte);
+}
+
+/* Exclusivo de eliminar. Es el único botón de color del sistema, y funciona
+   precisamente porque ningún otro lo es. */
+.btn--peligro {
+  background-color: var(--peligro);
+  color: var(--superficie);
+}
+
+.btn--peligro:hover:not(:disabled) { background-color: var(--peligro-fuerte); }
+
+/* Botón cuadrado que solo contiene un icono. Exige aria-label. */
+.btn--icono {
+  min-width: var(--objetivo-tactil);
+  padding: 0;
+}
+
+/* ---- Campos de formulario ------------------------------------------------
+   font-size 16px a propósito: por debajo, iOS hace zoom automático al enfocar
+   el campo, y esto se usa desde el teléfono en el almacén. */
+.campo {
+  width: 100%;
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-2) var(--esp-3);
+  font-size: 16px;
+  color: var(--tinta);
+  background-color: var(--superficie);
+  border: 1px solid var(--borde-control);
+  border-radius: var(--radio-md);
+  transition: border-color var(--dur-media) var(--curva),
+              box-shadow var(--dur-media) var(--curva);
+}
+
+.campo::placeholder { color: var(--tinta-tenue); }
+
+.campo:focus {
+  outline: none;
+  border-color: var(--marca);
+  box-shadow: var(--anillo-foco);
+}
+
+/* ---- Etiquetas de estado -------------------------------------------------- */
+
+.badge {
+  display: inline-block;
+  padding: 0.125rem var(--esp-2);
+  border-radius: var(--radio-sm);
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: 0.03em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* ---- Barra superior compartida -------------------------------------------
+   La misma en la Principal y en Inventario. Consistencia como afordancia: el
+   usuario no debe reaprender dónde está la navegación al cambiar de pantalla. */
+
+.barra-app {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-barra);
+  background-color: var(--superficie);
+  border-bottom: 1px solid var(--filete);
+}
+
+/* Cada hoja de página fija --ancho-pagina para que la barra, el contenido y la
+   barra de selección compartan exactamente la misma caja. Sin esto, la tabla
+   de Inventario (1280px) sobresalía de su propia barra superior. */
+.barra-app__interior {
+  max-width: var(--ancho-pagina, var(--ancho-contenido));
+  margin: 0 auto;
+  padding: var(--esp-2) var(--esp-pagina);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--esp-2) var(--esp-4);
+}
+
+.barra-app__marca {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-3);
+  margin-inline-end: auto;
+  text-decoration: none;
+  color: inherit;
+}
+
+/* El logo es un JPG con fondo gris texturizado incrustado. Sin sombra y con un
+   filete: así se lee como marca enmarcada y no como una caja gris flotando
+   sobre el papel. */
+.barra-app__logo {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radio-md);
+  box-shadow: inset 0 0 0 1px var(--filete);
+  flex-shrink: 0;
+}
+
+.barra-app__nombre {
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-titulo);
+  color: var(--tinta-fuerte);
+  line-height: 1.2;
+}
+
+.barra-app__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-1);
+}
+
+/* Dos enlaces. Esconderlos tras una hamburguesa costaría un toque de más. */
+.barra-app__enlace {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--objetivo-tactil);
+  padding: 0 var(--esp-3);
+  border-radius: var(--radio-md);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  color: var(--tinta-tenue);
+  text-decoration: none;
+  transition: color var(--dur-media) var(--curva),
+              background-color var(--dur-media) var(--curva);
+}
+
+.barra-app__enlace:hover {
+  color: var(--tinta-fuerte);
+  background-color: var(--papel-hundido);
+}
+
+/* La pantalla actual: peso, tinta plena y la regla de marca debajo. */
+.barra-app__enlace[aria-current='page'] {
+  color: var(--tinta-fuerte);
+  font-weight: var(--peso-fuerte);
+  box-shadow: inset 0 -2px 0 var(--marca);
+  border-radius: var(--radio-md) var(--radio-md) 0 0;
+}
+
+/* ---- Cabecera de pantalla -------------------------------------------------- */
+
+.cabecera-pantalla {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--esp-2) var(--esp-4);
+  padding-bottom: var(--esp-4);
+  margin-bottom: var(--esp-5);
+  border-bottom: 1px solid var(--filete);
+}
+
+.cabecera-pantalla h1 {
+  font-size: var(--texto-display);
+  margin-inline-end: auto;
+}
+
+.cabecera-pantalla__sub {
+  font-size: var(--texto-sm);
+  color: var(--tinta-tenue);
+}

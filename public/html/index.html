@@ -2,60 +2,78 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Ok-producciones-almacen</title>
-  <link rel="stylesheet" href="/css/style.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <title>Elegir material — Ok-producciones</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/style.css">
 </head>
 
 <body>
-  <div class="container">
-    
-    <!-- ENCABEZADO -->
-    <div class="header">
-      <img src="/img/logo.jpg" alt="Logo de la empresa" class="logo">
-      <h1>Inventario</h1>
-      <div class="header-buttons">
-        <div class="botones-menu">
-          <a class="btn-inventario" href="/html/inventario.html">Inventario</a>
-          <a class="btn-orden" href="/html/orden_del_dia.html">Orden del Día</a>
+
+  <!-- BARRA SUPERIOR: la misma en esta pantalla y en Inventario -->
+  <header class="barra-app">
+    <div class="barra-app__interior">
+      <a class="barra-app__marca" href="/">
+        <img src="/img/logo.jpg" alt="" class="barra-app__logo">
+        <span class="barra-app__nombre">Ok-producciones<br>Almacén</span>
+      </a>
+      <nav class="barra-app__nav" aria-label="Principal">
+        <a class="barra-app__enlace" href="/" aria-current="page">Elegir</a>
+        <a class="barra-app__enlace" href="/html/inventario.html">Inventario</a>
+        <a class="barra-app__enlace" href="/html/orden_del_dia.html">Orden del día</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <div class="cabecera-pantalla">
+      <h1>Elegir material</h1>
+      <p class="cabecera-pantalla__sub">Ajusta la cantidad de lo que sale hoy.</p>
+    </div>
+
+    <!-- Dos columnas a partir de 1024px: catálogo a la izquierda, selección
+         fija a la derecha. Por debajo se apila. -->
+    <div class="disposicion">
+
+      <div class="disposicion__principal">
+        <div class="buscador">
+          <label class="visualmente-oculto" for="buscar">Buscar producto</label>
+          <input type="search" id="buscar" class="campo" placeholder="Buscar producto…" autocomplete="off">
         </div>
-      </div>
-    </div> 
 
-    <!-- BÚSQUEDA -->
-    <div class="search-box">
-      <input type="text" id="buscar" placeholder="Buscar producto..." />
-      <h1>Listado</h1>
+        <!-- logica.js monta aquí .grupo-area > .rejilla-productos > .producto -->
+        <div id="resultados" class="resultados"></div>
+      </div>
+
+      <aside class="disposicion__lateral" aria-label="Selección">
+        <section class="panel-seleccion">
+          <div class="panel-seleccion__cabecera">
+            <h2>Selección</h2>
+            <p class="panel-seleccion__resumen cifra" data-resumen></p>
+          </div>
+          <p id="listaVacia" class="lista__vacia">Todavía no has elegido nada.</p>
+          <ul id="lista" class="lista__items"></ul>
+          <a id="ctaOrden" href="/html/orden_del_dia.html"
+             class="btn btn--primario panel-seleccion__cta" hidden>Ver orden del día</a>
+        </section>
+      </aside>
+
     </div>
 
-    <!-- RESULTADOS -->
-    <div id="resultados" class="resultados"></div>
+  </main>
 
-    <!-- LISTA DE ÍTEMS SELECCIONADOS -->
-    <div class="lista">
-      <h2>Lista seleccionada</h2>
-      <ul id="lista"></ul>
-    </div>
-
-  </div> 
-
-  <!-- MODAL PARA SELECCIONAR CANTIDAD -->
-  <div id="modalCantidad" class="modal">
-    <div class="modal-content">
-      <h3 id="modalItemNombre">Nombre del ítem</h3>
-      
-      <label for="cantidadInput">Cantidad:</label>
-      <input type="number" id="cantidadInput" min="1" value="1">
-      
-      <div class="modal-buttons">
-        <button id="btnAgregarCantidad">Agregar</button>
-        <button id="btnCancelarModal">Cancelar</button>
-      </div>
+  <!-- BARRA DE SELECCIÓN: atajo persistente mientras se recorre el catálogo.
+       Solo hasta 1024px — por encima, el panel lateral ya está siempre a la
+       vista y repetir el contador sería ruido. Se oculta con el atributo
+       `hidden`, que funciona gracias a [hidden]{display:none!important}. -->
+  <div id="barraSeleccion" class="barra-seleccion" hidden>
+    <div class="barra-seleccion__interior">
+      <p class="barra-seleccion__resumen cifra" data-resumen></p>
+      <a href="/html/orden_del_dia.html" class="btn btn--primario">Ver orden del día</a>
     </div>
   </div>
 
-  <!-- LÓGICA PRINCIPAL -->
   <script src="/js/logica.js"></script>
 </body>
 </html>

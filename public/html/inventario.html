@@ -2,156 +2,144 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Inventario</title>
-  <link rel="stylesheet" href="/css/style-inventario.css" />
+  <title>Inventario — Ok-producciones</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/style-inventario.css" />
 </head>
 
 <body>
-<div class="container">
 
-  <div class="header">
-    <div class="header-left">
-      <!-- Botón para volver a la página anterior o al menú -->
-      <a href="/" class="btn-volver">&lt;</a>
+<!-- BARRA SUPERIOR: la misma que en la Principal -->
+<header class="barra-app">
+  <div class="barra-app__interior">
+    <a class="barra-app__marca" href="/">
+      <img src="/img/logo.jpg" alt="" class="barra-app__logo">
+      <span class="barra-app__nombre">Ok-producciones<br>Almacén</span>
+    </a>
+    <nav class="barra-app__nav" aria-label="Principal">
+      <a class="barra-app__enlace" href="/">Elegir</a>
+      <a class="barra-app__enlace" href="/html/inventario.html" aria-current="page">Inventario</a>
+      <a class="barra-app__enlace" href="/html/orden_del_dia.html">Orden del día</a>
+    </nav>
+  </div>
+</header>
 
-      <!-- Logo de la empresa -->
-      <div class="logo"> <img class="logo" src="/img/logo.jpg" alt="logo de la empresa"></div>
+<main class="container">
 
-      <!-- Título principal -->
-      <h1>Inventario</h1>
+  <div class="cabecera-pantalla">
+    <h1>Inventario</h1>
+    <p class="cabecera-pantalla__sub">Catálogo completo, incluido lo desactivado.</p>
+  </div>
+
+  <!-- BARRA DE HERRAMIENTAS: buscar a la izquierda, acciones a la derecha.
+       Una sola acción primaria en la pantalla — "Agregar producto". -->
+  <div class="barra-herramientas">
+    <div class="barra-herramientas__busqueda">
+      <label class="visualmente-oculto" for="buscar">Buscar productos</label>
+      <input type="search" id="buscar" class="campo" placeholder="Buscar por nombre, marca o descripción…" autocomplete="off">
     </div>
-
-    <!-- Botones del lado derecho del encabezado -->
-    <div class="header-buttons">
-      <!-- Botón para descargar el inventario en formato CSV -->
-      <button class="btn-secondary" id="btnDescargarCSV">Descargar Cambios</button>
-      <!-- Botón para abrir el modal de "Agregar Nuevo Ítem" -->
-      <button class="btn-primary" id="btnNuevoItem">Agregar Item</button>
+    <div class="barra-herramientas__acciones">
+      <button class="btn btn--secundario" id="btnDescargarCSV" type="button">Descargar CSV</button>
+      <button class="btn btn--primario" id="btnNuevoItem" type="button">Agregar producto</button>
     </div>
   </div>
 
-  <!-- 🟦 SECCIÓN DE BÚSQUEDA -->
-  <div class="search-section">
-    <div class="search-box">
-      <!-- Input de búsqueda para filtrar productos -->
-      <input type="text" id="buscar" placeholder="Buscar productos...">
-    </div>
-  </div>
-
-  <!-- 🟩 TABLA DE INVENTARIO -->
+  <!-- TABLA: edit.js rellena #tablaInventario -->
   <div class="table-container">
-    <div class="table-header">
-      <!-- Título de la tabla -->
-      <h2 class="table-title">Inventario de Equipos</h2>
-    </div>
-
-    <!-- Tabla con encabezados -->
     <table class="table">
       <thead>
         <tr>
-          <th>ID</th>
-          <th>Nombre</th>
-          <th>Marca</th>
-          <th>Descripción</th>
-          <th>Área</th>
-          <th>Cantidad</th>
-          <th>Estado</th>
-          <th>Acciones</th>
+          <th scope="col">ID</th>
+          <th scope="col">Nombre</th>
+          <th scope="col">Marca</th>
+          <th scope="col">Descripción</th>
+          <th scope="col">Área</th>
+          <th scope="col" class="col-cifra">Cantidad</th>
+          <th scope="col">Estado</th>
+          <th scope="col"><span class="visualmente-oculto">Acciones</span></th>
         </tr>
       </thead>
-
-      <!-- Cuerpo de la tabla donde se cargan los ítems dinámicamente con JS -->
-      <tbody id="tablaInventario">
-        <!-- JS insertará aquí las filas -->
-      </tbody>
+      <tbody id="tablaInventario"></tbody>
     </table>
   </div>
-</div>
 
-<!-- 🔶 MODAL PARA AGREGAR O EDITAR UN ÍTEM -->
+</main>
+
+<!-- MODAL: agregar o editar producto -->
 <div id="modalItem" class="modal">
   <div class="modal-content">
-    <!-- Título que cambia dinámicamente: "Agregar" o "Editar" -->
-    <h3 id="modalTitle">Agregar Nuevo Item</h3>
+    <h3 id="modalTitle" class="modal-titulo">Agregar producto</h3>
 
-    <!-- Formulario para agregar o editar ítems -->
     <form id="formItem">
-      <!-- Campo: Nombre -->
       <div class="form-group">
-        <label for="itemNombre">Nombre del producto:</label>
-        <input type="text" id="itemNombre" required>
+        <label for="itemNombre">Nombre del producto</label>
+        <input type="text" id="itemNombre" class="campo" required>
       </div>
 
-      <!-- Campo: Marca -->
       <div class="form-group">
-        <label for="itemMarca">Marca:</label>
-        <input type="text" id="itemMarca" required>
+        <label for="itemMarca">Marca</label>
+        <input type="text" id="itemMarca" class="campo" required>
       </div>
 
-      <!-- Campo: Descripción -->
       <div class="form-group">
-        <label for="itemDescripcion">Descripción:</label>
-        <textarea id="itemDescripcion" rows="3" required></textarea>
+        <label for="itemDescripcion">Descripción</label>
+        <textarea id="itemDescripcion" class="campo" rows="3" required></textarea>
       </div>
 
-      <!-- Campo: Cantidad -->
       <div class="form-group">
-        <label for="itemCantidad">Cantidad:</label>
-        <input type="number" id="itemCantidad" min="0" required>
+        <label for="itemCantidad">Cantidad</label>
+        <input type="number" id="itemCantidad" class="campo cifra" min="0" required>
       </div>
 
-      <!-- Campo: Área (se puebla desde /api/areas) -->
       <div class="form-group">
-        <label for="itemArea">Área:</label>
-        <select name="area" id="itemArea" required>
+        <label for="itemArea">Área</label>
+        <select name="area" id="itemArea" class="campo" required>
           <option value="">Elige el área</option>
         </select>
       </div>
 
-      <!-- Botones del formulario -->
       <div class="modal-buttons">
-        <!-- Botón para cerrar el modal sin guardar -->
-        <button type="button" class="btn-modal btn-modal-secondary" id="btnCancelar">Cancelar</button>
-        <!-- Botón para guardar el nuevo ítem -->
-        <button type="submit" class="btn-modal btn-modal-primary">Guardar</button>
+        <button type="button" class="btn btn--fantasma" id="btnCancelar">Cancelar</button>
+        <button type="submit" class="btn btn--primario">Guardar</button>
       </div>
     </form>
   </div>
 </div>
 
-    <!-- 🔍 MODAL DE DETALLE DE ITEM -->
+<!-- MODAL: detalle del producto -->
 <div id="modalDetalle" class="modal">
   <div class="modal-content">
-    <h3 style="margin-bottom: 10px; color: #ae3592;">Detalles del Producto</h3>
+    <h3 class="modal-titulo">Detalle del producto</h3>
 
-    <p><strong>Nombre:</strong> <span id="detalleNombre"></span></p>
-    <p><strong>Marca:</strong> <span id="detalleMarca"></span></p>
-    <p><strong>Descripción:</strong> <span id="detalleDescripcion"></span></p>
-    <p><strong>Área:</strong> <span id="detalleArea"></span></p>
-    <p><strong>Cantidad:</strong> <span id="detalleCantidad"></span></p>
-    <p><strong>Estado:</strong> <span id="detalleEstado"></span></p>
+    <dl class="detalle">
+      <dt>Nombre</dt>      <dd id="detalleNombre"></dd>
+      <dt>Marca</dt>       <dd id="detalleMarca"></dd>
+      <dt>Descripción</dt> <dd id="detalleDescripcion"></dd>
+      <dt>Área</dt>        <dd id="detalleArea"></dd>
+      <dt>Cantidad</dt>    <dd id="detalleCantidad" class="cifra"></dd>
+      <dt>Estado</dt>      <dd id="detalleEstado"></dd>
+    </dl>
 
-    <div class="modal-buttons" style="justify-content: center;">
-      <button type="button" class="btn-modal btn-modal-secondary" onclick="cerrarModalDetalle()">Cerrar</button>
+    <div class="modal-buttons modal-buttons--centrado">
+      <button type="button" class="btn btn--secundario" onclick="cerrarModalDetalle()">Cerrar</button>
     </div>
   </div>
 </div>
 
-    <!-- ❌ MODAL DE CONFIRMACIÓN DE ELIMINACIÓN -->
+<!-- MODAL: confirmación de borrado -->
 <div id="modalEliminar" class="modal">
   <div class="modal-content">
-    <h3 style="margin-bottom: 15px; color: #c82333;">¿Eliminar ítem?</h3>
-    <p id="textoConfirmacionEliminar">¿Estás seguro de eliminar este ítem?</p>
+    <h3 class="modal-titulo modal-titulo--peligro">¿Eliminar producto?</h3>
+    <p id="textoConfirmacionEliminar">¿Seguro que deseas eliminar este producto?</p>
+    <p class="modal-nota">Esta acción no se puede deshacer.</p>
     <div class="modal-buttons">
-      <button class="btn-modal btn-modal-secondary" onclick="cerrarModalEliminar()">Cancelar</button>
-      <button class="btn-modal btn-modal-primary" onclick="confirmarEliminar()">Sí, eliminar</button>
+      <button type="button" class="btn btn--fantasma" onclick="cerrarModalEliminar()">Cancelar</button>
+      <button type="button" class="btn btn--peligro" onclick="confirmarEliminar()">Sí, eliminar</button>
     </div>
   </div>
 </div>
 
-
-<!-- 🧠 ENLACE AL ARCHIVO DE LÓGICA JS -->
 <script src="/js/edit.js"></script>
 </body>
 </html>
