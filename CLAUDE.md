@@ -58,11 +58,27 @@ areas                          productos
                                │ cantidad    │ INTEGER NOT NULL DEF 0 │
                                │ activo      │ INTEGER NOT NULL DEF 1 │
                                │ id_area     │ FK → areas             │
-                               └─────────────┴────────────────────────┘
+                               └──────┬──────┴────────────────────────┘
+                                      │
+ordenes                               │  orden_lineas
+┌─────────────┬───────────────┐       │  ┌─────────────┬──────────────────┐
+│ id_orden    │ INTEGER PK    │◄─────────┤ id_orden    │ FK → ordenes     │
+│ creada_en   │ TEXT NOT NULL │       └─►│ id_producto │ FK → productos   │
+│ evento      │ TEXT          │          │ nombre      │ TEXT NOT NULL    │
+│ responsable │ TEXT          │          │ cantidad    │ INTEGER NOT NULL │
+└─────────────┴───────────────┘          └─────────────┴──────────────────┘
 ```
 
 - **La cantidad vive en el producto**, no en una tabla puente. `activo` decide si el
   producto aparece en la pantalla principal.
+- **`ordenes` / `orden_lineas` son el registro histórico de lo que salió** (migración
+  002), escrito en el MISMO `COMMIT` que el descuento: no puede haber stock descontado
+  sin constancia del motivo, ni constancia de una salida que se revirtió. Las líneas van
+  **ya agrupadas por producto**, igual que el descuento. `orden_lineas.nombre` duplica a
+  propósito el del producto — es un registro, no una vista: si el producto se renombra o
+  se borra, la orden de marzo debe seguir diciendo qué salió. Lo escribe el servidor
+  desde su propio `SELECT`, nunca el cliente.
+- **Nada lee esas tablas todavía**: no hay `GET /api/ordenes` ni pantalla de historial.
 - `usuarios`, `historial_login` — existen pero ninguna ruta ni UI las usa. No hay
   autenticación; quedó explícitamente para después.
 
@@ -75,7 +91,13 @@ node db/migrations/run.js db/migrations/001-productos-con-area.sql db/inventario
 El runner **no tiene ruta de base por defecto** a propósito: hay que pasarla siempre, para
 que sea imposible migrar la base real por accidente. Haz copia antes
 (`db/inventario.db3.bak` es la de la migración 001, que plegó `detalle_inventario` a
-`productos.cantidad` y renombró `subprocesos` a `areas`).
+`productos.cantidad` y renombró `subprocesos` a `areas`;
+`db/inventario.db3.pre-002.bak` es la de la 002).
+
+La **002** es puramente aditiva (solo `CREATE TABLE` / `CREATE INDEX`): una versión vieja
+de la app sigue funcionando contra una base migrada, y revertirla es un `DROP` de las dos
+tablas. Si añades una migración, **el esquema de `test/helpers/db.js` tiene que
+reflejarla** o los tests correrán contra un modelo que ya no existe.
 
 **Frontend — `public/`.** Servido como estático (`express.static('public')`), por lo que
 las rutas absolutas son `/css/...`, `/js/...`, `/html/...`. Tres pantallas con roles
@@ -92,7 +114,15 @@ separados:
 - `html/inventario.html` + `js/edit.js` — CRUD real contra la API: alta, edición,
   activar/desactivar, borrado, export CSV.
 - `html/orden_del_dia.html` + `js/orden.js` — el formato imprimible. Lee la selección,
-  la agrupa por área y al confirmar descuenta de verdad.
+  la agrupa por área y al confirmar descuenta de verdad. **También la ajusta**: cada
+  línea trae `− + ✕` (`.no-imprimir`), así que devolver material no obliga a volver a
+  la Principal. El `+` necesita saber cuánto hay, así que esta pantalla también pide
+  `/api/productos?activo=1`; si falla queda deshabilitado y solo se puede bajar o
+  quitar — nunca al revés, porque bajar jamás deja el stock corto.
+  Lleva la misma `.barra-app` que las otras dos, con el botón de imprimir **dentro**:
+  dos barras `sticky; top: 0` se solapan cuando la de navegación envuelve en móvil.
+  Bajo 700px ese botón pasa a `fixed` abajo. En el estado vacío se oculta el **botón**,
+  nunca la barra.
 
 **Capa de diseño.** `public/css/base.css` se carga antes que la hoja de cada pantalla y
 contiene todos los tokens, el reset y las primitivas. El sistema está descrito en
@@ -116,6 +146,9 @@ actual ya se aplicó, y es lo que hace que imprimir dos veces descuente una sola
 invariante: **quien escriba `ordenSeleccion` debe borrar `ordenAplicada`.** Si la selección
 cambia, la orden es otra y su descuento está pendiente; dejar la clave en `"true"` hace que
 Orden del día imprima sin llamar a `/api/ordenes` — papel por material nunca descontado.
+Escriben la clave **las dos pantallas**: `logica.js` al mover un contador y `orden.js` al
+ajustar una línea del formato. Las dos pasan por su propia `guardarSeleccion()`, que hace
+ambas cosas a la vez justamente para que no se pueda olvidar una.
 
 La otra mitad: **la Principal no rehidrata una selección cuya orden ya se aplicó.**
 Si `ordenAplicada` es `"true"` al cargar, arranca en limpio en vez de recuperar
@@ -124,11 +157,39 @@ descontaría dos veces si se reenvía. `ordenSeleccion` se deja en
 `sessionStorage` a propósito pese a esto: es lo que permite a Orden del día
 reimprimir el mismo papel sin volver a llamar a `/api/ordenes`.
 
+Y la tercera operación, que faltaba y era un bug: **cerrar la orden borra las DOS
+claves** (botón "Empezar una nueva orden"). Sin ella, una orden ya impresa se quedaba
+pegada para siempre: la Principal arrancaba en limpio, así que no tenía nada que quitar
+y nunca reescribía la clave, e imprimir solo reimprimía.
+
 **`POST /api/ordenes` es el único camino que escribe stock.** Valida todo antes de tocar
 nada, agrupa las líneas repetidas del mismo producto **antes** de comparar contra el stock
 (si no, dos pedidos que caben por separado dejarían la cantidad en negativo), y aplica los
-`UPDATE` dentro de una transacción: todo o nada. Responde 409 con `{faltantes}` sin
-descontar si algo no alcanza.
+`UPDATE` **junto con el registro de la orden** dentro de una transacción: todo o nada.
+Responde 409 con `{faltantes}` sin descontar si algo no alcanza, y 200 con `{id_orden}`.
+Acepta `evento` y `responsable` opcionales (texto, máximo 200); en blanco se guardan como
+`NULL`, no como cadena vacía.
+
+**Se avisa antes de emitir, y solo antes.** El descuento es inmediato y no se deshace
+desde la app, así que un `<dialog>` lo dice con las unidades delante antes del `POST`. Es
+`<dialog>` nativo y no el `.modal` de Inventario porque ese se abre conmutando
+`style.display`, que es justo lo que choca con el `[hidden]` del que depende `orden.js`.
+
+Después de imprimir **no se pregunta nada**, aunque el navegador tampoco sepa si el papel
+salió (`afterprint` se dispara igual al imprimir que al cancelar, y la web no ve la cola
+de impresión). Se probó preguntar "¿salió bien el papel?" y se retiró: el aviso previo ya
+lo dijo, y una segunda pregunta invita a dudar de un descuento ya aplicado. Si la
+impresora falla, "Reimprimir" está a la vista y no vuelve a descontar.
+
+Se descarta separarlo en "Imprimir" + "Confirmar salida": invierte el riesgo. Un papel sin
+descontar significa material fuera del almacén que el sistema cree tener, y eso no se
+detecta hasta el siguiente inventario; una orden descontada sin papel se ve al instante y
+se arregla reimprimiendo.
+
+**Para verificar el `@media print` no sirve `getComputedStyle`**: en un hijo de un
+elemento oculto devuelve su propio `display`, no `none`, y da por bueno lo que en papel no
+se ve. Usa `elemento.checkVisibility()`, que sí mira los ancestros, con
+`page.emulateMedia({ media: 'print' })`.
 
 ## Estado conocido (no son bugs que introdujiste)
 

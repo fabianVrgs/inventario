@@ -3,7 +3,7 @@ const os = require('node:os');
 const path = require('node:path');
 const sqlite3 = require('sqlite3');
 
-// Esquema equivalente al de db/inventario.db3 tras la migración 001.
+// Esquema equivalente al de db/inventario.db3 tras las migraciones 001 y 002.
 // Se recrea en un archivo temporal para que los tests nunca escriban
 // sobre la base versionada.
 const ESQUEMA = `
@@ -21,6 +21,23 @@ const ESQUEMA = `
     activo INTEGER NOT NULL DEFAULT 1,
     id_area INTEGER REFERENCES areas(id_area)
   );
+
+  CREATE TABLE ordenes (
+    id_orden    INTEGER PRIMARY KEY AUTOINCREMENT,
+    creada_en   TEXT NOT NULL,
+    evento      TEXT,
+    responsable TEXT
+  );
+
+  CREATE TABLE orden_lineas (
+    id_linea    INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_orden    INTEGER NOT NULL REFERENCES ordenes(id_orden),
+    id_producto INTEGER NOT NULL REFERENCES productos(id_producto),
+    nombre      TEXT NOT NULL,
+    cantidad    INTEGER NOT NULL
+  );
+
+  CREATE INDEX idx_orden_lineas_orden ON orden_lineas(id_orden);
 `;
 
 const DATOS = `
@@ -57,9 +74,12 @@ function crearBaseTemporal() {
 function sembrar(db) {
   return new Promise((resolve, reject) => {
     db.exec(
-      `DELETE FROM productos;
+      `DELETE FROM orden_lineas;
+       DELETE FROM ordenes;
+       DELETE FROM productos;
        DELETE FROM areas;
-       DELETE FROM sqlite_sequence WHERE name IN ('productos', 'areas');
+       DELETE FROM sqlite_sequence
+         WHERE name IN ('productos', 'areas', 'ordenes', 'orden_lineas');
        ${DATOS}`,
       (err) => (err ? reject(err) : resolve())
     );

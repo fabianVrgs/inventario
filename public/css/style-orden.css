@@ -3,14 +3,15 @@
 
    Esta pantalla NO es solo una pantalla: es el papel que se entrega al equipo
    de montaje. El bloque @media print del final es contrato funcional, no
-   decoración — orden.js llama a window.print() en las líneas 183 y 205.
+   decoración — orden.js llama a window.print() al confirmar y al reimprimir.
 
    Es también la única superficie del sistema que se gana parecer una hoja
    levantada del escritorio, porque de verdad lo es.
 
    Contrato con orden.js — no renombrar, lo emite o lo consulta el JS:
-     .barra-acciones (querySelector), .seccion-area, .titulo-area,
-     .linea-producto, .nombre-prod, .puntos, .cantidad-prod
+     .seccion-area, .titulo-area, .linea-producto, .nombre-prod, .puntos,
+     .cantidad-prod, .acciones-linea, .acciones-linea__paso (querySelectorAll
+     para habilitar/deshabilitar el + según las existencias)
    Y orden.js muestra/oculta con el atributo `hidden`, no con style.display.
    base.css define `[hidden]{display:none!important}` justo por eso: sin él,
    el `display:flex` de .barra-acciones ganaba y la barra NUNCA se ocultaba
@@ -19,36 +20,40 @@
 
 body {
   min-height: 100dvh;
+  /* La barra superior comparte caja con la hoja (700px), no con el ancho de
+     contenido por defecto: si no, el nav quedaba más ancho que el papel que
+     tiene justo debajo. Lo lee .barra-app__interior en base.css. */
+  --ancho-pagina: var(--ancho-hoja);
 }
 
-/* ---------- Barra de acciones (solo pantalla) ---------- */
-
-.barra-acciones {
-  position: sticky;
-  top: 0;
-  z-index: var(--z-barra);
-  background-color: var(--superficie);
-  border-bottom: 1px solid var(--filete);
-  /* El fondo ocupa todo el ancho, pero los botones se alinean con los bordes
-     de la hoja. El padding calculado evita tener que meter un <div> envoltorio
-     dentro de .barra-acciones, que es el elemento que orden.js localiza con
-     querySelector. */
-  padding: var(--esp-2) max(var(--esp-pagina), calc((100% - var(--ancho-hoja)) / 2));
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--esp-3);
-  justify-content: space-between;
-  align-items: center;
-}
-
-.btn-volver {
-  color: var(--tinta-suave);
-}
+/* ---------- Acción de imprimir, dentro de la barra compartida ---------- */
 
 /* Único estado de carga real del proyecto: orden.js deshabilita el botón
    mientras el POST a /api/ordenes está en vuelo. */
 .btn-imprimir:disabled {
   cursor: progress;
+}
+
+/* Por debajo del ancho de la hoja, la barra superior envuelve en tres filas y
+   se comía 155px pegados arriba, con el botón descolgado a la izquierda. La
+   acción principal baja al pulgar, igual que la barra de selección de la
+   Principal. Sigue siendo hijo de .barra-app, así que @media print lo oculta
+   con ella; y `position: sticky` en el ancestro no crea containing block, de
+   modo que `fixed` se ancla al viewport como debe. */
+@media (max-width: 700px) {
+  .btn-imprimir {
+    position: fixed;
+    left: var(--esp-pagina);
+    right: var(--esp-pagina);
+    bottom: var(--esp-4);
+    z-index: var(--z-barra);
+    box-shadow: var(--sombra-modal);
+  }
+
+  /* Hueco para que el botón fijo no tape la firma de la hoja. */
+  .hoja {
+    margin-bottom: calc(var(--esp-8) + var(--objetivo-tactil));
+  }
 }
 
 /* ---------- Estado vacío ---------- */
@@ -105,6 +110,89 @@ body {
 .aviso-faltantes ul {
   margin: 0;
   padding-left: var(--esp-5);
+}
+
+/* ---------- Orden ya aplicada (cerrada) ---------- */
+
+.aviso-aplicada {
+  max-width: var(--ancho-hoja);
+  margin: var(--esp-4) auto 0;
+  padding: var(--esp-4);
+  background-color: var(--exito-lavado);
+  border-radius: var(--radio-md);
+  color: var(--exito-texto);
+  font-size: var(--texto-sm);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esp-3);
+}
+
+.aviso-aplicada__texto {
+  margin: 0;
+  flex: 1 1 16rem;
+  font-weight: var(--peso-medio);
+}
+
+/* ---------- Diálogo de confirmación antes de descontar ----------
+   <dialog> nativo, no el .modal de Inventario: aquí hace falta backdrop,
+   Escape y foco sin JS, y sobre todo no conmutar `style.display`, que es lo
+   que pelearía con el [hidden]{display:none!important} del que depende el
+   resto de la pantalla. El navegador oculta el <dialog> cerrado por sí solo. */
+
+.dialogo {
+  width: min(100% - var(--esp-5) * 2, 460px);
+  padding: var(--esp-5);
+  border: 0;
+  border-radius: var(--radio-lg);
+  background-color: var(--superficie);
+  box-shadow: var(--sombra-modal);
+  color: var(--tinta);
+}
+
+.dialogo::backdrop {
+  background-color: var(--velo-modal);
+}
+
+.dialogo[open] {
+  animation: entrada-dialogo var(--dur-lenta) var(--curva);
+}
+
+@keyframes entrada-dialogo {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialogo[open] { animation: none; }
+}
+
+.dialogo__titulo {
+  margin: 0 0 var(--esp-4);
+  padding-bottom: var(--esp-3);
+  border-bottom: 1px solid var(--filete);
+  font-size: var(--texto-titulo);
+  color: var(--tinta-fuerte);
+}
+
+.dialogo__texto {
+  margin: 0;
+  font-size: var(--texto-sm);
+}
+
+.dialogo__nota {
+  margin: var(--esp-2) 0 0;
+  font-size: var(--texto-sm);
+  color: var(--tinta-tenue);
+}
+
+.dialogo__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-2);
+  justify-content: flex-end;
+  margin-top: var(--esp-5);
 }
 
 /* ---------- La hoja ---------- */
@@ -245,6 +333,66 @@ body {
   font-variant-numeric: tabular-nums lining-nums;
 }
 
+/* ---------- Ajuste de la orden (sólo pantalla) ----------
+   Devolver material obligaba a volver a la Principal y bajar contadores uno
+   a uno; estos controles lo hacen sobre el propio formato. Van marcados
+   .no-imprimir porque el papel que se entrega no lleva botones.
+
+   `align-self: center` y no el `baseline` de la línea: los 44px del objetivo
+   táctil descuadrarían la línea de puntos, que sí se alinea por baseline. */
+
+.acciones-linea {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  flex-shrink: 0;
+  gap: var(--esp-1);
+  margin-left: var(--esp-3);
+}
+
+.acciones-linea__paso,
+.acciones-linea__quitar {
+  width: var(--objetivo-tactil);
+  min-height: var(--objetivo-tactil);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  border-radius: var(--radio-md);
+  transition: background-color var(--dur-rapida) var(--curva),
+              color var(--dur-rapida) var(--curva);
+}
+
+.acciones-linea__paso {
+  font-size: var(--texto-titulo);
+  font-weight: var(--peso-medio);
+  color: var(--tinta-fuerte);
+  box-shadow: inset 0 0 0 1px var(--filete-fuerte);
+}
+
+.acciones-linea__paso:hover:not(:disabled) {
+  background-color: var(--papel-hundido);
+}
+
+/* El + se apaga cuando se pidió todo lo que hay — o cuando no se pudo
+   consultar el catálogo y por tanto no se sabe cuánto hay. */
+.acciones-linea__paso:disabled {
+  color: var(--filete-fuerte);
+  box-shadow: inset 0 0 0 1px var(--filete);
+  cursor: not-allowed;
+}
+
+.acciones-linea__quitar {
+  font-size: var(--texto-base);
+  color: var(--tinta-tenue);
+}
+
+/* Quitar es destructivo: en hover se declara como tal, igual que en la Principal. */
+.acciones-linea__quitar:hover {
+  background-color: var(--peligro-lavado);
+  color: var(--peligro-texto);
+}
+
 .pie-firma {
   display: flex;
   flex-wrap: wrap;
@@ -276,8 +424,10 @@ body {
 @media print {
   /* Todo lo que no es el formato desaparece. */
   .no-imprimir,
-  .barra-acciones,
-  .aviso-faltantes {
+  .barra-app,
+  .aviso-faltantes,
+  .aviso-aplicada,
+  .acciones-linea {
     display: none !important;
   }
 

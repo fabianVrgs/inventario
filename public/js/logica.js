@@ -383,7 +383,10 @@ function restaurarSeleccion() {
 // ---------------------------------------------------------------------------
 
 window.addEventListener("DOMContentLoaded", () => {
-  fetch("/api/productos?activo=1")
+  // `no-store` no es paranoia: volviendo con el botón atrás del navegador,
+  // Chrome servía este GET desde su caché y la pantalla pintaba las
+  // existencias de ANTES del último descuento (16 donde ya quedaban 13).
+  fetch("/api/productos?activo=1", { cache: "no-store" })
     .then(res => res.json())
     .then(data => {
       productos = data.map(p => ({
