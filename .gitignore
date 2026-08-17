@@ -1,0 +1,25 @@
+# Dependencias — se reconstruyen con `npm install`.
+# sqlite3 compila nativo, así que node_modules/ nunca es portable entre máquinas.
+node_modules/
+
+# Documentación de trabajo (specs, planes, verificaciones).
+# Vive en el disco de quien la escribe, no en el repo.
+docs/
+
+# Artefactos de herramientas de agentes
+.claude/
+.playwright-mcp/
+
+# Respaldos de la base de datos.
+# db/inventario.db3 SÍ se versiona: trae los datos de arranque del almacén.
+*.bak
+db/*.db3-journal
+
+# Sistema operativo
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Logs
+npm-debug.log*
+*.log

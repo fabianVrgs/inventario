@@ -237,6 +237,16 @@ h1 {
     transform: translateY(-1px);
 }
 
+.btn-toggle {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-toggle:hover {
+    background-color: #545b62;
+    transform: translateY(-1px);
+}
+
 .badge {
     padding: 4px 8px;
     border-radius: 12px;
@@ -376,4 +386,14 @@ h1 {
     .table {
         min-width: 800px;
     }
+}
+
+/* Fila de un producto desactivado: sigue siendo editable y reactivable,
+   pero se distingue de un vistazo de lo que sí está disponible. */
+.table tbody tr.fila-inactiva {
+    opacity: 0.55;
+}
+
+.table tbody tr.fila-inactiva td strong {
+    text-decoration: line-through;
 }

@@ -13,7 +13,7 @@
   <div class="header">
     <div class="header-left">
       <!-- Botón para volver a la página anterior o al menú -->
-      <a href="index.html" class="btn-volver">&lt;</a>
+      <a href="/" class="btn-volver">&lt;</a>
 
       <!-- Logo de la empresa -->
       <div class="logo"> <img class="logo" src="/img/logo.jpg" alt="logo de la empresa"></div>
@@ -54,6 +54,7 @@
           <th>Nombre</th>
           <th>Marca</th>
           <th>Descripción</th>
+          <th>Área</th>
           <th>Cantidad</th>
           <th>Estado</th>
           <th>Acciones</th>
@@ -100,12 +101,11 @@
         <input type="number" id="itemCantidad" min="0" required>
       </div>
 
+      <!-- Campo: Área (se puebla desde /api/areas) -->
       <div class="form-group">
-        <label for="itemestado">Estado:</label>
-        <select name="estado" id="itemestado" required>
-          <option value="">Elige el estado</option>
-          <option value="Disponible">Disponible</option>
-          <option value="No-disponible">No disponible</option>
+        <label for="itemArea">Área:</label>
+        <select name="area" id="itemArea" required>
+          <option value="">Elige el área</option>
         </select>
       </div>
 
@@ -128,6 +128,7 @@
     <p><strong>Nombre:</strong> <span id="detalleNombre"></span></p>
     <p><strong>Marca:</strong> <span id="detalleMarca"></span></p>
     <p><strong>Descripción:</strong> <span id="detalleDescripcion"></span></p>
+    <p><strong>Área:</strong> <span id="detalleArea"></span></p>
     <p><strong>Cantidad:</strong> <span id="detalleCantidad"></span></p>
     <p><strong>Estado:</strong> <span id="detalleEstado"></span></p>
 

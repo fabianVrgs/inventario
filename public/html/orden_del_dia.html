@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Orden del Día - Ok-producciones-almacen</title>
+  <link rel="stylesheet" href="/css/style-orden.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+
+<body>
+
+  <!-- BARRA SUPERIOR: sólo visible en pantalla, no en impresión -->
+  <div class="barra-acciones no-imprimir">
+    <a href="/" class="btn-volver">&larr; Volver</a>
+    <button id="btnImprimirOrden" class="btn-imprimir" type="button">Imprimir</button>
+  </div>
+
+  <!-- MENSAJE DE ERROR / FALTANTES (409) -->
+  <div id="avisoFaltantes" class="aviso-faltantes no-imprimir" hidden></div>
+
+  <!-- ESTADO VACÍO: se muestra cuando no hay selección en sessionStorage -->
+  <div id="estadoVacio" class="estado-vacio no-imprimir" hidden>
+    <p>No hay productos seleccionados.</p>
+    <a href="/" class="btn-volver-vacio">Volver al inicio</a>
+  </div>
+
+  <!-- FORMATO IMPRIMIBLE -->
+  <div id="formatoOrden" class="hoja" hidden>
+
+    <div class="encabezado">
+      <img src="/img/logo.jpg" alt="Logo de la empresa" class="logo-orden">
+      <div class="titulo-encabezado">
+        <h1>ORDEN DEL DÍA</h1>
+        <p class="linea-dato">
+          <span class="etiqueta">Fecha:</span>
+          <span id="fechaHoy" class="valor-impreso"></span>
+        </p>
+        <p class="linea-dato">
+          <span class="etiqueta">Evento:</span>
+          <input type="text" id="inputEvento" class="campo-editable" placeholder="Nombre del evento">
+          <span class="valor-impreso solo-impresion" id="valorEventoImpreso"></span>
+        </p>
+      </div>
+    </div>
+
+    <hr class="separador">
+
+    <div id="contenidoAreas" class="contenido-areas"></div>
+
+    <hr class="separador">
+
+    <div class="pie-firma">
+      <div class="campo-firma">
+        <span class="etiqueta">Responsable:</span>
+        <input type="text" id="inputResponsable" class="campo-editable" placeholder="Nombre del responsable">
+        <span class="valor-impreso solo-impresion" id="valorResponsableImpreso"></span>
+      </div>
+      <div class="campo-firma">
+        <span class="etiqueta">Firma:</span>
+        <span class="raya-firma"></span>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/js/orden.js"></script>
+</body>
+</html>

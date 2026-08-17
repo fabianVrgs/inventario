@@ -77,6 +77,27 @@ h2 {
 #lista li {
   padding: 10px;
   border-bottom: 1px solid #ccc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-quitar {
+  background: none;
+  border: none;
+  color: #a328a7;
+  font-weight: bold;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.btn-quitar:hover {
+  background-color: #f0e0f0;
+  color: #6f1a6f;
 }
 
 /* Modal estilo*/
