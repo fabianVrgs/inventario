@@ -10,10 +10,39 @@
 
 <body>
 
-  <!-- BARRA SUPERIOR: sólo visible en pantalla, no en impresión -->
-  <div class="barra-acciones no-imprimir">
-    <a href="/" class="btn btn--fantasma btn-volver">&larr; Volver a elegir</a>
-    <button id="btnImprimirOrden" class="btn btn--primario btn-imprimir" type="button">Imprimir y descontar</button>
+  <!-- BARRA SUPERIOR: la misma que en la Principal y en Inventario. Orden del
+       día es una sección más de la app, no una pantalla aparte a la que se
+       sale; antes esta barra no existía aquí y la única vuelta era un enlace.
+
+       El botón de imprimir vive DENTRO de esta barra y no en una segunda
+       barra propia: las dos serían `position: sticky; top: 0` y se
+       solaparían en cuanto la de navegación envuelve en móvil. -->
+  <header class="barra-app no-imprimir">
+    <div class="barra-app__interior">
+      <a class="barra-app__marca" href="/">
+        <img src="/img/logo.jpg" alt="" class="barra-app__logo">
+        <span class="barra-app__nombre">Ok-producciones<br>Almacén</span>
+      </a>
+      <nav class="barra-app__nav" aria-label="Principal">
+        <a class="barra-app__enlace" href="/">Elegir</a>
+        <a class="barra-app__enlace" href="/html/inventario.html">Inventario</a>
+        <a class="barra-app__enlace" href="/html/orden_del_dia.html" aria-current="page">Orden del día</a>
+      </nav>
+      <button id="btnImprimirOrden" class="btn btn--primario btn-imprimir" type="button">Imprimir y descontar</button>
+    </div>
+  </header>
+
+  <!-- ORDEN YA APLICADA: el descuento se hizo y esta orden está cerrada.
+       Sin este bloque no había forma de vaciarla desde la interfaz: la
+       Principal arranca en limpio (no tiene nada que quitar, así que nunca
+       reescribe `ordenSeleccion`) e "Imprimir" sólo reimprime. La orden se
+       quedaba pegada hasta cerrar la pestaña. -->
+  <div id="avisoOrdenAplicada" class="aviso-aplicada no-imprimir" hidden>
+    <p class="aviso-aplicada__texto">
+      Esta orden ya se descontó del inventario: el material salió del almacén.
+      Reimprimir no vuelve a descontar.
+    </p>
+    <button id="btnNuevaOrden" class="btn btn--secundario" type="button">Empezar una nueva orden</button>
   </div>
 
   <!-- MENSAJE DE ERROR / FALTANTES (409) -->
@@ -38,7 +67,7 @@
         </p>
         <p class="linea-dato">
           <span class="etiqueta">Evento:</span>
-          <input type="text" id="inputEvento" class="campo-editable" placeholder="Nombre del evento">
+          <input type="text" id="inputEvento" class="campo-editable" placeholder="Nombre del evento" maxlength="200">
           <span class="valor-impreso solo-impresion" id="valorEventoImpreso"></span>
         </p>
       </div>
@@ -53,7 +82,7 @@
     <div class="pie-firma">
       <div class="campo-firma">
         <span class="etiqueta">Responsable:</span>
-        <input type="text" id="inputResponsable" class="campo-editable" placeholder="Nombre del responsable">
+        <input type="text" id="inputResponsable" class="campo-editable" placeholder="Nombre del responsable" maxlength="200">
         <span class="valor-impreso solo-impresion" id="valorResponsableImpreso"></span>
       </div>
       <div class="campo-firma">
@@ -63,6 +92,30 @@
     </div>
 
   </div>
+
+  <!-- CONFIRMACIÓN PREVIA: pulsar imprimir descuenta de verdad, y eso no se
+       deshace desde la aplicación. Se avisa ANTES, no después.
+
+       <dialog> nativo y no el .modal de Inventario a propósito: da backdrop,
+       Escape y foco sin JS, y sobre todo no depende de conmutar
+       `style.display`, que es justo lo que chocaría con el
+       `[hidden]{display:none!important}` del que vive el resto de esta
+       pantalla. -->
+  <dialog id="dialogoEmitir" class="dialogo no-imprimir" aria-labelledby="dialogoEmitirTitulo">
+    <h2 id="dialogoEmitirTitulo" class="dialogo__titulo">¿Emitir la orden del día?</h2>
+    <p class="dialogo__texto">
+      Al continuar se descontarán <strong id="resumenDescuento"></strong>
+      del inventario y se abrirá el diálogo de impresión.
+    </p>
+    <p class="dialogo__nota">
+      El descuento se aplica aunque después canceles la impresión, y no se
+      deshace desde la aplicación.
+    </p>
+    <div class="dialogo__acciones">
+      <button id="btnCancelarEmision" class="btn btn--fantasma" type="button">Cancelar</button>
+      <button id="btnConfirmarEmision" class="btn btn--primario" type="button">Sí, descontar e imprimir</button>
+    </div>
+  </dialog>
 
   <script src="/js/orden.js"></script>
 </body>
