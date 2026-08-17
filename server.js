@@ -16,6 +16,40 @@ const db = new sqlite3.Database(dbPath, (err) => {
   }
 });
 
+// `db/inventario.db3` está versionado con la 001 aplicada pero sin la 002, así
+// que recién clonado no tiene estas dos tablas y POST /api/ordenes responde
+// 500 (`no such table: ordenes`). Crearlas al arrancar es idempotente y deja
+// la app usable sin correr el runner de migraciones a mano.
+//
+// Se encola aquí, antes de declarar cualquier ruta, para que sqlite3 lo
+// procese en esta conexión antes de la primera consulta de una petición.
+// El DDL debe seguir igual al de db/migrations/002-registro-de-ordenes.sql.
+db.serialize(() => {
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS ordenes (
+       id_orden    INTEGER PRIMARY KEY AUTOINCREMENT,
+       creada_en   TEXT NOT NULL,
+       evento      TEXT,
+       responsable TEXT
+     );
+
+     CREATE TABLE IF NOT EXISTS orden_lineas (
+       id_linea    INTEGER PRIMARY KEY AUTOINCREMENT,
+       id_orden    INTEGER NOT NULL REFERENCES ordenes(id_orden),
+       id_producto INTEGER NOT NULL REFERENCES productos(id_producto),
+       nombre      TEXT NOT NULL,
+       cantidad    INTEGER NOT NULL
+     );
+
+     CREATE INDEX IF NOT EXISTS idx_orden_lineas_orden ON orden_lineas(id_orden);`,
+    (errEsquema) => {
+      if (errEsquema) {
+        console.error('❌ Error al asegurar las tablas de órdenes:', errEsquema.message);
+      }
+    }
+  );
+});
+
 // Ruta principal
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/public/html/index.html');

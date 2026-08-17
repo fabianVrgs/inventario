@@ -39,6 +39,12 @@ Orden inusual del archivo, importante al editar: la ruta `/` y `app.listen()` es
 
 Tres ganchos existen solo para poder testear, no los quites: `DB_PATH` (env) elige la base, `app.listen()` está envuelto en `require.main === module` para que importar el módulo no abra puerto, y el final exporta la app con la conexión colgada en `app.locals.db` para cerrarla en el teardown.
 
+Al abrir la conexión, `server.js` crea `ordenes` y `orden_lineas` con `CREATE TABLE
+IF NOT EXISTS`. No es una migración: es porque `db/inventario.db3` está versionado
+con la 001 aplicada pero **sin la 002**, y recién clonado `POST /api/ordenes` moría
+con `no such table: ordenes`. Si cambias el DDL de la 002, cambia también ese
+bloque — son la misma definición escrita dos veces.
+
 **Tests — `test/`.** Runner nativo de Node, cero dependencias extra. `test/helpers/db.js` recrea el esquema en una base temporal sembrada; los tests levantan la app en puerto efímero (`listen(0)`) y la consultan con `fetch`. Nunca escriben sobre `db/inventario.db3`.
 
 Una trampa al añadir tests: `process.env.DB_PATH` debe fijarse **antes** del

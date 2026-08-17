@@ -3,10 +3,10 @@ const os = require('node:os');
 const path = require('node:path');
 const sqlite3 = require('sqlite3');
 
-// Esquema equivalente al de db/inventario.db3 tras las migraciones 001 y 002.
+// Esquema equivalente al de db/inventario.db3 tras la migración 001.
 // Se recrea en un archivo temporal para que los tests nunca escriban
 // sobre la base versionada.
-const ESQUEMA = `
+const ESQUEMA_001 = `
   CREATE TABLE areas (
     id_area INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre TEXT NOT NULL UNIQUE
@@ -21,7 +21,11 @@ const ESQUEMA = `
     activo INTEGER NOT NULL DEFAULT 1,
     id_area INTEGER REFERENCES areas(id_area)
   );
+`;
 
+// Lo que añade la migración 002. Separado a propósito: `crearBaseSinOrdenes`
+// omite este bloque para reproducir una base a la que aún no se le aplicó.
+const ESQUEMA_002 = `
   CREATE TABLE ordenes (
     id_orden    INTEGER PRIMARY KEY AUTOINCREMENT,
     creada_en   TEXT NOT NULL,
@@ -39,6 +43,8 @@ const ESQUEMA = `
 
   CREATE INDEX idx_orden_lineas_orden ON orden_lineas(id_orden);
 `;
+
+const ESQUEMA = ESQUEMA_001 + ESQUEMA_002;
 
 const DATOS = `
   INSERT INTO areas (id_area, nombre) VALUES
@@ -69,6 +75,25 @@ function crearBaseTemporal() {
   });
 }
 
+// Crea una base con la 001 aplicada pero SIN la 002, ya sembrada: reproduce
+// db/inventario.db3 tal como está versionada en el repo, donde las tablas de
+// órdenes no existen todavía.
+function crearBaseSinOrdenes() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'inventario-test-sin-ordenes-'));
+  const archivo = path.join(dir, 'inventario.db3');
+
+  return new Promise((resolve, reject) => {
+    const db = new sqlite3.Database(archivo, (err) => {
+      if (err) return reject(err);
+
+      db.exec(ESQUEMA_001 + DATOS, (err) => {
+        if (err) return reject(err);
+        db.close((err) => (err ? reject(err) : resolve({ dir, archivo })));
+      });
+    });
+  });
+}
+
 // Deja la base en el estado sembrado. Se llama antes de cada test para que
 // ninguno dependa de las mutaciones del anterior.
 function sembrar(db) {
@@ -86,4 +111,4 @@ function sembrar(db) {
   });
 }
 
-module.exports = { crearBaseTemporal, sembrar };
+module.exports = { crearBaseTemporal, crearBaseSinOrdenes, sembrar };
