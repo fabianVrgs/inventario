@@ -1,232 +1,289 @@
 /* ============================================================================
-   Pantalla principal: catálogo disponible + selección para la orden del día.
+   Pantalla principal: elegir qué material sale hoy y en qué cantidad.
    Requiere base.css cargado antes (tokens, reset, primitivas).
 
    Contrato con logica.js — no renombrar, lo emite el JS:
-     .grupo-area, .titulo-area, .producto, .disponible,
-     .mensaje-vacio, .mensaje-error, .btn-quitar
-   Y el modal se abre con `style.display = "flex"` inline desde JS, así que
-   .modal se queda en `display:none` y deja que el inline gane. No migrar a
-   clases: rompería logica.js.
+     .grupo-area, .titulo-area, .rejilla-productos, .producto,
+     .producto--elegido, .producto__info, .producto__nombre, .producto__marca,
+     .producto__meta, .producto__disponible, .contador, .contador__btn,
+     .contador__campo, .lista__nombre, .lista__cantidad, .btn-quitar,
+     .mensaje-vacio, .mensaje-error
+
+   Esta pantalla ya NO tiene modal. La cantidad se ajusta con el contador de
+   la propia fila; un diálogo para capturar un solo número era una capa de más.
    ============================================================================ */
 
+/* La columna flex es lo que permite que .barra-seleccion se quede abajo con
+   `position: sticky` sin necesidad de position:fixed ni de compensar el alto
+   del contenido con padding en <body>. */
 body {
-  background-color: var(--gris-50);
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Más ancha que --ancho-contenido porque aquí conviven dos columnas. La barra
+   superior y la de selección leen esta misma variable, así que las tres cajas
+   quedan alineadas. */
+:root {
+  --ancho-pagina: 1180px;
 }
 
 .container {
-  max-width: var(--ancho-contenido);
-  margin: var(--esp-5) auto;
-  padding: var(--esp-pagina);
-  background: var(--superficie);
-  border-radius: var(--radio-xl);
-  box-shadow: var(--sombra-2);
+  width: 100%;
+  max-width: var(--ancho-pagina);
+  margin: 0 auto;
+  padding: var(--esp-5) var(--esp-pagina) var(--esp-7);
 }
 
-/* ---------- Encabezado ---------- */
+/* ---------- Disposición ----------
+   Una columna hasta 1024px; dos por encima. El lateral no es decorativo: sin
+   él, en un monitor quedaban ~40% de ancho vacío a los lados y había que
+   bajar hasta el final de la lista para ver qué llevabas elegido. */
 
-.header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--esp-4);
-  padding-bottom: var(--esp-5);
-  margin-bottom: var(--esp-5);
-  border-bottom: 1px solid var(--borde);
-}
-
-.logo {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radio-lg);
-  box-shadow: var(--sombra-1);
-  flex-shrink: 0;
-}
-
-.header h1 {
-  font-size: var(--texto-3xl);
-  font-weight: var(--peso-negrita);
-  color: var(--gris-900);
-  /* Empuja los botones al extremo derecho. Antes esto se hacía con un
-     `margin-left: 15rem` en .botones-menu, que reventaba en móvil. */
-  margin-inline-end: auto;
-}
-
-.header-buttons {
-  display: contents;
-}
-
-.botones-menu {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--esp-3);
-}
-
-.btn-inventario,
-.btn-orden {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--objetivo-tactil);
-  padding: var(--esp-2) var(--esp-5);
-  border-radius: var(--radio-md);
-  font-size: var(--texto-base);
-  font-weight: var(--peso-fuerte);
-  text-align: center;
-  text-decoration: none;
-  transition: background-color var(--trans-media) var(--curva),
-              box-shadow var(--trans-media) var(--curva);
-}
-
-.btn-inventario {
-  background-color: var(--superficie);
-  color: var(--morado-600);
-  box-shadow: inset 0 0 0 1px var(--morado-200);
-}
-
-.btn-inventario:hover {
-  background-color: var(--morado-50);
-  box-shadow: inset 0 0 0 1px var(--morado-300);
-}
-
-.btn-orden {
-  background-color: var(--morado-500);
-  color: var(--texto-inverso);
-}
-
-.btn-orden:hover {
-  background-color: var(--morado-600);
-}
-
-.btn-orden:active {
-  background-color: var(--morado-700);
+.disposicion {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--esp-6);
 }
 
 /* ---------- Búsqueda ---------- */
 
-.search-box h2 {
-  font-size: var(--texto-xl);
-  font-weight: var(--peso-fuerte);
-  color: var(--gris-900);
-  margin-bottom: var(--esp-3);
-}
-
-#buscar {
+.buscador {
   margin-bottom: var(--esp-5);
 }
 
 /* ---------- Resultados ----------
-   Estructura que genera logica.js:
-     #resultados > .grupo-area > h3.titulo-area + button.producto*
-   Antes el fondo lila se aplicaba al GRUPO entero vía `#resultados > div`,
-   así que los ítems clicables no tenían ninguna afordancia visual. Ahora la
-   tarjeta es el producto, que es lo que de verdad se pulsa. */
+   Estructura que monta logica.js:
+     #resultados > section.grupo-area > h3.titulo-area + ul.rejilla-productos
+                                                          > li.producto */
 
 .resultados {
   display: flex;
   flex-direction: column;
-  gap: var(--esp-5);
+  gap: var(--esp-6);
 }
 
 .grupo-area {
   display: flex;
   flex-direction: column;
-  gap: var(--esp-2);
+  gap: var(--esp-3);
 }
 
+/* El rótulo de área con su regla: es el elemento que más carácter de documento
+   aporta a la pantalla, y el único sitio de la Principal donde aparece el
+   morado de marca. */
 .titulo-area {
-  font-size: var(--texto-sm);
+  font-size: var(--texto-etiqueta);
   font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-etiqueta);
   text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--morado-600);
+  color: var(--marca-fuerte);
   padding-bottom: var(--esp-2);
-  border-bottom: 1px solid var(--morado-200);
+  border-bottom: 2px solid var(--marca);
 }
+
+.rejilla-productos {
+  display: grid;
+  gap: var(--esp-2);
+  grid-template-columns: 1fr;
+}
+
+/* ---------- Fila de producto con contador ---------- */
 
 .producto {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--esp-1) var(--esp-3);
-  width: 100%;
-  min-height: var(--objetivo-tactil);
-  padding: var(--esp-3) var(--esp-4);
-  text-align: left;
-  font-size: var(--texto-base);
-  color: var(--texto);
-  background-color: var(--morado-50);
-  border-left: 4px solid var(--morado-500);
-  border-radius: var(--radio-md);
-  transition: background-color var(--trans-rapida) var(--curva),
-              transform var(--trans-rapida) var(--curva);
-}
-
-.producto strong {
-  font-weight: var(--peso-fuerte);
-  color: var(--gris-900);
-}
-
-.producto .disponible {
-  font-size: var(--texto-sm);
-  color: var(--texto-tenue);
-}
-
-.producto:hover {
-  background-color: var(--morado-100);
-  transform: translateX(2px);
-}
-
-.producto:active {
-  transform: translateX(0);
-}
-
-/* Estados vacío y de error de la búsqueda. */
-.mensaje-vacio,
-.mensaje-error {
-  padding: var(--esp-5);
-  text-align: center;
-  border-radius: var(--radio-md);
-}
-
-.mensaje-vacio {
-  color: var(--texto-tenue);
-  background-color: var(--gris-50);
-  border: 1px dashed var(--borde-fuerte);
-}
-
-.mensaje-error {
-  color: var(--peligro-texto);
-  background-color: var(--peligro-bg);
-  border: 1px solid var(--peligro);
-  font-weight: var(--peso-medio);
-}
-
-/* ---------- Lista seleccionada ---------- */
-
-.lista {
-  margin-top: var(--esp-7);
-}
-
-.lista h2 {
-  font-size: var(--texto-xl);
-  font-weight: var(--peso-fuerte);
-  color: var(--gris-900);
-  margin-bottom: var(--esp-3);
-}
-
-#lista li {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--esp-3);
-  padding: var(--esp-3) 0;
-  border-bottom: 1px solid var(--borde);
+  padding: var(--esp-3);
+  background-color: var(--superficie);
+  border-radius: var(--radio-md);
+  /* inset y no border: al cambiar de grosor o color en el estado elegido no
+     desplaza ni un píxel el contenido. */
+  box-shadow: inset 0 0 0 1px var(--filete);
+  transition: background-color var(--dur-media) var(--curva),
+              box-shadow var(--dur-media) var(--curva);
 }
 
-#lista li:last-child {
-  border-bottom: 0;
+/* Estado elegido: se ve en el sitio, sin tener que bajar a la lista. */
+.producto--elegido {
+  background-color: var(--marca-lavado);
+  box-shadow: inset 0 0 0 1px var(--marca-filete);
+}
+
+/* Base de 9rem y no 12: a 390px el ancho útil de la fila es ~334px y el
+   contador ocupa 140. Con 12rem la base no cabía y el contador caía a una
+   segunda línea, dejando cada fila en ~100px de alto. */
+.producto__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  flex: 1 1 9rem;
+}
+
+.producto__nombre {
+  font-weight: var(--peso-fuerte);
+  color: var(--tinta-fuerte);
+  overflow-wrap: anywhere;
+}
+
+.producto__meta {
+  font-size: var(--texto-sm);
+  color: var(--tinta-tenue);
+}
+
+.producto__marca {
+  color: var(--tinta-suave);
+}
+
+/* ---------- Contador ---------- */
+
+.contador {
+  display: inline-flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  background-color: var(--superficie);
+  border-radius: var(--radio-md);
+  box-shadow: inset 0 0 0 1px var(--filete-fuerte);
+}
+
+/* Sin overflow:hidden a propósito: recortaría el anillo de foco de los pasos.
+   Las esquinas se redondean por extremo. */
+.contador__btn {
+  width: var(--objetivo-tactil);
+  min-height: var(--objetivo-tactil);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--texto-headline);
+  font-weight: var(--peso-medio);
+  line-height: 1;
+  color: var(--tinta-fuerte);
+  transition: background-color var(--dur-rapida) var(--curva);
+}
+
+.contador__btn:first-child { border-radius: var(--radio-md) 0 0 var(--radio-md); }
+.contador__btn:last-child  { border-radius: 0 var(--radio-md) var(--radio-md) 0; }
+
+.contador__btn:hover:not(:disabled) { background-color: var(--papel-hundido); }
+
+.contador__btn:disabled {
+  color: var(--filete-fuerte);
+  cursor: not-allowed;
+}
+
+.contador__campo {
+  width: 3.25rem;
+  min-height: var(--objetivo-tactil);
+  padding: 0 var(--esp-1);
+  text-align: center;
+  /* 16px: por debajo, iOS hace zoom automático al enfocar. */
+  font-size: 16px;
+  font-weight: var(--peso-fuerte);
+  color: var(--tinta-fuerte);
+  background-color: transparent;
+  border: 0;
+  border-inline: 1px solid var(--filete);
+}
+
+.contador__campo:focus {
+  outline: none;
+  background-color: var(--superficie);
+  box-shadow: var(--anillo-foco);
+  border-radius: 1px;
+}
+
+/* Las flechas nativas sobran: los pasos ya son los botones de al lado. */
+.contador__campo::-webkit-outer-spin-button,
+.contador__campo::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.contador__campo { -moz-appearance: textfield; appearance: textfield; }
+
+/* ---------- Estados vacío y de error ---------- */
+
+.mensaje-vacio,
+.mensaje-error {
+  padding: var(--esp-6) var(--esp-4);
+  text-align: center;
+  border-radius: var(--radio-md);
+}
+
+.mensaje-vacio {
+  color: var(--tinta-tenue);
+  background-color: var(--papel-hundido);
+}
+
+.mensaje-error {
+  color: var(--peligro-texto);
+  background-color: var(--peligro-lavado);
+  font-weight: var(--peso-medio);
+}
+
+/* ---------- Panel de selección ---------- */
+
+.panel-seleccion {
+  padding-top: var(--esp-5);
+  border-top: 1px solid var(--filete);
+}
+
+.panel-seleccion__cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--esp-2);
+  margin-bottom: var(--esp-3);
+}
+
+.panel-seleccion__cabecera h2 {
+  font-size: var(--texto-headline);
+}
+
+/* Hasta 1024px lo cuenta la barra inferior, que está siempre a la vista.
+   Repetirlo aquí sería el mismo dato dos veces en la misma pantalla. */
+.panel-seleccion__resumen {
+  display: none;
+  font-size: var(--texto-sm);
+  color: var(--tinta-tenue);
+}
+
+.panel-seleccion__cta {
+  width: 100%;
+  margin-top: var(--esp-4);
+}
+
+.lista__vacia {
+  color: var(--tinta-tenue);
+  font-size: var(--texto-sm);
+}
+
+.lista__items li {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-3);
+  padding: var(--esp-2) 0;
+  border-bottom: 1px solid var(--filete);
+}
+
+.lista__items li:last-child { border-bottom: 0; }
+
+.lista__nombre {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lista__cantidad {
+  font-weight: var(--peso-fuerte);
+  color: var(--tinta-fuerte);
+  min-width: 2.5ch;
+  text-align: right;
 }
 
 .btn-quitar {
@@ -235,139 +292,103 @@ body {
   justify-content: center;
   min-width: var(--objetivo-tactil);
   min-height: var(--objetivo-tactil);
-  font-size: var(--texto-lg);
-  font-weight: var(--peso-negrita);
+  font-size: var(--texto-base);
   line-height: 1;
-  color: var(--texto-tenue);
+  color: var(--tinta-tenue);
   border-radius: var(--radio-md);
-  transition: background-color var(--trans-rapida) var(--curva),
-              color var(--trans-rapida) var(--curva);
+  transition: background-color var(--dur-rapida) var(--curva),
+              color var(--dur-rapida) var(--curva);
 }
 
 /* Quitar es destructivo: en hover se declara como tal. */
 .btn-quitar:hover {
-  background-color: var(--peligro-bg);
+  background-color: var(--peligro-lavado);
   color: var(--peligro-texto);
 }
 
-/* ---------- Modal de cantidad ----------
-   `display:none` es contrato con logica.js:64/92. El centrado queda preparado
-   para cuando el JS ponga `display:flex` inline. */
+/* ---------- Barra de selección ----------
+   `margin-top:auto` la manda al fondo cuando hay poco contenido; `sticky` la
+   fija al borde inferior cuando hay mucho. Sin position:fixed no hace falta
+   reservar hueco en <body> ni arriesgarse a tapar la última fila. */
 
-.modal {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal);
-  display: none;
-  justify-content: center;
-  align-items: center;
-  padding: var(--esp-4);
-  background-color: rgba(26, 23, 31, .55);
-}
-
-/* El fondo oscuro DEBE seguir siendo .modal y el contenido un hijo menor:
-   logica.js:96 cierra comparando `event.target === modal`. Si .modal-content
-   cubriera todo el overlay, el cierre al pulsar fuera dejaría de funcionar. */
-.modal-content {
-  width: min(100%, 380px);
-  max-height: 90dvh;
-  overflow-y: auto;
-  padding: var(--esp-6);
-  text-align: center;
-  background: var(--superficie);
-  border-radius: var(--radio-xl);
-  box-shadow: var(--sombra-modal);
-  /* Al pasar de display:none a flex los descendientes se renderizan de nuevo,
-     así que la animación se dispara en cada apertura sin una línea de JS. */
-  animation: entrada-modal var(--trans-media) var(--curva);
-}
-
-@keyframes entrada-modal {
-  from { opacity: 0; transform: translateY(8px) scale(.98); }
-  to   { opacity: 1; transform: none; }
-}
-
-.modal-content h3 {
-  font-size: var(--texto-xl);
-  font-weight: var(--peso-fuerte);
-  color: var(--gris-900);
-  margin-bottom: var(--esp-4);
-}
-
-.modal-content label {
-  display: block;
-  margin-bottom: var(--esp-2);
-  font-size: var(--texto-sm);
-  font-weight: var(--peso-medio);
-  color: var(--texto-suave);
-  text-align: left;
-}
-
-.modal-content input {
-  width: 100%;
-  min-height: var(--objetivo-tactil);
-  margin-bottom: var(--esp-5);
-  padding: var(--esp-3) var(--esp-4);
-  font-size: 16px;
-  color: var(--texto);
+.barra-seleccion {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-barra);
+  margin-top: auto;
   background-color: var(--superficie);
-  border: 1px solid var(--borde-fuerte);
-  border-radius: var(--radio-md);
-  transition: border-color var(--trans-media) var(--curva),
-              box-shadow var(--trans-media) var(--curva);
+  box-shadow: var(--sombra-fija);
 }
 
-.modal-content input:focus {
-  outline: none;
-  border-color: var(--morado-500);
-  box-shadow: var(--anillo-foco);
-}
-
-.modal-buttons {
+.barra-seleccion__interior {
+  max-width: var(--ancho-pagina);
+  margin: 0 auto;
+  padding: var(--esp-3) var(--esp-pagina);
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--esp-3);
 }
 
-.modal-buttons button {
-  flex: 1;
-  min-height: var(--objetivo-tactil);
-  padding: var(--esp-2) var(--esp-4);
-  border-radius: var(--radio-md);
-  font-weight: var(--peso-fuerte);
-  transition: background-color var(--trans-media) var(--curva);
+.barra-seleccion__resumen {
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  color: var(--tinta-suave);
 }
 
-#btnAgregarCantidad {
-  background-color: var(--morado-500);
-  color: var(--texto-inverso);
+.barra-seleccion .btn {
+  flex: 1 1 auto;
+  max-width: 100%;
 }
 
-#btnAgregarCantidad:hover {
-  background-color: var(--morado-600);
-}
-
-#btnCancelarModal {
-  background-color: var(--gris-100);
-  color: var(--texto);
-}
-
-#btnCancelarModal:hover {
-  background-color: var(--gris-200);
-}
-
-/* ---------- Escritorio ---------- */
+/* ---------- Móvil grande ---------- */
 
 @media (min-width: 640px) {
   .container {
-    margin: var(--esp-7) auto;
+    padding-top: var(--esp-6);
   }
 
-  .logo {
-    width: 72px;
-    height: 72px;
+  .rejilla-productos {
+    grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
   }
 
-  .producto {
-    align-items: center;
+  .barra-seleccion .btn {
+    flex: 0 0 auto;
+  }
+}
+
+/* ---------- Escritorio: dos columnas ---------- */
+
+@media (min-width: 1024px) {
+  .disposicion {
+    grid-template-columns: minmax(0, 1fr) 19rem;
+    align-items: start;
+  }
+
+  /* El panel acompaña el scroll del catálogo. `top` lo separa de la barra
+     superior, que también es sticky. */
+  .disposicion__lateral {
+    position: sticky;
+    top: calc(var(--alto-barra) + var(--esp-4));
+    max-height: calc(100dvh - var(--alto-barra) - var(--esp-6));
+    overflow-y: auto;
+  }
+
+  .panel-seleccion {
+    padding: var(--esp-4);
+    background-color: var(--superficie);
+    border: 1px solid var(--filete);
+    border-radius: var(--radio-lg);
+  }
+
+  .panel-seleccion__resumen {
+    display: block;
+  }
+
+  /* Con el panel siempre a la vista, la barra inferior sería el mismo dato
+     dos veces. */
+  .barra-seleccion {
+    display: none;
   }
 }

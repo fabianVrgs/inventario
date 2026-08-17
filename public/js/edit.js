@@ -120,7 +120,7 @@ function renderizarTabla(datos = productosFiltrados) {
             <td>${item.area ?? ''}</td>
             <td>${item.cantidad}</td>
             <td><span class="badge ${
-                  activo ? 'badge-success' : 'badge-danger'
+                  activo ? 'badge-activo' : 'badge-inactivo'
             }">${activo ? 'Activo' : 'Inactivo'}</span></td>
             <td>
                 <div class="actions">
@@ -152,7 +152,7 @@ function filtrarInventario() {
 }
 
 // 🧱 Modal: abrir con título personalizado
-function abrirModal(titulo = 'Agregar Nuevo Item') {
+function abrirModal(titulo = 'Agregar producto') {
     document.getElementById('modalTitle').textContent = titulo;
     modalItem.style.display = 'flex';
 }
@@ -179,7 +179,7 @@ function editarItem(id) {
         document.getElementById('itemCantidad').value = item.cantidad;
         selectArea.value = item.id_area ?? '';
 
-        abrirModal('Editar Item');
+        abrirModal('Editar producto');
     }
 }
 

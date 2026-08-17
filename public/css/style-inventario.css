@@ -1,306 +1,217 @@
 /* ============================================================================
-   Pantalla de inventario (CRUD real: alta, edición, activar/desactivar,
-   borrado, export CSV). Requiere base.css cargado antes.
+   Pantalla "Inventario" (CRUD del catálogo). Requiere base.css antes.
+
+   Es la pantalla densa del sistema: su usuario está sentado frente a un
+   monitor y quiere ver muchas filas de un vistazo. La Principal es holgada
+   porque su usuario está de pie con el pulgar. La misma tabla no sirve para
+   los dos, y por eso aquí la escala baja a --texto-sm.
 
    Contrato con edit.js — no renombrar, lo emite el JS:
-     .no-results, .no-results--error, .fila-inactiva, .badge, .badge-success,
-     .badge-danger, .actions, .btn-action, .btn-detail, .btn-edit,
-     .btn-toggle, .btn-delete
-   Los tres modales se abren con `style.display = "flex"` inline (edit.js:139,
-   144, 181, 186, 231, 237): .modal se queda en `display:none`.
-
-   Prioridad de esta pantalla: escritorio. En móvil no debe romperse, pero la
-   densidad de la tabla se conserva donde hay sitio.
+     .no-results, .no-results--error, .fila-inactiva, .badge,
+     .badge-activo, .badge-inactivo, .actions, .btn-action,
+     .btn-detail, .btn-edit, .btn-toggle, .btn-delete
+   Y los 3 modales se abren con `style.display = 'flex'` inline desde el JS,
+   así que .modal se queda en `display:none` y deja que el inline gane. No
+   migrar a clases: son 8 puntos de edit.js.
    ============================================================================ */
 
-body {
-  padding: var(--esp-4);
-  background-color: var(--gris-50);
+/* La barra superior lee esta variable, así que la tabla y la barra comparten
+   exactamente la misma caja. */
+:root {
+  --ancho-pagina: var(--ancho-tabla);
 }
 
 .container {
-  max-width: var(--ancho-tabla);
+  width: 100%;
+  max-width: var(--ancho-pagina);
   margin: 0 auto;
-  padding: var(--esp-pagina);
-  background: var(--superficie);
-  border-radius: var(--radio-xl);
-  box-shadow: var(--sombra-2);
+  padding: var(--esp-5) var(--esp-pagina) var(--esp-7);
 }
 
-/* ---------- Encabezado ---------- */
+/* ---------- Barra de herramientas ---------- */
 
-.header {
+.barra-herramientas {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--esp-4);
-  margin-bottom: var(--esp-6);
-  padding-bottom: var(--esp-5);
-  border-bottom: 1px solid var(--borde);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: var(--esp-4);
-}
-
-.btn-volver {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--objetivo-tactil);
-  height: var(--objetivo-tactil);
-  flex-shrink: 0;
-  font-size: var(--texto-xl);
-  font-weight: var(--peso-negrita);
-  line-height: 1;
-  text-decoration: none;
-  color: var(--morado-600);
-  background-color: var(--morado-50);
-  border-radius: var(--radio-full);
-  transition: background-color var(--trans-media) var(--curva),
-              color var(--trans-media) var(--curva);
-}
-
-.btn-volver:hover {
-  background-color: var(--morado-500);
-  color: var(--texto-inverso);
-}
-
-.logo {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radio-lg);
-  box-shadow: var(--sombra-1);
-  flex-shrink: 0;
-}
-
-.header h1 {
-  font-size: var(--texto-3xl);
-  font-weight: var(--peso-negrita);
-  color: var(--gris-900);
-}
-
-.header-buttons {
-  display: flex;
-  flex-wrap: wrap;
   gap: var(--esp-3);
+  margin-bottom: var(--esp-5);
 }
 
-/* Antes: verde #28a745 (2.7:1 con texto blanco) y azul #007bff (3.1:1).
-   Ninguno llegaba a AA. Ahora la acción principal es la de marca y la
-   secundaria es neutra, que además ordena la jerarquía. */
-.btn-primary,
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--objetivo-tactil);
-  padding: var(--esp-2) var(--esp-5);
-  border-radius: var(--radio-md);
-  font-size: var(--texto-base);
-  font-weight: var(--peso-fuerte);
-  text-decoration: none;
-  transition: background-color var(--trans-media) var(--curva),
-              box-shadow var(--trans-media) var(--curva);
+.barra-herramientas__busqueda {
+  flex: 1 1 18rem;
+  min-width: 0;
 }
 
-.btn-primary {
-  background-color: var(--morado-500);
-  color: var(--texto-inverso);
-}
-
-.btn-primary:hover {
-  background-color: var(--morado-600);
-}
-
-.btn-primary:active {
-  background-color: var(--morado-700);
-}
-
-.btn-secondary {
-  background-color: var(--superficie);
-  color: var(--morado-600);
-  box-shadow: inset 0 0 0 1px var(--morado-200);
-}
-
-.btn-secondary:hover {
-  background-color: var(--morado-50);
-  box-shadow: inset 0 0 0 1px var(--morado-300);
-}
-
-/* ---------- Búsqueda ---------- */
-
-.search-section {
-  margin-bottom: var(--esp-6);
+.barra-herramientas__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-2);
 }
 
 /* ---------- Tabla ---------- */
 
 .table-container {
-  background: var(--superficie);
-  border: 1px solid var(--borde);
+  background-color: var(--superficie);
+  border: 1px solid var(--filete);
   border-radius: var(--radio-lg);
+  /* El scroll horizontal de la tabla es intencional; el del <body> no. */
   overflow-x: auto;
   overscroll-behavior-x: contain;
-}
-
-.table-header {
-  padding: var(--esp-4) var(--esp-5);
-  background: var(--superficie-alt);
-  border-bottom: 1px solid var(--borde);
-}
-
-.table-title {
-  font-size: var(--texto-lg);
-  font-weight: var(--peso-fuerte);
-  color: var(--gris-900);
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
-  background: var(--superficie);
-}
-
-.table thead {
-  background: var(--superficie-alt);
-}
-
-.table th {
-  font-size: var(--texto-xs);
-  font-weight: var(--peso-fuerte);
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--texto-suave);
-  white-space: nowrap;
+  font-size: var(--texto-sm);
 }
 
 .table th,
 .table td {
-  padding: var(--esp-3) var(--esp-4);
+  padding: var(--esp-3);
   text-align: left;
-  border-bottom: 1px solid var(--borde);
+  vertical-align: middle;
 }
 
-.table tbody tr:last-child td {
-  border-bottom: 0;
+.table thead th {
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-etiqueta);
+  text-transform: uppercase;
+  color: var(--tinta-tenue);
+  background-color: var(--papel-hundido);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--filete-fuerte);
+}
+
+/* Filas separadas por filete. SIN rayado alterno: el zebra es de Bootstrap y
+   junto a los filetes solo añade ruido. */
+.table tbody tr + tr td {
+  border-top: 1px solid var(--filete);
 }
 
 .table tbody tr {
-  transition: background-color var(--trans-rapida) var(--curva);
-}
-
-.table tbody tr:nth-child(even) {
-  background-color: var(--gris-50);
+  transition: background-color var(--dur-rapida) var(--curva);
 }
 
 .table tbody tr:hover {
-  background-color: var(--morado-50);
-}
-
-/* La columna ID en cifras tabulares: no baila al ordenar ni al filtrar. */
-.table tbody td:first-child {
-  font-family: var(--fuente-mono);
-  font-size: var(--texto-sm);
-  color: var(--texto-tenue);
+  background-color: var(--papel-hundido);
 }
 
 .table tbody td strong {
   font-weight: var(--peso-fuerte);
-  color: var(--gris-900);
+  color: var(--tinta-fuerte);
 }
 
-/* Fila de un producto desactivado: sigue siendo editable y reactivable, pero
-   se distingue de un vistazo. Antes era solo `opacity:.55`, que hunde el
-   contraste del texto por debajo del mínimo; ahora la señal es doble
-   (fondo + tachado) y ninguna depende de la opacidad. */
+/* ID: dato de servicio, no de lectura. */
+.table tbody td:nth-child(1) {
+  color: var(--tinta-tenue);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Cantidad: el dato que la gente vino a leer. A la derecha y en cifra tabular
+   para que la columna no baile al actualizarse. */
+.col-cifra {
+  text-align: right !important;
+}
+
+.table tbody td:nth-child(6) {
+  text-align: right;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-weight: var(--peso-medio);
+  color: var(--tinta-fuerte);
+}
+
+/* Descripción: lo que más ocupa y menos se consulta. */
+.table tbody td:nth-child(4) {
+  color: var(--tinta-suave);
+  max-width: 22rem;
+}
+
+/* ---------- Fila desactivada ---------- */
+
 .table tbody tr.fila-inactiva {
-  background-color: var(--gris-100);
-  /* --texto-suave y no --texto-tenue: sobre este fondo el tenue se queda en
-     4.4:1, por debajo del mínimo AA. Lo que marca el estado es el fondo y el
-     tachado, no atenuar el texto hasta que cueste leerlo. */
-  color: var(--texto-suave);
+  background-color: var(--papel-hundido);
+  /* --tinta-suave y no --tinta-tenue: sobre este fondo la tenue se queda en
+     4.80:1 y encima el nombre va tachado. Y nada de opacity: atenuar con
+     opacidad rompe cualquier contraste que se haya medido. */
+  color: var(--tinta-suave);
 }
 
 .table tbody tr.fila-inactiva td strong {
   text-decoration: line-through;
-  color: var(--texto-suave);
+  color: var(--tinta-suave);
+  font-weight: var(--peso-medio);
 }
 
-/* ---------- Estados vacío y error de la tabla ---------- */
+/* ---------- Estado ---------- */
+
+/* "Inactivo" NO es un error: es un estado normal del catálogo. Por eso va en
+   neutro y no en rojo. El rojo de este sistema es exclusivo de eliminar y de
+   los fallos reales. */
+.badge-activo {
+  background-color: var(--exito-lavado);
+  color: var(--exito-texto);
+}
+
+.badge-inactivo {
+  background-color: var(--superficie);
+  color: var(--tinta-suave);
+  box-shadow: inset 0 0 0 1px var(--filete-fuerte);
+}
+
+/* ---------- Acciones de fila ---------- */
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-1);
+}
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--objetivo-tactil);
+  height: var(--objetivo-tactil);
+  border-radius: var(--radio-md);
+  color: var(--tinta-suave);
+  transition: background-color var(--dur-rapida) var(--curva),
+              color var(--dur-rapida) var(--curva);
+}
+
+.btn-action:hover {
+  background-color: var(--filete);
+  color: var(--tinta-fuerte);
+}
+
+/* Solo el destructivo cambia de color, y solo al apuntarlo. En reposo los
+   cuatro botones son iguales: cuatro colores saturados distintos en cada fila
+   de una tabla de ocho columnas es exactamente el ruido del que venimos. */
+.btn-delete:hover {
+  background-color: var(--peligro-lavado);
+  color: var(--peligro);
+}
+
+/* ---------- Estado vacío / error de la tabla ---------- */
 
 .no-results {
-  padding: var(--esp-7) var(--esp-4);
+  padding: var(--esp-7) var(--esp-4) !important;
   text-align: center;
-  color: var(--texto-tenue);
+  color: var(--tinta-tenue);
 }
 
 .no-results--error {
   color: var(--peligro-texto);
-  background-color: var(--peligro-bg);
+  background-color: var(--peligro-lavado);
   font-weight: var(--peso-medio);
 }
 
-/* ---------- Etiquetas de estado ---------- */
-
-.badge-success {
-  background-color: var(--exito-bg);
-  color: var(--exito-texto);
-}
-
-.badge-danger {
-  background-color: var(--peligro-bg);
-  color: var(--peligro-texto);
-}
-
-/* ---------- Botones de acción de cada fila ----------
-   Cuatro colores saturados distintos (amarillo, cian, gris, rojo) en una
-   tabla de 8 columnas era ruido y ninguno llegaba a contraste AA. Ahora son
-   botones-icono neutros y solo el destructivo se colorea, y solo al enfocarlo
-   o pasar por encima. */
-
-.actions {
-  display: flex;
-  gap: var(--esp-2);
-}
-
-.btn-action {
-  display: grid;
-  place-items: center;
-  min-width: var(--objetivo-tactil);
-  min-height: var(--objetivo-tactil);
-  padding: 0;
-  color: var(--texto-suave);
-  background-color: transparent;
-  border-radius: var(--radio-md);
-  transition: background-color var(--trans-rapida) var(--curva),
-              color var(--trans-rapida) var(--curva);
-}
-
-.btn-action:hover {
-  background-color: var(--gris-200);
-  color: var(--gris-900);
-}
-
-.btn-detail:hover,
-.btn-edit:hover,
-.btn-toggle:hover {
-  background-color: var(--morado-100);
-  color: var(--morado-700);
-}
-
-.btn-delete:hover {
-  background-color: var(--peligro-bg);
-  color: var(--peligro-fuerte);
-}
-
-/* ---------- Modales ----------
-   `display:none` es contrato con edit.js. El fondo oscuro sigue siendo .modal
-   y .modal-content un hijo estrictamente menor: edit.js cierra comparando
-   `e.target === modal` en los tres modales. */
+/* ============================================================================
+   MODALES
+   `display:none` es contrato con edit.js. El centrado queda preparado para
+   cuando el JS ponga `display:flex` inline.
+   ============================================================================ */
 
 .modal {
   position: fixed;
@@ -310,181 +221,138 @@ body {
   justify-content: center;
   align-items: center;
   padding: var(--esp-4);
-  background-color: rgba(26, 23, 31, .55);
+  background-color: var(--velo-modal);
 }
 
+/* El fondo oscuro DEBE seguir siendo .modal y el contenido un hijo menor:
+   edit.js cierra comparando `e.target === modal`. Si .modal-content cubriera
+   todo el overlay, el cierre al pulsar fuera dejaría de funcionar. */
 .modal-content {
-  width: min(100%, 520px);
+  width: min(100%, 460px);
   max-height: 90dvh;
   overflow-y: auto;
-  padding: var(--esp-6);
-  background: var(--superficie);
-  border-radius: var(--radio-xl);
+  padding: var(--esp-5);
+  background-color: var(--superficie);
+  border-radius: var(--radio-lg);
   box-shadow: var(--sombra-modal);
-  animation: entrada-modal var(--trans-media) var(--curva);
+  /* Al pasar de display:none a flex los descendientes se renderizan de nuevo,
+     así que la animación se dispara en cada apertura sin una línea de JS. */
+  animation: entrada-modal var(--dur-lenta) var(--curva);
 }
 
 @keyframes entrada-modal {
-  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: none; }
 }
 
-.modal h3,
 .modal-titulo {
+  font-size: var(--texto-titulo);
   margin-bottom: var(--esp-4);
-  font-size: var(--texto-xl);
-  font-weight: var(--peso-fuerte);
-  color: var(--morado-600);
+  padding-bottom: var(--esp-3);
+  border-bottom: 1px solid var(--filete);
 }
 
 .modal-titulo--peligro {
-  color: var(--peligro-fuerte);
+  color: var(--peligro-texto);
 }
 
-/* Modal de detalle: pares etiqueta/valor. */
-.modal-content p {
-  padding: var(--esp-2) 0;
-  border-bottom: 1px solid var(--borde);
-}
-
-.modal-content p:last-of-type {
-  border-bottom: 0;
-}
-
-.modal-content p strong {
-  color: var(--texto-suave);
-  font-weight: var(--peso-medio);
+.modal-nota {
+  margin-top: var(--esp-2);
+  font-size: var(--texto-sm);
+  color: var(--tinta-tenue);
 }
 
 .form-group {
-  margin-bottom: var(--esp-5);
+  margin-bottom: var(--esp-4);
 }
 
 .form-group label {
   display: block;
-  margin-bottom: var(--esp-2);
+  margin-bottom: var(--esp-1);
   font-size: var(--texto-sm);
   font-weight: var(--peso-medio);
-  color: var(--texto-suave);
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-  width: 100%;
-  min-height: var(--objetivo-tactil);
-  padding: var(--esp-3) var(--esp-4);
-  font-size: 16px;
-  color: var(--texto);
-  background-color: var(--superficie);
-  border: 1px solid var(--borde-fuerte);
-  border-radius: var(--radio-md);
-  transition: border-color var(--trans-media) var(--curva),
-              box-shadow var(--trans-media) var(--curva);
+  color: var(--tinta-suave);
 }
 
 .form-group textarea {
-  min-height: 0;
+  min-height: 5rem;
   resize: vertical;
 }
 
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: var(--morado-500);
-  box-shadow: var(--anillo-foco);
+/* Detalle: lista de definición en dos columnas. */
+.detalle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--esp-2) var(--esp-4);
+  margin: 0;
+  font-size: var(--texto-sm);
+}
+
+.detalle dt {
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-etiqueta);
+  text-transform: uppercase;
+  color: var(--tinta-tenue);
+  padding-top: 0.15em;
+}
+
+.detalle dd {
+  margin: 0;
+  color: var(--tinta-fuerte);
+  overflow-wrap: anywhere;
 }
 
 .modal-buttons {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--esp-3);
+  gap: var(--esp-2);
   justify-content: flex-end;
-  margin-top: var(--esp-6);
+  margin-top: var(--esp-5);
 }
 
 .modal-buttons--centrado {
   justify-content: center;
 }
 
-.btn-modal {
-  min-height: var(--objetivo-tactil);
-  padding: var(--esp-2) var(--esp-5);
-  border-radius: var(--radio-md);
-  font-weight: var(--peso-fuerte);
-  transition: background-color var(--trans-media) var(--curva),
-              box-shadow var(--trans-media) var(--curva);
-}
-
-.btn-modal-primary {
-  background-color: var(--morado-500);
-  color: var(--texto-inverso);
-}
-
-.btn-modal-primary:hover {
-  background-color: var(--morado-600);
-}
-
-.btn-modal-secondary {
-  background-color: var(--gris-100);
-  color: var(--texto);
-}
-
-.btn-modal-secondary:hover {
-  background-color: var(--gris-200);
-}
-
-/* Confirmar un borrado es destructivo: se declara como tal en vez de usar el
-   mismo morado que "Guardar". */
-.btn-modal-peligro {
-  background-color: var(--peligro);
-  color: var(--texto-inverso);
-}
-
-.btn-modal-peligro:hover {
-  background-color: var(--peligro-fuerte);
-}
-
 /* ============================================================================
-   Tabla en pantallas estrechas.
+   RESPONSIVE
 
-   Se ocultan las columnas de menor valor en vez de dejar 800px de scroll
-   horizontal. No se pierde información: el botón "Ver detalle" abre un modal
-   con los seis campos completos.
-
-   TRAMPA: las filas de estado vacío y de error son un solo
-   `<td colspan="8" class="no-results">`, es decir la celda es :nth-child(1).
-   Sin el `:not(.no-results)` de abajo, ocultar la columna ID haría
-   desaparecer los mensajes "No se encontraron productos" y "Error al cargar
-   el inventario", y la tabla se quedaría muda. No quitar el :not().
+   Excepción a la convención mobile-first del proyecto: ocultar columnas es un
+   gesto sustractivo, así que se expresa con max-width. El `:not(.no-results)`
+   es OBLIGATORIO — la celda de "sin resultados" es un <td colspan="8"> y por
+   tanto :nth-child(1); sin el guardia, ocultar la columna 1 dejaría la tabla
+   muda justo cuando más tiene que hablar.
    ============================================================================ */
 
-/* Descripción (col. 4): texto largo, es lo primero que sobra. */
+/* NO poner aquí un thead con position:sticky. Se intentó y se rompe: el
+   `overflow-x: auto` de .table-container lo convierte en contenedor de scroll
+   en LOS DOS ejes, así que el scrollport del thead pasa a ser el contenedor y
+   no la ventana. Con `top: 60px` el navegador empujaba la cabecera 60px hacia
+   abajo, tapando la primera fila y dejando su hueco en blanco. Y como el
+   contenedor no hace scroll vertical, la cabecera no se fijaría a nada útil
+   aunque se corrigiera el `top`. Para que funcione habría que darle altura
+   máxima y scroll propio al contenedor, y eso es una región de scroll anidada
+   peleándose con la de la página. */
+
 @media (max-width: 900px) {
+  /* Fuera ID y Descripción. El dato sigue completo en el modal de detalle. */
+  .table thead th:nth-child(1),
   .table thead th:nth-child(4),
+  .table tbody td:nth-child(1):not(.no-results),
   .table tbody td:nth-child(4):not(.no-results) {
     display: none;
   }
 }
 
-/* ID (col. 1), Marca (col. 3) y Área (col. 5): quedan Nombre · Cantidad ·
-   Estado · Acciones, que es lo mínimo para que la columna de acciones entre
-   en pantalla sin obligar a hacer scroll horizontal para alcanzarla. */
 @media (max-width: 640px) {
-  /* Cada píxel de marco es un píxel que le falta a la tabla. */
-  body {
-    padding: var(--esp-2);
-  }
-
   .container {
-    padding: var(--esp-3);
+    padding-inline: var(--esp-2);
   }
 
-  .table thead th:nth-child(1),
+  /* Quedan Nombre, Cantidad, Estado y Acciones: lo mínimo para reconocer una
+     fila y operar sobre ella sin scroll horizontal. */
   .table thead th:nth-child(3),
   .table thead th:nth-child(5),
-  .table tbody td:nth-child(1):not(.no-results),
   .table tbody td:nth-child(3):not(.no-results),
   .table tbody td:nth-child(5):not(.no-results) {
     display: none;
@@ -495,33 +363,18 @@ body {
     padding: var(--esp-2) var(--esp-1);
   }
 
-  /* Los cuatro botones en rejilla 2×2: la celda de acciones pasa de ~200px
-     de ancho a ~96px, que es lo que de verdad estrangula la tabla. El alto de
-     fila que gana se compensa de sobra con no tener que buscar los botones
-     desplazando la tabla a mano. */
-  .actions {
-    display: grid;
-    grid-template-columns: repeat(2, var(--objetivo-tactil));
-    gap: var(--esp-1);
-  }
-
-  /* La celda de acciones no debe encogerse: es la que hay que poder pulsar. */
   .table thead th:last-child,
   .table tbody td:last-child:not(.no-results) {
     width: 1%;
     white-space: nowrap;
   }
 
-  .badge {
-    padding: var(--esp-1) var(--esp-2);
-  }
-
-  .header-buttons {
+  .barra-herramientas__acciones {
     width: 100%;
   }
 
-  .header-buttons .btn-primary,
-  .header-buttons .btn-secondary {
+  .barra-herramientas__acciones .btn,
+  .modal-buttons .btn {
     flex: 1;
   }
 }

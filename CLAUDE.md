@@ -83,10 +83,28 @@ separados:
 
 - `html/index.html` + `js/logica.js` — principal. Lista lo disponible
   (`/api/productos?activo=1`) agrupado por área y arma la selección con cantidad.
+  **Además del filtro `activo=1`, oculta lo que no tiene existencias**: una fila se
+  pinta si `cantidadDisponible > 0` *o* si ya está en la selección. Lo segundo no es
+  un adorno — sin ello la fila desaparecería bajo el dedo justo al tomar la última
+  unidad, y desde la Principal no habría forma de devolverla.
+  La cantidad se ajusta con un contador en la propia fila (`− n +`); **no hay modal**
+  en esta pantalla desde el rediseño.
 - `html/inventario.html` + `js/edit.js` — CRUD real contra la API: alta, edición,
   activar/desactivar, borrado, export CSV.
 - `html/orden_del_dia.html` + `js/orden.js` — el formato imprimible. Lee la selección,
   la agrupa por área y al confirmar descuenta de verdad.
+
+**Capa de diseño.** `public/css/base.css` se carga antes que la hoja de cada pantalla y
+contiene todos los tokens, el reset y las primitivas. El sistema está descrito en
+`DESIGN.md` (visual) y `PRODUCT.md` (estratégico), ambos en la raíz. Tres cosas que
+muerden si se editan a ciegas:
+
+- Los colores son **OKLCH**, con un bloque `@supports not (color: oklch(...))` que los
+  repite en hex. Si cambias un token, recalcula también su hex.
+- `[hidden] { display: none !important }` es obligatorio (ver el contrato de `orden.js`).
+- **No pongas `position: sticky` en el `thead` de Inventario.** El `overflow-x: auto` de
+  `.table-container` lo vuelve scrollport en los dos ejes y la cabecera acaba empujada
+  sobre la primera fila. Está documentado en el propio CSS.
 
 **Contrato entre principal y orden del día:** `sessionStorage`, clave `ordenSeleccion`,
 un array de `{ id_producto, nombre, marca, area, cantidad }` donde `id_producto` y
