@@ -164,7 +164,25 @@ app.get('/api/areas', (req, res) => {
   });
 });
 
-// API Ordenes: descuenta stock de forma atómica (todo o nada).
+// Normaliza los campos de texto del formato (evento, responsable). Devuelve
+// `undefined` si el valor no sirve, para poder responder 400 sin ambigüedad:
+// null es un valor válido (el campo se dejó en blanco para rellenarlo a mano
+// sobre el papel) y no puede confundirse con "lo que mandaron está mal".
+const LARGO_MAXIMO_TEXTO = 200;
+
+function normalizarTexto(valor) {
+  if (valor === undefined || valor === null) return null;
+  if (typeof valor !== 'string') return undefined;
+  const limpio = valor.trim();
+  if (limpio.length === 0) return null;
+  if (limpio.length > LARGO_MAXIMO_TEXTO) return undefined;
+  return limpio;
+}
+
+// API Ordenes: descuenta stock y registra la orden de forma atómica (todo o
+// nada). El registro va en el MISMO COMMIT que el descuento a propósito: no
+// puede existir stock descontado sin constancia de por qué, ni constancia de
+// una salida que no llegó a aplicarse.
 app.post('/api/ordenes', (req, res) => {
   const { lineas } = req.body;
 
@@ -184,23 +202,34 @@ app.post('/api/ordenes', (req, res) => {
     }
   }
 
+  const evento = normalizarTexto(req.body.evento);
+  const responsable = normalizarTexto(req.body.responsable);
+  if (evento === undefined || responsable === undefined) {
+    return res.status(400).json({
+      error: `Evento y responsable deben ser texto de hasta ${LARGO_MAXIMO_TEXTO} caracteres.`,
+    });
+  }
+
   db.serialize(() => {
     db.run('BEGIN', (errBegin) => {
       if (errBegin) return res.status(500).json({ error: errBegin.message });
 
+      const abortar = (estado, cuerpo) =>
+        db.run('ROLLBACK', () => res.status(estado).json(cuerpo));
+
       // Relee las cantidades actuales: nunca confiar en lo que manda el navegador.
+      // El nombre también sale de aquí y no del cliente, porque se copia al
+      // registro histórico.
       const ids = lineas.map((l) => l.id_producto);
       const marcadores = ids.map(() => '?').join(',');
 
       db.all(
-        `SELECT id_producto, cantidad FROM productos WHERE id_producto IN (${marcadores})`,
+        `SELECT id_producto, nombre, cantidad FROM productos WHERE id_producto IN (${marcadores})`,
         ids,
         (errSelect, filas) => {
-          if (errSelect) {
-            return db.run('ROLLBACK', () => res.status(500).json({ error: errSelect.message }));
-          }
+          if (errSelect) return abortar(500, { error: errSelect.message });
 
-          const disponiblePorId = new Map(filas.map((f) => [f.id_producto, f.cantidad]));
+          const productoPorId = new Map(filas.map((f) => [f.id_producto, f]));
 
           // Un mismo producto puede llegar en varias líneas. Se suman ANTES de
           // validar: si se comparara línea por línea, dos pedidos que caben por
@@ -212,40 +241,58 @@ app.post('/api/ordenes', (req, res) => {
 
           const faltantes = [];
           for (const [id_producto, pedido] of pedidoPorId) {
-            const disponible = disponiblePorId.has(id_producto) ? disponiblePorId.get(id_producto) : 0;
-            if (!disponiblePorId.has(id_producto) || pedido > disponible) {
+            const fila = productoPorId.get(id_producto);
+            const disponible = fila ? fila.cantidad : 0;
+            if (!fila || pedido > disponible) {
               faltantes.push({ id_producto, pedido, disponible });
             }
           }
 
-          if (faltantes.length > 0) {
-            return db.run('ROLLBACK', () => res.status(409).json({ faltantes }));
-          }
+          if (faltantes.length > 0) return abortar(409, { faltantes });
 
-          // Un UPDATE por producto, con el total ya sumado.
-          let pendientes = pedidoPorId.size;
-          let fallo = null;
+          // Cabecera primero: sus líneas necesitan el id que genera este INSERT.
+          // `function` y no arrow: el handler depende de `this.lastID`.
+          db.run(
+            'INSERT INTO ordenes (creada_en, evento, responsable) VALUES (?, ?, ?)',
+            [new Date().toISOString(), evento, responsable],
+            function (errOrden) {
+              if (errOrden) return abortar(500, { error: errOrden.message });
 
-          pedidoPorId.forEach((cantidad, id_producto) => {
-            db.run(
-              'UPDATE productos SET cantidad = cantidad - ? WHERE id_producto = ?',
-              [cantidad, id_producto],
-              (errUpdate) => {
-                if (errUpdate && !fallo) fallo = errUpdate;
+              const idOrden = this.lastID;
+
+              // Dos escrituras por producto: la línea del registro y el
+              // descuento. Se cuentan juntas porque el COMMIT sólo puede salir
+              // cuando han terminado TODAS.
+              let pendientes = pedidoPorId.size * 2;
+              let fallo = null;
+
+              const alTerminar = (err) => {
+                if (err && !fallo) fallo = err;
                 pendientes -= 1;
+                if (pendientes > 0) return;
 
-                if (pendientes === 0) {
-                  if (fallo) {
-                    return db.run('ROLLBACK', () => res.status(500).json({ error: fallo.message }));
-                  }
-                  db.run('COMMIT', (errCommit) => {
-                    if (errCommit) return res.status(500).json({ error: errCommit.message });
-                    res.json({ mensaje: 'Orden aplicada correctamente' });
-                  });
-                }
-              }
-            );
-          });
+                if (fallo) return abortar(500, { error: fallo.message });
+
+                db.run('COMMIT', (errCommit) => {
+                  if (errCommit) return res.status(500).json({ error: errCommit.message });
+                  res.json({ mensaje: 'Orden aplicada correctamente', id_orden: idOrden });
+                });
+              };
+
+              pedidoPorId.forEach((cantidad, id_producto) => {
+                db.run(
+                  'INSERT INTO orden_lineas (id_orden, id_producto, nombre, cantidad) VALUES (?, ?, ?, ?)',
+                  [idOrden, id_producto, productoPorId.get(id_producto).nombre, cantidad],
+                  alTerminar
+                );
+                db.run(
+                  'UPDATE productos SET cantidad = cantidad - ? WHERE id_producto = ?',
+                  [cantidad, id_producto],
+                  alTerminar
+                );
+              });
+            }
+          );
         }
       );
     });
