@@ -68,11 +68,18 @@ areas                          productos
                                       │
 ordenes                               │  orden_lineas
 ┌─────────────┬───────────────┐       │  ┌─────────────┬──────────────────┐
-│ id_orden    │ INTEGER PK    │◄─────────┤ id_orden    │ FK → ordenes     │
-│ creada_en   │ TEXT NOT NULL │       └─►│ id_producto │ FK → productos   │
-│ evento      │ TEXT          │          │ nombre      │ TEXT NOT NULL    │
-│ responsable │ TEXT          │          │ cantidad    │ INTEGER NOT NULL │
-└─────────────┴───────────────┘          └─────────────┴──────────────────┘
+│ id_orden    │ INTEGER PK    │◄─┬───────┤ id_orden    │ FK → ordenes     │
+│ creada_en   │ TEXT NOT NULL │  │    └─►│ id_producto │ FK → productos   │
+│ evento      │ TEXT          │  │       │ nombre      │ TEXT NOT NULL    │
+│ responsable │ TEXT          │  │       │ cantidad    │ INTEGER NOT NULL │
+└─────────────┴───────────────┘  │       └─────────────┴──────────────────┘
+                                 │
+                                 │  devoluciones
+                                 │  ┌───────────────┬────────────────────┐
+                                 └──┤ id_orden      │ FK → ordenes UNIQUE│
+                                    │ recibida_en   │ TEXT NOT NULL      │
+                                    │ recibida_por  │ TEXT               │
+                                    └───────────────┴────────────────────┘
 ```
 
 - **La cantidad vive en el producto**, no en una tabla puente. `activo` decide si el
@@ -84,7 +91,15 @@ ordenes                               │  orden_lineas
   propósito el del producto — es un registro, no una vista: si el producto se renombra o
   se borra, la orden de marzo debe seguir diciendo qué salió. Lo escribe el servidor
   desde su propio `SELECT`, nunca el cliente.
-- **Nada lee esas tablas todavía**: no hay `GET /api/ordenes` ni pantalla de historial.
+- **`devoluciones` cierra el ciclo** (migración 003): una fila = "esta orden volvió
+  completa". Es **todo o nada** como la salida, así que basta una fila por orden y no hay
+  tabla de líneas — lo que volvió es lo que dice `orden_lineas`. El **`UNIQUE` en `id_orden`
+  es la pieza importante**, no un adorno del índice: hace de "una orden se devuelve una sola
+  vez" una garantía de la base y no un `if`, igual que "imprimir dos veces descuenta una
+  sola". Devolver **no reescribe `ordenes` ni `orden_lineas`**: son un registro, no un saldo.
+- Las **`REFERENCES` son decorativas**: no hay `PRAGMA foreign_keys = ON` en ninguna parte.
+  De ahí las líneas huérfanas — borrar un producto deja sus `orden_lineas` apuntando a un id
+  que ya no está, y la devolución trata ese caso a mano.
 - `usuarios`, `historial_login` — existen pero ninguna ruta ni UI las usa. No hay
   autenticación; quedó explícitamente para después.
 
@@ -98,12 +113,19 @@ El runner **no tiene ruta de base por defecto** a propósito: hay que pasarla si
 que sea imposible migrar la base real por accidente. Haz copia antes
 (`db/inventario.db3.bak` es la de la migración 001, que plegó `detalle_inventario` a
 `productos.cantidad` y renombró `subprocesos` a `areas`;
-`db/inventario.db3.pre-002.bak` es la de la 002).
+`db/inventario.db3.pre-002.bak` es la de la 002; `db/inventario.db3.pre-003.bak`, la de
+la 003).
 
-La **002** es puramente aditiva (solo `CREATE TABLE` / `CREATE INDEX`): una versión vieja
-de la app sigue funcionando contra una base migrada, y revertirla es un `DROP` de las dos
-tablas. Si añades una migración, **el esquema de `test/helpers/db.js` tiene que
-reflejarla** o los tests correrán contra un modelo que ya no existe.
+La **002** y la **003** son puramente aditivas (solo `CREATE TABLE` / `CREATE INDEX`): una
+versión vieja de la app sigue funcionando contra una base migrada, y revertirlas es un
+`DROP` de sus tablas. Si añades una migración, **el esquema de `test/helpers/db.js` tiene
+que reflejarla** o los tests correrán contra un modelo que ya no existe.
+
+Y el bloque de arranque de `server.js` **obliga a que una migración aditiva cree una tabla
+y no añada una columna**: `CREATE TABLE IF NOT EXISTS` no añade columnas a una tabla que ya
+existe, y `ADD COLUMN` no admite `IF NOT EXISTS` en SQLite, así que una columna nueva no se
+puede asegurar de forma idempotente desde ahí. De ahí que la 003 sea la tabla `devoluciones`
+y no un `ordenes.devuelta_en`.
 
 **Frontend — `public/`.** Servido como estático (`express.static('public')`), por lo que
 las rutas absolutas son `/css/...`, `/js/...`, `/html/...`. Tres pantallas con roles
@@ -118,7 +140,11 @@ separados:
   La cantidad se ajusta con un contador en la propia fila (`− n +`); **no hay modal**
   en esta pantalla desde el rediseño.
 - `html/inventario.html` + `js/edit.js` — CRUD real contra la API: alta, edición,
-  activar/desactivar, borrado, export CSV.
+  activar/desactivar, borrado, export CSV. Y `js/devolucion.js`, la sección **Recibir
+  devolución** encima de la tabla: se teclea el N.º impreso en la orden y se repone todo lo
+  que salió. Va **en IIFE por obligación**: `edit.js` no lo está y declara sus `const` en el
+  nivel superior, que los classic scripts comparten, así que repetir un nombre allí rompería
+  el archivo entero al parsear. (El id `buscar` ya lo usa el buscador del CRUD.)
 - `html/orden_del_dia.html` + `js/orden.js` — el formato imprimible. Lee la selección,
   la agrupa por área y al confirmar descuenta de verdad. **También la ajusta**: cada
   línea trae `− + ✕` (`.no-imprimir`), así que devolver material no obliga a volver a
@@ -147,14 +173,19 @@ un array de `{ id_producto, nombre, marca, area, cantidad }` donde `id_producto`
 `cantidad` son **números** — el backend valida con `typeof === 'number'` y rechaza strings
 con 400. `cantidad` es lo pedido, no lo disponible.
 
-Hay una **segunda clave, `ordenAplicada`**: vale `"true"` cuando el descuento de la orden
-actual ya se aplicó, y es lo que hace que imprimir dos veces descuente una sola. Su
-invariante: **quien escriba `ordenSeleccion` debe borrar `ordenAplicada`.** Si la selección
-cambia, la orden es otra y su descuento está pendiente; dejar la clave en `"true"` hace que
-Orden del día imprima sin llamar a `/api/ordenes` — papel por material nunca descontado.
-Escriben la clave **las dos pantallas**: `logica.js` al mover un contador y `orden.js` al
-ajustar una línea del formato. Las dos pasan por su propia `guardarSeleccion()`, que hace
-ambas cosas a la vez justamente para que no se pueda olvidar una.
+Hay una **segunda clave, `ordenAplicada`** (`"true"` = el descuento ya se aplicó, y es lo que
+hace que imprimir dos veces descuente una sola) y una **tercera, `ordenId`**: el número que
+asignó la base, el que se imprime en el papel y el que se teclea en Inventario para devolver.
+
+El invariante cubre las dos: **quien escriba `ordenSeleccion` debe borrar `ordenAplicada` y
+`ordenId`.** Si la selección cambia, la orden es otra: dejar `ordenAplicada` en `"true"` hace
+imprimir sin llamar a `/api/ordenes` —papel por material nunca descontado—, y dejar `ordenId`
+haría que el papel nuevo llevara el número del anterior, con lo que alguien **devolvería una
+orden equivocada**, que es irreversible y peor que quedarse sin número. Escriben las claves
+**las dos pantallas** —`logica.js` al mover un contador, `orden.js` al ajustar una línea—,
+cada una por su `guardarSeleccion()`, que hace las tres cosas a la vez precisamente para que
+no se pueda olvidar ninguna. `devolucion.js` **no escribe ninguna**: recibir el material no
+reabre la orden.
 
 La otra mitad: **la Principal no rehidrata una selección cuya orden ya se aplicó.**
 Si `ordenAplicada` es `"true"` al cargar, arranca en limpio en vez de recuperar
@@ -163,23 +194,67 @@ descontaría dos veces si se reenvía. `ordenSeleccion` se deja en
 `sessionStorage` a propósito pese a esto: es lo que permite a Orden del día
 reimprimir el mismo papel sin volver a llamar a `/api/ordenes`.
 
-Y la tercera operación, que faltaba y era un bug: **cerrar la orden borra las DOS
+Y la tercera operación, que faltaba y era un bug: **cerrar la orden borra las TRES
 claves** (botón "Empezar una nueva orden"). Sin ella, una orden ya impresa se quedaba
 pegada para siempre: la Principal arrancaba en limpio, así que no tenía nada que quitar
 y nunca reescribía la clave, e imprimir solo reimprimía.
 
-**`POST /api/ordenes` es el único camino que escribe stock.** Valida todo antes de tocar
-nada, agrupa las líneas repetidas del mismo producto **antes** de comparar contra el stock
-(si no, dos pedidos que caben por separado dejarían la cantidad en negativo), y aplica los
-`UPDATE` **junto con el registro de la orden** dentro de una transacción: todo o nada.
-Responde 409 con `{faltantes}` sin descontar si algo no alcanza, y 200 con `{id_orden}`.
-Acepta `evento` y `responsable` opcionales (texto, máximo 200); en blanco se guardan como
-`NULL`, no como cadena vacía.
+**El N.º se pinta desde `cerrarOrdenEnPantalla()`**, no en la rama del 200: esa función es la
+única puerta al estado "aplicada" —se entra por el POST y por una recarga—, y pintar en dos
+sitios acabaría dejando la reimpresión sin número. Y `marcarOrdenAplicada` escribe en
+`sessionStorage` **dentro de un `try/catch`** porque `setItem` lanza en modo privado: sin
+envolver, la excepción caería en el `catch` de red de `emitirOrden` y el usuario vería "no se
+pudo conectar" sobre una orden ya descontada, y sin papel — `window.print()` no se ejecutaría.
+
+**Hay dos caminos que escriben stock, y solo dos: `POST /api/ordenes` descuenta y
+`POST /api/ordenes/:id/devolucion` repone.**
+
+`POST /api/ordenes` valida todo antes de tocar nada, agrupa las líneas repetidas del mismo
+producto **antes** de comparar contra el stock (si no, dos pedidos que caben por separado
+dejarían la cantidad en negativo), y aplica los `UPDATE` **junto con el registro de la
+orden** dentro de una transacción: todo o nada. Responde 409 con `{faltantes}` sin descontar
+si algo no alcanza, y 200 con `{id_orden}`. Acepta `evento` y `responsable` opcionales
+(texto, máximo 200); en blanco se guardan como `NULL`, no como cadena vacía.
+
+`GET /api/ordenes/:id` es el primer lector de esas tablas: cabecera, `devolucion` (o `null`)
+y las líneas con `existe`, `nombre_actual` y `activo` — tres datos que el histórico por sí
+solo no da. En su `SELECT`, **`p.nombre` va aliasado a `nombre_actual` obligatoriamente**:
+sqlite3 devuelve la fila como objeto plano y una segunda columna `nombre` sobreescribiría en
+silencio la histórica.
+
+`POST /api/ordenes/:id/devolucion` repone con `cantidad = cantidad + ?`. Cuatro trampas, las
+cuatro comentadas en el propio `server.js`:
+
+- **Las lecturas previas van FUERA de la transacción**, al contrario que en
+  `POST /api/ordenes`. Hay una sola conexión y `BEGIN`/`COMMIT` son de conexión, no de
+  petición: lo que otra petición ejecute entre nuestro `BEGIN` y nuestro `ROLLBACK` se
+  revierte con ella. Y aquí el `ROLLBACK` sería el camino **normal** —teclear mal un
+  número— en la misma pantalla en la que el CRUD escribe todo el rato.
+- **El `SQLITE_CONSTRAINT` del UNIQUE se mapea a 409**, no a 500: es la red del hueco entre
+  el `SELECT` de "¿ya está devuelta?" y el `INSERT`.
+- **`devueltas`/`omitidas` se construyen con `this.changes`**, no con el snapshot: un
+  `UPDATE` que no encuentra fila no da error en SQLite, da cero cambios.
+- **Con cero líneas reponibles el `COMMIT` sale directo**, o el contador nace en cero y la
+  petición no responde nunca. Su test lleva `timeout` explícito: un test colgado bloquea
+  `npm test` entero en vez de fallar.
+
+No se filtra por `activo` al reponer —el stock es físico—, pero la respuesta marca `activo`
+en cada línea y la pantalla lo avisa: si no, el material volvería a un producto que la
+Principal no lista y quedaría invisible.
+
+**No hay forma de anular una devolución.** El UNIQUE impide devolver dos veces la misma
+orden, no devolver la equivocada: teclear 21 en vez de 12 suma material a productos ajenos y
+deja la 21 bloqueada para siempre; se arregla a mano por el CRUD. Por eso el `<dialog>`
+muestra la **identidad** de la orden —fecha, evento, responsable y líneas—, no solo el
+número. Y las órdenes anteriores a la 003 no llevan número impreso: no se encuentran desde
+la UI, se cuadran a mano.
 
 **Se avisa antes de emitir, y solo antes.** El descuento es inmediato y no se deshace
 desde la app, así que un `<dialog>` lo dice con las unidades delante antes del `POST`. Es
 `<dialog>` nativo y no el `.modal` de Inventario porque ese se abre conmutando
 `style.display`, que es justo lo que choca con el `[hidden]` del que depende `orden.js`.
+La primitiva `.dialogo` vive en `base.css` (con su `@keyframes`) porque la comparten las
+**dos** acciones irreversibles que escriben stock: emitir y recibir.
 
 Después de imprimir **no se pregunta nada**, aunque el navegador tampoco sepa si el papel
 salió (`afterprint` se dispara igual al imprimir que al cancelar, y la web no ve la cola

@@ -281,7 +281,7 @@ fija, y la hoja imprimible (que representa un papel físico sobre un escritorio)
   que el contenido parezca cortado.
 - **Hoja** (`0 1px 2px oklch(20.5% 0.021 338 / .04), 0 8px 24px oklch(20.5% 0.021 338 / .05)`):
   el formato de Orden del día en pantalla. Desaparece por completo en `@media print`.
-- **Modal** (`0 16px 48px oklch(20.5% 0.021 338 / .22)`): el único diálogo. Sombra franca,
+- **Modal** (`0 16px 48px oklch(20.5% 0.021 338 / .22)`): los diálogos. Sombra franca,
   porque tapar el fondo es su función.
 
 ### Named Rules
@@ -313,6 +313,27 @@ No hay tarjetas. Las secciones se delimitan con un filete superior o inferior de
 espacio vertical de la escala. El único contenedor con superficie propia y radio es la
 **hoja** de Orden del día (8px, sombra Hoja) y el **modal** (8px, sombra Modal). Las tarjetas
 anidadas están prohibidas y no existe ningún caso que las necesite.
+
+"Recibir devolución", en Inventario, es el caso de prueba de esta regla: es una sección con
+su propio título, formulario, panel de resultado y aviso, y aun así **no lleva caja**. Se
+delimita con un filete inferior y espacio, como todo lo demás. Un bloque así es exactamente
+donde la tentación de la tarjeta aparece; ceder ahí es empezar el dashboard.
+
+### Diálogo de confirmación
+
+La primitiva `.dialogo` vive en `base.css`, no en la hoja de una pantalla, porque la
+comparten **las dos acciones irreversibles que escriben stock**: emitir la orden (descuenta)
+y recibir la devolución (repone).
+
+Es `<dialog>` nativo y **no** el `.modal` de Inventario, que se abre conmutando
+`style.display`. Dos razones, y las dos son funcionales: el nativo da backdrop, Escape y
+trampa de foco sin JS, y no toca `display`, que es justo lo que pelearía con el
+`[hidden] { display: none !important }` del que depende `orden.js`.
+
+Regla de contenido, no de forma: **cuando la acción se aplica a un registro concreto, el
+diálogo muestra cuál.** El de la devolución enumera número, fecha, evento, responsable y
+líneas — no "¿devolver la orden 21?". Confirmar la acción correcta sobre el registro
+equivocado es el error que ningún diálogo genérico atrapa.
 
 ### Inputs / Fields
 

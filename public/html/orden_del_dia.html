@@ -61,6 +61,15 @@
       <img src="/img/logo.jpg" alt="Logo de la empresa" class="logo-orden">
       <div class="titulo-encabezado">
         <h1>ORDEN DEL DÍA</h1>
+        <!-- El número que la base asignó a la orden. Es lo que se teclea en
+             Inventario para devolver el material, así que sin él impreso aquí no
+             hay forma de encontrar la orden después. Sólo existe tras emitir:
+             oculto hasta entonces, para que el papel no salga con la etiqueta y
+             nada al lado. -->
+        <p class="linea-dato" id="lineaNumeroOrden" hidden>
+          <span class="etiqueta">N.º de orden:</span>
+          <span id="valorNumeroOrden" class="valor-impreso cifra"></span>
+        </p>
         <p class="linea-dato">
           <span class="etiqueta">Fecha:</span>
           <span id="fechaHoy" class="valor-impreso"></span>

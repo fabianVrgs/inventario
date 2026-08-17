@@ -45,45 +45,55 @@ deuda más visible del repo.
 | Pantalla | Ruta | Qué hace |
 |---|---|---|
 | **Principal** | `/` | Elegir de lo disponible, con cantidad. No edita el catálogo. |
-| **Inventario** | `/html/inventario.html` | Administrar el catálogo: alta, edición, activar/desactivar, borrado, export CSV. |
+| **Inventario** | `/html/inventario.html` | Administrar el catálogo: alta, edición, activar/desactivar, borrado, export CSV. Y **recibir devoluciones**: aquí es donde vuelve a subir el stock. |
 | **Orden del día** | `/html/orden_del_dia.html` | Revisar el formato, ajustarlo e imprimir. Aquí es donde baja el stock. |
 
-El flujo es de izquierda a derecha: se carga el catálogo en Inventario, se
-selecciona en la Principal, se revisa en Orden del día, se imprime.
+El flujo va de izquierda a derecha: se carga el catálogo en Inventario, se
+selecciona en la Principal, se revisa en Orden del día, se imprime. Y **cierra
+el círculo** volviendo a Inventario cuando el material regresa del evento: se
+teclea el N.º que la orden lleva impreso y se repone de una vez todo lo que salió.
 
-Cuatro reglas del negocio que explican casi todo el diseño:
+Cinco reglas del negocio que explican casi todo el diseño:
 
 - **`activo` separa "existe en el catálogo" de "se puede pedir hoy".** Un
   producto desactivado sigue en Inventario pero no aparece en la Principal.
 - **Imprimir dos veces descuenta una sola vez.** Sacar dos copias del mismo
-  papel es normal; descontar dos veces dejaría el inventario mal.
-- **Devolver material se puede hasta el momento de imprimir**, tanto desde la
+  papel es normal; descontar dos veces dejaría el inventario corto.
+- **Recibir dos veces la misma orden repone una sola vez.** La regla espejo, y
+  garantizada por un `UNIQUE` en la base y no por un `if`: devolver dos veces
+  infla el inventario con material que no existe.
+- **Ajustar la orden se puede hasta el momento de imprimir**, tanto desde la
   Principal como desde la propia Orden del día (`− + ✕` en cada línea). Después
   de imprimir la orden queda cerrada, y se cierra del todo con "Empezar una
   nueva orden".
 - **Cada orden emitida queda registrada** en `ordenes` / `orden_lineas`, con
-  fecha, evento y responsable, dentro de la misma transacción que el descuento.
+  fecha, evento y responsable, dentro de la misma transacción que el descuento;
+  y su regreso en `devoluciones`, con la fecha y quién lo recibió.
 
 ## Cómo se pasan la orden las pantallas
 
 No hay estado en el servidor entre pantallas: viaja por `sessionStorage`, en
-dos claves que hay que mover **juntas**.
+tres claves que hay que mover **juntas**.
 
 | Clave | Contenido | Quién la escribe |
 |---|---|---|
 | `ordenSeleccion` | Array de `{ id_producto, nombre, marca, area, cantidad }`, con `id_producto` y `cantidad` como **números** | Principal y Orden del día, al mover una cantidad |
 | `ordenAplicada` | `"true"` cuando el descuento de esa orden ya se aplicó | Orden del día, al emitir |
+| `ordenId` | El N.º que asignó la base: lo que se imprime en el papel y lo que se teclea en Inventario para devolver | Orden del día, al emitir |
 
-La regla que las une: **quien escriba `ordenSeleccion` borra `ordenAplicada`**,
-porque una selección distinta es otra orden y su descuento está pendiente. Al
-revés, con `ordenAplicada` en `"true"` imprimir sólo reimprime, y la Principal
-arranca en limpio en vez de rehidratar una orden ya consumida. "Empezar una
-nueva orden" borra las dos. Cada pantalla lo hace desde su propia
-`guardarSeleccion()`, en un solo sitio, para que no se pueda olvidar la mitad.
+La regla que las une: **quien escriba `ordenSeleccion` borra `ordenAplicada` y
+`ordenId`**, porque una selección distinta es otra orden. Si quedara
+`ordenAplicada`, imprimir sacaría papel por material nunca descontado; si
+quedara `ordenId`, el papel nuevo llevaría el número del anterior y alguien
+devolvería la orden equivocada — que no se deshace. Al revés, con
+`ordenAplicada` en `"true"` imprimir sólo reimprime (conservando su número), y
+la Principal arranca en limpio en vez de rehidratar una orden ya consumida.
+"Empezar una nueva orden" borra las tres. Cada pantalla lo hace desde su propia
+`guardarSeleccion()`, en un solo sitio, para que no se pueda olvidar una.
 
 ## Probar
 
-    npm test                                        # los 29 tests de API
+    npm test                                        # los 55 tests de API
     node --test test/api.test.js                    # un solo archivo
     node --test --test-name-pattern "elimina el producto"   # un solo test
 
@@ -110,8 +120,14 @@ Todo vive en `server.js`.
 | DELETE | `/api/productos/:id` | Eliminar |
 | GET | `/api/areas` | Poblar el selector de área |
 | POST | `/api/ordenes` | Confirmar la orden, descontar y registrarla |
+| GET | `/api/ordenes/:id` | Leer una orden emitida y si ya se devolvió |
+| POST | `/api/ordenes/:id/devolucion` | Recibir la orden y reponer su stock |
 
-**`POST /api/ordenes` es el único camino que escribe stock.** Recibe
+**Hay exactamente dos caminos que escriben stock: `POST /api/ordenes` descuenta
+y `POST /api/ordenes/:id/devolucion` repone.** Ninguna otra ruta toca
+`productos.cantidad` salvo el CRUD, que la fija a mano.
+
+`POST /api/ordenes` recibe
 `{ lineas: [{ id_producto, cantidad }], evento?, responsable? }`, donde
 `id_producto` y `cantidad` deben ser **números** (los strings se rechazan con
 400) y los dos textos son opcionales, de hasta 200 caracteres. Valida todo
@@ -126,6 +142,29 @@ real del inventario.** Si el descuento no se pudo aplicar, no hay papel. Y al
 revés: si se aplicó, queda registrado quién se llevó qué aunque la impresora
 falle. Como el descuento es inmediato y no se deshace desde la app, se avisa
 con un diálogo antes de emitir.
+
+`GET /api/ordenes/:id` devuelve la cabecera, la `devolucion` (o `null`) y las
+líneas. Cada línea trae, además del `nombre` histórico, si el producto todavía
+`existe`, su `nombre_actual` —para poder casarla con la tabla de Inventario si
+se renombró— y si está `activo`.
+
+`POST /api/ordenes/:id/devolucion` acepta `{ recibida_por? }` y repone con
+`cantidad = cantidad + ?`, dentro de una transacción y dejando constancia en
+`devoluciones`. Responde 200 con `{ devueltas, omitidas }`, 404 si la orden no
+existe, 409 si ya se recibió y 400 si el número no es un entero positivo. Tres
+cosas que conviene saber:
+
+- **No filtra por `activo`**: el stock es físico y `activo` sólo dice si se
+  puede pedir hoy. Pero cada línea devuelta informa su `activo`, porque si no
+  el material volvería a un producto que la Principal no lista y quedaría
+  invisible.
+- **Si una línea apunta a un producto ya eliminado**, se repone el resto y esa
+  línea sale en `omitidas`. La orden queda devuelta igual: si no, se quedaría
+  pendiente para siempre.
+- **No hay forma de anular una devolución.** El `UNIQUE` impide devolver dos
+  veces la misma orden, pero no devolver la equivocada; eso se corrige a mano
+  desde el CRUD. Por eso el diálogo de confirmación muestra la identidad de la
+  orden y no sólo su número.
 
 ## Modelo de datos
 
@@ -145,11 +184,18 @@ del almacén.
                                      │
     ordenes                          │   orden_lineas
     ┌─────────────┬───────────────┐  │   ┌─────────────┬──────────────────┐
-    │ id_orden    │ INTEGER PK    │◄─────┤ id_orden    │ FK → ordenes     │
-    │ creada_en   │ TEXT NOT NULL │  └──►│ id_producto │ FK → productos   │
-    │ evento      │ TEXT          │      │ nombre      │ TEXT NOT NULL    │
-    │ responsable │ TEXT          │      │ cantidad    │ INTEGER NOT NULL │
-    └─────────────┴───────────────┘      └─────────────┴──────────────────┘
+    │ id_orden    │ INTEGER PK    │◄┬────┤ id_orden    │ FK → ordenes     │
+    │ creada_en   │ TEXT NOT NULL │ │ └─►│ id_producto │ FK → productos   │
+    │ evento      │ TEXT          │ │    │ nombre      │ TEXT NOT NULL    │
+    │ responsable │ TEXT          │ │    │ cantidad    │ INTEGER NOT NULL │
+    └─────────────┴───────────────┘ │    └─────────────┴──────────────────┘
+                                    │
+                                    │    devoluciones
+                                    │    ┌──────────────┬─────────────────────┐
+                                    └────┤ id_orden     │ FK → ordenes UNIQUE │
+                                         │ recibida_en  │ TEXT NOT NULL       │
+                                         │ recibida_por │ TEXT                │
+                                         └──────────────┴─────────────────────┘
 
 La cantidad vive en el producto, no en una tabla puente.
 
@@ -158,6 +204,17 @@ almacén, escrito en el mismo `COMMIT` que el descuento. `orden_lineas.nombre`
 duplica a propósito el nombre del producto: es un registro, no una vista, y si
 el producto se renombra o se borra, la orden vieja tiene que seguir diciendo
 qué salió de verdad.
+
+`devoluciones` es la vuelta: una fila significa "esta orden regresó completa".
+Como la devolución es todo o nada, basta una fila por orden y no hace falta una
+tabla de líneas — lo que volvió es lo que dice `orden_lineas`. El `UNIQUE` en
+`id_orden` es lo que impide devolver dos veces la misma orden, y está en la base
+justamente para no depender de que la aplicación se acuerde de comprobarlo.
+
+Ojo: las `REFERENCES` son decorativas, porque no hay `PRAGMA foreign_keys = ON`
+en ninguna parte. Por eso borrar un producto desde el CRUD deja sus
+`orden_lineas` apuntando a un id que ya no existe, y la devolución tiene que
+tratar ese caso a mano.
 
 Las tablas `usuarios` e `historial_login` existen pero ninguna ruta ni
 pantalla las usa: **no hay autenticación**, quedó explícitamente para después.
@@ -181,9 +238,19 @@ antes de correr cualquier migración.
 - **002** añadió `ordenes` y `orden_lineas`. Es puramente aditiva (solo
   `CREATE TABLE`), así que una versión vieja de la app funciona igual contra
   una base ya migrada. Copia previa: `db/inventario.db3.pre-002.bak`.
+- **003** añadió `devoluciones`. También aditiva; revertirla es un `DROP TABLE`.
+  Copia previa: `db/inventario.db3.pre-003.bak`.
 
 Al añadir una migración, actualiza también el esquema de
 `test/helpers/db.js`: es el que recrean los tests.
+
+Y ten en cuenta el bloque de arranque de `server.js`, que asegura estas tablas
+con `CREATE TABLE IF NOT EXISTS` para que la app funcione recién clonada sin
+correr el runner a mano. **Eso obliga a que una migración aditiva cree una tabla
+en vez de añadir una columna**: `IF NOT EXISTS` no añade columnas a una tabla que
+ya existe, y `ALTER TABLE ... ADD COLUMN` no admite `IF NOT EXISTS` en SQLite, así
+que no habría forma idempotente de asegurarla. Es la razón por la que la 003 es
+una tabla y no un `ordenes.devuelta_en`.
 
 ## Estado conocido
 
@@ -203,10 +270,17 @@ migración 001.
 
 - **Usuarios y login.** Diferido explícitamente. Las órdenes guardan el
   responsable como texto tecleado, no como un usuario del sistema.
-- **Deshacer una orden ya emitida.** Devolver material se puede hasta el
-  momento de imprimir; después el descuento es de una sola vía y corregirlo
-  obliga a editar la cantidad a mano desde Inventario. La orden queda
-  registrada aunque se corrija el stock por fuera.
-- **Consultar el historial.** Las órdenes **sí** se guardan (`ordenes` /
-  `orden_lineas`), pero nada las lee todavía: no hay `GET /api/ordenes` ni
-  pantalla que las muestre. Por ahora se consultan con SQL.
+- **Deshacer una orden ya emitida.** Ajustar la orden se puede hasta el momento
+  de imprimir. Después el descuento es de una sola vía: lo que existe es
+  **recibir la devolución**, que es otra operación con su propia constancia, no
+  una anulación. Corregir un descuento equivocado sigue obligando a editar la
+  cantidad a mano desde Inventario.
+- **Anular una devolución.** Misma historia y el mismo remedio a mano. Devolver
+  la orden equivocada es el error que más duele, porque además deja la orden real
+  bloqueada por el `UNIQUE`; por eso se confirma mostrando la identidad completa
+  de la orden.
+- **Listar órdenes o consultar el historial.** `GET /api/ordenes/:id` lee **una**
+  orden por su número, que es lo que necesita la devolución. No hay listado de
+  órdenes pendientes ni pantalla de historial: para eso, SQL. Consecuencia
+  aceptada: las órdenes emitidas antes de la 003 no llevan número impreso, así
+  que no se pueden encontrar desde la UI y su stock se cuadra a mano.

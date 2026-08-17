@@ -375,3 +375,306 @@ test('POST /api/ordenes rechaza evento o responsable que no sean texto', async (
   assert.equal(res.status, 400);
   assert.equal(await cantidadDe(1), 4);
 });
+
+// ------------------------------------------------------------- devoluciones
+
+// Devolver es la segunda mitad de un ciclo que empieza descontando, así que
+// casi todo lo de aquí necesita una orden ya emitida.
+const emitir = async (lineas, extra = {}) => {
+  const res = await enviar('POST', '/api/ordenes', { lineas, ...extra });
+  assert.equal(res.status, 200, 'la orden de partida debe emitirse bien');
+  return (await res.json()).id_orden;
+};
+
+const devolver = (idOrden, cuerpo = {}) =>
+  enviar('POST', `/api/ordenes/${idOrden}/devolucion`, cuerpo);
+
+test('GET /api/ordenes/:id devuelve la orden con sus líneas', async () => {
+  const idOrden = await emitir(
+    [
+      { id_producto: 1, cantidad: 3 },
+      { id_producto: 2, cantidad: 10 },
+    ],
+    { evento: 'Feria de agosto', responsable: 'Bodega' }
+  );
+
+  const res = await get(`/api/ordenes/${idOrden}`);
+  assert.equal(res.status, 200);
+
+  const orden = await res.json();
+  assert.equal(orden.id_orden, idOrden);
+  assert.equal(orden.evento, 'Feria de agosto');
+  assert.equal(orden.responsable, 'Bodega');
+  assert.ok(!Number.isNaN(Date.parse(orden.creada_en)), 'creada_en debe ser una fecha ISO');
+  assert.equal(orden.devolucion, null, 'una orden recién emitida no está devuelta');
+  assert.deepEqual(
+    orden.lineas.map((l) => [l.id_producto, l.nombre, l.cantidad, l.existe]),
+    [
+      [1, 'vim2', 3, true],
+      [2, 'BT3', 10, true],
+    ]
+  );
+});
+
+test('GET /api/ordenes/:id responde 404 si la orden no existe', async () => {
+  const res = await get('/api/ordenes/999');
+  assert.equal(res.status, 404);
+});
+
+test('GET /api/ordenes/:id responde 400 si el número no es un entero positivo', async () => {
+  assert.equal((await get('/api/ordenes/abc')).status, 400);
+  assert.equal((await get('/api/ordenes/0')).status, 400);
+  assert.equal((await get('/api/ordenes/-3')).status, 400);
+});
+
+test('GET /api/ordenes/:id marca la línea cuyo producto ya no existe', async () => {
+  const idOrden = await emitir([{ id_producto: 3, cantidad: 2 }]);
+  assert.equal((await enviar('DELETE', '/api/productos/3')).status, 200);
+
+  const { lineas } = await (await get(`/api/ordenes/${idOrden}`)).json();
+  assert.equal(lineas.length, 1, 'la línea del registro sobrevive al borrado del producto');
+  assert.equal(lineas[0].nombre, 'Cable XLR', 'y sigue diciendo qué salió');
+  assert.equal(lineas[0].existe, false);
+});
+
+test('GET /api/ordenes/:id informa la devolución ya registrada', async () => {
+  const idOrden = await emitir([{ id_producto: 1, cantidad: 2 }]);
+  assert.equal((await devolver(idOrden, { recibida_por: 'Erick' })).status, 200);
+
+  const { devolucion } = await (await get(`/api/ordenes/${idOrden}`)).json();
+  assert.equal(devolucion.recibida_por, 'Erick');
+  assert.ok(!Number.isNaN(Date.parse(devolucion.recibida_en)), 'recibida_en debe ser ISO');
+});
+
+test('POST /api/ordenes/:id/devolucion repone el stock que salió', async () => {
+  const idOrden = await emitir([
+    { id_producto: 1, cantidad: 3 },
+    { id_producto: 2, cantidad: 10 },
+  ]);
+  assert.equal(await cantidadDe(1), 1);
+  assert.equal(await cantidadDe(2), 20);
+
+  const res = await devolver(idOrden);
+  assert.equal(res.status, 200);
+
+  const cuerpo = await res.json();
+  assert.equal(cuerpo.id_orden, idOrden);
+  assert.deepEqual(
+    cuerpo.devueltas.map((l) => [l.id_producto, l.cantidad]),
+    [
+      [1, 3],
+      [2, 10],
+    ]
+  );
+  assert.deepEqual(cuerpo.omitidas, []);
+
+  assert.equal(await cantidadDe(1), 4, 'vuelve al stock que había antes de la salida');
+  assert.equal(await cantidadDe(2), 30);
+});
+
+test('POST /api/ordenes/:id/devolucion deja constancia de cuándo llegó y quién recibió', async () => {
+  const idOrden = await emitir([{ id_producto: 1, cantidad: 1 }]);
+  assert.equal((await devolver(idOrden, { recibida_por: 'Erick' })).status, 200);
+
+  const filas = await consultar('SELECT * FROM devoluciones WHERE id_orden = ?', [idOrden]);
+  assert.equal(filas.length, 1);
+  assert.equal(filas[0].recibida_por, 'Erick');
+  assert.ok(!Number.isNaN(Date.parse(filas[0].recibida_en)), 'recibida_en debe ser una fecha ISO');
+});
+
+test('POST /api/ordenes/:id/devolucion acepta quién recibe en blanco', async () => {
+  const idOrden = await emitir([{ id_producto: 1, cantidad: 1 }]);
+  assert.equal((await devolver(idOrden, { recibida_por: '   ' })).status, 200);
+
+  const [fila] = await consultar('SELECT * FROM devoluciones WHERE id_orden = ?', [idOrden]);
+  assert.equal(fila.recibida_por, null, 'en blanco se guarda como NULL, no como cadena vacía');
+});
+
+test('POST /api/ordenes/:id/devolucion rechaza quién recibe si no es texto', async () => {
+  const idOrden = await emitir([{ id_producto: 1, cantidad: 3 }]);
+
+  const res = await devolver(idOrden, { recibida_por: { nombre: 'inyección' } });
+  assert.equal(res.status, 400);
+  assert.equal(await cantidadDe(1), 1, 'un 400 no puede reponer nada');
+  assert.deepEqual(await consultar('SELECT * FROM devoluciones'), []);
+});
+
+test('POST /api/ordenes/:id/devolucion responde 409 si la orden ya se devolvió', async () => {
+  const idOrden = await emitir([{ id_producto: 1, cantidad: 3 }]);
+  assert.equal((await devolver(idOrden)).status, 200);
+  assert.equal(await cantidadDe(1), 4);
+
+  const res = await devolver(idOrden);
+  assert.equal(res.status, 409);
+
+  const cuerpo = await res.json();
+  assert.ok(cuerpo.devolucion, 'el 409 dice cuándo se recibió, para que se vea que ya está');
+
+  // Lo que de verdad importa: devolver dos veces no infla el inventario con
+  // material que no existe.
+  assert.equal(await cantidadDe(1), 4, 'la segunda devolución no vuelve a sumar');
+  assert.equal(
+    (await consultar('SELECT * FROM devoluciones WHERE id_orden = ?', [idOrden])).length,
+    1,
+    'y no deja una segunda constancia'
+  );
+});
+
+test('POST /api/ordenes/:id/devolucion responde 404 si la orden no existe', async () => {
+  const res = await devolver(999);
+  assert.equal(res.status, 404);
+  assert.equal(await cantidadDe(1), 4, 'no toca el stock');
+  assert.deepEqual(await consultar('SELECT * FROM devoluciones'), []);
+});
+
+test('POST /api/ordenes/:id/devolucion repone igual a un producto desactivado', async () => {
+  // El producto 4 está sembrado con activo = 0 y 15 unidades. `activo` sólo
+  // dice si se puede pedir hoy; el stock es físico y vuelve igual.
+  const idOrden = await emitir([{ id_producto: 4, cantidad: 5 }]);
+  assert.equal(await cantidadDe(4), 10);
+
+  assert.equal((await devolver(idOrden)).status, 200);
+  assert.equal(await cantidadDe(4), 15);
+});
+
+test('POST /api/ordenes/:id/devolucion omite la línea sin producto y repone las demás', async () => {
+  const idOrden = await emitir([
+    { id_producto: 1, cantidad: 3 },
+    { id_producto: 3, cantidad: 2 },
+  ]);
+  assert.equal((await enviar('DELETE', '/api/productos/3')).status, 200);
+
+  const res = await devolver(idOrden);
+  assert.equal(res.status, 200);
+
+  const cuerpo = await res.json();
+  assert.deepEqual(
+    cuerpo.devueltas.map((l) => l.id_producto),
+    [1]
+  );
+  assert.deepEqual(
+    cuerpo.omitidas.map((l) => [l.id_producto, l.nombre, l.cantidad]),
+    [[3, 'Cable XLR', 2]],
+    'lo que no se pudo reponer se informa, no se calla'
+  );
+
+  assert.equal(await cantidadDe(1), 4, 'lo que sí existe vuelve al stock');
+  assert.equal(
+    (await consultar('SELECT * FROM devoluciones WHERE id_orden = ?', [idOrden])).length,
+    1,
+    'la orden queda devuelta: si no, se quedaría pendiente para siempre'
+  );
+});
+
+// El timeout no es decorativo: si el COMMIT dependiera de que termine alguna
+// escritura, en este caso no habría ninguna, la petición no respondería nunca y
+// `npm test` se quedaría colgado para siempre en vez de fallar.
+test('POST /api/ordenes/:id/devolucion cierra la orden aunque no quede ningún producto', { timeout: 5000 }, async () => {
+  const idOrden = await emitir([{ id_producto: 3, cantidad: 2 }]);
+  assert.equal((await enviar('DELETE', '/api/productos/3')).status, 200);
+
+  const res = await devolver(idOrden);
+  assert.equal(res.status, 200);
+
+  const cuerpo = await res.json();
+  assert.deepEqual(cuerpo.devueltas, []);
+  assert.equal(cuerpo.omitidas.length, 1);
+  assert.equal(
+    (await consultar('SELECT * FROM devoluciones WHERE id_orden = ?', [idOrden])).length,
+    1
+  );
+});
+
+test('POST /api/ordenes/:id/devolucion responde 400 si el número no es un entero positivo', async () => {
+  assert.equal((await devolver('abc')).status, 400);
+  assert.equal((await devolver(0)).status, 400);
+  assert.deepEqual(await consultar('SELECT * FROM devoluciones'), []);
+});
+
+test('POST /api/ordenes/:id/devolucion rechaza quién recibe si pasa de 200 caracteres', async () => {
+  const idOrden = await emitir([{ id_producto: 1, cantidad: 1 }]);
+
+  const res = await devolver(idOrden, { recibida_por: 'a'.repeat(201) });
+  assert.equal(res.status, 400);
+  assert.deepEqual(await consultar('SELECT * FROM devoluciones'), []);
+});
+
+test('POST /api/ordenes/:id/devolucion recorta los espacios de quién recibe', async () => {
+  const idOrden = await emitir([{ id_producto: 1, cantidad: 1 }]);
+  assert.equal((await devolver(idOrden, { recibida_por: '  Ana  ' })).status, 200);
+
+  const [fila] = await consultar('SELECT * FROM devoluciones WHERE id_orden = ?', [idOrden]);
+  assert.equal(fila.recibida_por, 'Ana');
+});
+
+test('POST /api/ordenes/:id/devolucion suma al stock actual, no restaura el de antes de la orden', async () => {
+  const idOrden = await emitir([{ id_producto: 1, cantidad: 3 }]);
+  assert.equal(await cantidadDe(1), 1);
+
+  // El almacenista corrige el conteo a mano mientras el material está fuera.
+  await enviar('PUT', '/api/productos/1', { nombre: 'vim2', cantidad: 10, id_area: 1 });
+
+  assert.equal((await devolver(idOrden)).status, 200);
+  assert.equal(await cantidadDe(1), 13, 'las 3 que vuelven se suman a las 10 que hay');
+});
+
+test('POST /api/ordenes/:id/devolucion sólo bloquea la orden ya devuelta, no las demás', async () => {
+  const primera = await emitir([{ id_producto: 1, cantidad: 1 }]);
+  const segunda = await emitir([{ id_producto: 2, cantidad: 1 }]);
+
+  assert.equal((await devolver(primera)).status, 200);
+  assert.equal((await devolver(segunda)).status, 200, 'el UNIQUE es por orden, no global');
+});
+
+test('POST /api/ordenes/:id/devolucion acumula cuando dos órdenes comparten producto', async () => {
+  const primera = await emitir([{ id_producto: 1, cantidad: 2 }]);
+  const segunda = await emitir([{ id_producto: 1, cantidad: 1 }]);
+  assert.equal(await cantidadDe(1), 1);
+
+  assert.equal((await devolver(primera)).status, 200);
+  assert.equal((await devolver(segunda)).status, 200);
+  assert.equal(await cantidadDe(1), 4);
+});
+
+test('POST /api/ordenes/:id/devolucion no altera el registro histórico de la salida', async () => {
+  const idOrden = await emitir([{ id_producto: 1, cantidad: 3 }], { evento: 'Feria' });
+  const antes = await consultar('SELECT * FROM orden_lineas WHERE id_orden = ?', [idOrden]);
+
+  assert.equal((await devolver(idOrden)).status, 200);
+
+  const [orden] = await consultar('SELECT * FROM ordenes WHERE id_orden = ?', [idOrden]);
+  assert.equal(orden.evento, 'Feria', 'la orden sigue diciendo qué salió y para qué');
+  assert.deepEqual(
+    await consultar('SELECT * FROM orden_lineas WHERE id_orden = ?', [idOrden]),
+    antes,
+    'devolver no reescribe las líneas: son un registro, no un saldo'
+  );
+});
+
+test('GET /api/ordenes/:id no atribuye a una orden la devolución de otra', async () => {
+  const primera = await emitir([{ id_producto: 1, cantidad: 1 }]);
+  const segunda = await emitir([{ id_producto: 2, cantidad: 1 }]);
+  assert.equal((await devolver(primera)).status, 200);
+
+  const orden = await (await get(`/api/ordenes/${segunda}`)).json();
+  assert.equal(orden.devolucion, null);
+});
+
+test('GET /api/ordenes/:id distingue el nombre de la salida del nombre actual', async () => {
+  const idOrden = await emitir([{ id_producto: 3, cantidad: 2 }]);
+  await enviar('PUT', '/api/productos/3', { nombre: 'Cable XLR 10m', cantidad: 38, id_area: 2 });
+
+  const { lineas } = await (await get(`/api/ordenes/${idOrden}`)).json();
+  assert.equal(lineas[0].nombre, 'Cable XLR', 'el histórico no se mueve');
+  assert.equal(lineas[0].nombre_actual, 'Cable XLR 10m', 'y se puede casar con el catálogo de hoy');
+});
+
+test('GET /api/ordenes/:id avisa de que el producto está desactivado', async () => {
+  // El 4 está sembrado con activo = 0: su material vuelve al stock, pero no se
+  // podrá pedir desde la Principal hasta reactivarlo.
+  const idOrden = await emitir([{ id_producto: 4, cantidad: 5 }]);
+
+  const { lineas } = await (await get(`/api/ordenes/${idOrden}`)).json();
+  assert.equal(lineas[0].existe, true);
+  assert.equal(lineas[0].activo, false);
+});

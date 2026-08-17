@@ -32,6 +32,31 @@
     <p class="cabecera-pantalla__sub">Catálogo completo, incluido lo desactivado.</p>
   </div>
 
+  <!-- RECIBIR DEVOLUCIÓN: la otra mitad del ciclo de la orden del día. El
+       material sale descontando stock y vuelve reponiéndolo; aquí se teclea el
+       N.º impreso en el papel y se repone de una vez todo lo que salió.
+
+       La acción primaria de esta pantalla sigue siendo "Agregar producto", así
+       que el botón de recibir es SECUNDARIO. Lo irreversible se avisa con el
+       <dialog>, no con color: el rojo está reservado a eliminar. -->
+  <section class="devolucion" aria-labelledby="tituloDevolucion">
+    <h2 id="tituloDevolucion" class="devolucion__titulo">Recibir devolución</h2>
+    <p class="devolucion__ayuda">
+      Teclea el N.º de orden que aparece en la orden del día impresa para
+      reponer al inventario todo lo que salió en ella.
+    </p>
+
+    <form class="devolucion__buscador" id="formBuscarOrden">
+      <label class="visualmente-oculto" for="numeroOrden">N.º de orden</label>
+      <input type="number" id="numeroOrden" class="campo cifra" min="1" step="1"
+             inputmode="numeric" placeholder="N.º de orden" autocomplete="off">
+      <button type="submit" class="btn btn--secundario" id="btnBuscarOrden">Buscar</button>
+    </form>
+
+    <p class="devolucion__aviso" id="avisoDevolucion" hidden></p>
+    <div class="devolucion__panel" id="panelOrden" hidden></div>
+  </section>
+
   <!-- BARRA DE HERRAMIENTAS: buscar a la izquierda, acciones a la derecha.
        Una sola acción primaria en la pantalla — "Agregar producto". -->
   <div class="barra-herramientas">
@@ -140,6 +165,36 @@
   </div>
 </div>
 
+<!-- DIÁLOGO: confirmar la devolución. Repone stock, así que se avisa antes.
+
+     Muestra la IDENTIDAD de la orden —número, fecha, evento, responsable y las
+     líneas con cantidades—, no sólo el número: teclear 21 en lugar de 12 suma
+     material a productos ajenos de forma irreversible desde la app, y además
+     deja la orden 21 bloqueada para siempre. Que el operario reconozca la orden
+     antes de confirmar es la única defensa que hay.
+
+     <dialog> nativo y no el .modal de esta pantalla: esos se abren conmutando
+     `style.display`, y aquí sale gratis el backdrop, el Escape y el foco. -->
+<dialog id="dialogoDevolucion" class="dialogo" aria-labelledby="dialogoDevolucionTitulo">
+  <h2 id="dialogoDevolucionTitulo" class="dialogo__titulo">¿Recibir esta orden?</h2>
+  <div class="devolucion__resumen" id="resumenDevolucion"></div>
+
+  <div class="form-group">
+    <label for="recibidaPor">Recibido por (opcional)</label>
+    <input type="text" id="recibidaPor" class="campo" maxlength="200" autocomplete="off">
+  </div>
+
+  <p class="dialogo__nota">
+    El material vuelve al inventario al confirmar, y no se deshace desde la
+    aplicación.
+  </p>
+  <div class="dialogo__acciones">
+    <button id="btnCancelarDevolucion" class="btn btn--fantasma" type="button">Cancelar</button>
+    <button id="btnConfirmarDevolucion" class="btn btn--primario" type="button">Sí, recibir</button>
+  </div>
+</dialog>
+
 <script src="/js/edit.js"></script>
+<script src="/js/devolucion.js"></script>
 </body>
 </html>

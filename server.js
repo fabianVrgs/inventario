@@ -16,14 +16,20 @@ const db = new sqlite3.Database(dbPath, (err) => {
   }
 });
 
-// `db/inventario.db3` está versionado con la 001 aplicada pero sin la 002, así
-// que recién clonado no tiene estas dos tablas y POST /api/ordenes responde
+// `db/inventario.db3` está versionado con la 001 aplicada pero sin la 002 ni la
+// 003, así que recién clonado no tiene estas tablas y POST /api/ordenes responde
 // 500 (`no such table: ordenes`). Crearlas al arrancar es idempotente y deja
 // la app usable sin correr el runner de migraciones a mano.
 //
 // Se encola aquí, antes de declarar cualquier ruta, para que sqlite3 lo
 // procese en esta conexión antes de la primera consulta de una petición.
-// El DDL debe seguir igual al de db/migrations/002-registro-de-ordenes.sql.
+// El DDL debe seguir igual al de db/migrations/002-registro-de-ordenes.sql y
+// db/migrations/003-devoluciones.sql.
+//
+// Este bloque es también la razón por la que la 003 añade una tabla en vez de
+// una columna a `ordenes`: `CREATE TABLE IF NOT EXISTS` no añade columnas a una
+// tabla que ya existe, y `ALTER TABLE ... ADD COLUMN` no admite `IF NOT EXISTS`
+// en SQLite, así que no hay forma idempotente de asegurarla desde aquí.
 db.serialize(() => {
   db.exec(
     `CREATE TABLE IF NOT EXISTS ordenes (
@@ -41,7 +47,14 @@ db.serialize(() => {
        cantidad    INTEGER NOT NULL
      );
 
-     CREATE INDEX IF NOT EXISTS idx_orden_lineas_orden ON orden_lineas(id_orden);`,
+     CREATE INDEX IF NOT EXISTS idx_orden_lineas_orden ON orden_lineas(id_orden);
+
+     CREATE TABLE IF NOT EXISTS devoluciones (
+       id_devolucion INTEGER PRIMARY KEY AUTOINCREMENT,
+       id_orden      INTEGER NOT NULL UNIQUE REFERENCES ordenes(id_orden),
+       recibida_en   TEXT NOT NULL,
+       recibida_por  TEXT
+     );`,
     (errEsquema) => {
       if (errEsquema) {
         console.error('❌ Error al asegurar las tablas de órdenes:', errEsquema.message);
@@ -330,6 +343,215 @@ app.post('/api/ordenes', (req, res) => {
         }
       );
     });
+  });
+});
+
+// Los números de orden se validan aquí, a diferencia de `GET /api/productos/:id`
+// (server.js:100), que deja pasar cualquier cosa y acaba en 404 por la vía del
+// SQL. La diferencia es a propósito: este número lo teclea una persona con prisa,
+// y "abc" tiene que decir "eso no es un número de orden", no "esa orden no
+// existe" — que le haría pensar que la orden se perdió.
+function idOrdenValido(valor) {
+  const texto = String(valor).trim();
+  if (!/^\d+$/.test(texto)) return null;
+  const id = Number(texto);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+// `nombre_actual` y `activo_actual` van ALIASADOS y no como `p.nombre`: sqlite3
+// devuelve cada fila como objeto plano, así que una segunda columna `nombre`
+// sobreescribiría en silencio la de `orden_lineas` — que es justo el nombre
+// histórico que la 002 duplica a propósito para que la orden de marzo siga
+// diciendo qué salió.
+const SQL_LINEAS_DE_ORDEN = `
+  SELECT ol.id_producto,
+         ol.nombre,
+         ol.cantidad,
+         p.nombre AS nombre_actual,
+         p.activo AS activo_actual,
+         p.id_producto IS NOT NULL AS existe
+  FROM orden_lineas ol
+  LEFT JOIN productos p ON p.id_producto = ol.id_producto
+  WHERE ol.id_orden = ?
+  ORDER BY ol.id_producto
+`;
+
+// API Ordenes: lectura de una orden ya emitida. Es lo que la pantalla de
+// devolución necesita para mostrar qué salió antes de reponerlo.
+app.get('/api/ordenes/:id', (req, res) => {
+  const idOrden = idOrdenValido(req.params.id);
+  if (idOrden === null) {
+    return res.status(400).json({ error: 'El número de orden debe ser un entero positivo.' });
+  }
+
+  db.get('SELECT * FROM ordenes WHERE id_orden = ?', [idOrden], (errOrden, orden) => {
+    if (errOrden) return res.status(500).json({ error: errOrden.message });
+    if (!orden) return res.status(404).json({ error: `No existe la orden ${idOrden}.` });
+
+    db.get(
+      'SELECT recibida_en, recibida_por FROM devoluciones WHERE id_orden = ?',
+      [idOrden],
+      (errDev, devolucion) => {
+        if (errDev) return res.status(500).json({ error: errDev.message });
+
+        db.all(SQL_LINEAS_DE_ORDEN, [idOrden], (errLineas, filas) => {
+          if (errLineas) return res.status(500).json({ error: errLineas.message });
+
+          res.json({
+            id_orden: orden.id_orden,
+            creada_en: orden.creada_en,
+            evento: orden.evento,
+            responsable: orden.responsable,
+            devolucion: devolucion || null,
+            lineas: filas.map((f) => ({
+              id_producto: f.id_producto,
+              nombre: f.nombre,
+              cantidad: f.cantidad,
+              existe: f.existe === 1,
+              // Sólo tienen sentido si el producto sigue en el catálogo. El
+              // nombre actual permite casar la línea con la tabla de Inventario
+              // cuando el producto se renombró después de salir.
+              nombre_actual: f.existe === 1 ? f.nombre_actual : null,
+              activo: f.existe === 1 && f.activo_actual === 1,
+            })),
+          });
+        });
+      }
+    );
+  });
+});
+
+// API Devoluciones: repone al stock todo lo que salió en una orden y deja
+// constancia de cuándo volvió. Es el SEGUNDO camino que escribe existencias, y
+// el espejo de POST /api/ordenes: la salida descuenta, esto suma.
+//
+// Las tres comprobaciones previas son LECTURAS Y VAN FUERA DE LA TRANSACCIÓN, a
+// diferencia de POST /api/ordenes. La razón es que hay una sola conexión de
+// módulo (server.js:11) y BEGIN/COMMIT son de conexión, no de petición: todo lo
+// que otra petición ejecute entre nuestro BEGIN y nuestro ROLLBACK cae dentro de
+// nuestra transacción y se revierte con ella. Y aquí el ROLLBACK sería el camino
+// NORMAL — teclear mal un número de orden es lo más frecuente que va a pasar —
+// en la misma pantalla en la que el CRUD escribe todo el rato. Un 404 no puede
+// deshacer la edición que otro acaba de guardar.
+app.post('/api/ordenes/:id/devolucion', (req, res) => {
+  const idOrden = idOrdenValido(req.params.id);
+  if (idOrden === null) {
+    return res.status(400).json({ error: 'El número de orden debe ser un entero positivo.' });
+  }
+
+  const recibidaPor = normalizarTexto(req.body.recibida_por);
+  if (recibidaPor === undefined) {
+    return res.status(400).json({
+      error: `Quién recibe debe ser texto de hasta ${LARGO_MAXIMO_TEXTO} caracteres.`,
+    });
+  }
+
+  db.get('SELECT id_orden FROM ordenes WHERE id_orden = ?', [idOrden], (errOrden, orden) => {
+    if (errOrden) return res.status(500).json({ error: errOrden.message });
+    if (!orden) return res.status(404).json({ error: `No existe la orden ${idOrden}.` });
+
+    db.get(
+      'SELECT recibida_en, recibida_por FROM devoluciones WHERE id_orden = ?',
+      [idOrden],
+      (errYa, devolucion) => {
+        if (errYa) return res.status(500).json({ error: errYa.message });
+        if (devolucion) {
+          return res.status(409).json({
+            error: `La orden ${idOrden} ya se recibió; devolverla otra vez inflaría el inventario.`,
+            devolucion,
+          });
+        }
+
+        db.all(SQL_LINEAS_DE_ORDEN, [idOrden], (errLineas, filas) => {
+          if (errLineas) return res.status(500).json({ error: errLineas.message });
+          if (filas.length === 0) {
+            return res.status(409).json({ error: `La orden ${idOrden} no tiene líneas que devolver.` });
+          }
+
+          const describir = (f) => ({
+            id_producto: f.id_producto,
+            nombre: f.nombre,
+            cantidad: f.cantidad,
+            activo: f.existe === 1 && f.activo_actual === 1,
+          });
+          const porProducto = (a, b) => a.id_producto - b.id_producto;
+
+          db.serialize(() => {
+            db.run('BEGIN', (errBegin) => {
+              if (errBegin) return res.status(500).json({ error: errBegin.message });
+
+              const abortar = (estado, cuerpo) =>
+                db.run('ROLLBACK', () => res.status(estado).json(cuerpo));
+
+              db.run(
+                'INSERT INTO devoluciones (id_orden, recibida_en, recibida_por) VALUES (?, ?, ?)',
+                [idOrden, new Date().toISOString(), recibidaPor],
+                (errInsertar) => {
+                  if (errInsertar) {
+                    // El UNIQUE de la 003 es la red que cubre el hueco entre el
+                    // SELECT de arriba y este INSERT: dos pestañas pulsando a la
+                    // vez llegan las dos hasta aquí, y sólo una puede escribir.
+                    if (errInsertar.code === 'SQLITE_CONSTRAINT') {
+                      return abortar(409, {
+                        error: `La orden ${idOrden} ya se recibió; devolverla otra vez inflaría el inventario.`,
+                      });
+                    }
+                    return abortar(500, { error: errInsertar.message });
+                  }
+
+                  const reponibles = filas.filter((f) => f.existe === 1);
+                  const devueltas = [];
+                  const omitidas = filas.filter((f) => f.existe !== 1).map(describir);
+
+                  let pendientes = reponibles.length;
+                  let fallo = null;
+
+                  const cerrar = () => {
+                    if (fallo) return abortar(500, { error: fallo.message });
+
+                    db.run('COMMIT', (errCommit) => {
+                      if (errCommit) return res.status(500).json({ error: errCommit.message });
+                      res.json({
+                        mensaje: 'Devolución aplicada correctamente',
+                        id_orden: idOrden,
+                        devueltas: devueltas.sort(porProducto),
+                        omitidas: omitidas.sort(porProducto),
+                      });
+                    });
+                  };
+
+                  // Sin ninguna línea reponible no hay UPDATE que esperar, así
+                  // que el COMMIT tiene que salir aquí: si dependiera del
+                  // contador, éste nacería en cero, nadie lo decrementaría y la
+                  // petición se quedaría colgada sin responder nunca.
+                  if (pendientes === 0) return cerrar();
+
+                  reponibles.forEach((f) => {
+                    // `function` y no arrow: el resultado se decide con
+                    // `this.changes`. Un UPDATE que no encuentra su fila NO da
+                    // error en SQLite, da cero cambios — así que si el producto
+                    // se borró entre el SELECT de arriba y este UPDATE, decir
+                    // "devuelta" desde el snapshot sería mentir con un 200.
+                    db.run(
+                      'UPDATE productos SET cantidad = cantidad + ? WHERE id_producto = ?',
+                      [f.cantidad, f.id_producto],
+                      function (errUpdate) {
+                        if (errUpdate && !fallo) fallo = errUpdate;
+                        else if (this.changes === 0) omitidas.push(describir(f));
+                        else devueltas.push(describir(f));
+
+                        pendientes -= 1;
+                        if (pendientes === 0) cerrar();
+                      }
+                    );
+                  });
+                }
+              );
+            });
+          });
+        });
+      }
+    );
   });
 });
 

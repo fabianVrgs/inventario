@@ -438,6 +438,68 @@ a {
   white-space: nowrap;
 }
 
+/* ---- Diálogo de confirmación ----------------------------------------------
+   <dialog> nativo, NO el .modal de Inventario. Dos razones, y las dos son
+   contrato: hace falta backdrop, Escape y trampa de foco sin escribir JS, y
+   sobre todo no conmutar `style.display` — que es justo lo que pelearía con el
+   [hidden]{display:none!important} del que depende orden.js. El navegador
+   oculta un <dialog> cerrado por sí solo.
+
+   Lo usan las dos acciones irreversibles que escriben stock: emitir la orden
+   (descuenta) y recibir la devolución (repone). */
+
+.dialogo {
+  width: min(100% - var(--esp-5) * 2, 460px);
+  padding: var(--esp-5);
+  border: 0;
+  border-radius: var(--radio-lg);
+  background-color: var(--superficie);
+  box-shadow: var(--sombra-modal);
+  color: var(--tinta);
+}
+
+.dialogo::backdrop {
+  background-color: var(--velo-modal);
+}
+
+/* La animación no necesita guardia de prefers-reduced-motion: el bloque de
+   movimiento reducido de este mismo archivo ya las neutraliza todas. */
+.dialogo[open] {
+  animation: entrada-dialogo var(--dur-lenta) var(--curva);
+}
+
+@keyframes entrada-dialogo {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.dialogo__titulo {
+  margin: 0 0 var(--esp-4);
+  padding-bottom: var(--esp-3);
+  border-bottom: 1px solid var(--filete);
+  font-size: var(--texto-titulo);
+  color: var(--tinta-fuerte);
+}
+
+.dialogo__texto {
+  margin: 0;
+  font-size: var(--texto-sm);
+}
+
+.dialogo__nota {
+  margin: var(--esp-2) 0 0;
+  font-size: var(--texto-sm);
+  color: var(--tinta-tenue);
+}
+
+.dialogo__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-2);
+  justify-content: flex-end;
+  margin-top: var(--esp-5);
+}
+
 /* ---- Barra superior compartida -------------------------------------------
    La misma en la Principal y en Inventario. Consistencia como afordancia: el
    usuario no debe reaprender dónde está la navegación al cambiar de pantalla. */

@@ -24,6 +24,7 @@
 
   const CLAVE_SELECCION = "ordenSeleccion";
   const CLAVE_APLICADA = "ordenAplicada";
+  const CLAVE_ID = "ordenId";
 
   // Referencias a elementos del DOM.
   const elEstadoVacio = document.getElementById("estadoVacio");
@@ -41,6 +42,9 @@
   const elBtnConfirmarEmision = document.getElementById("btnConfirmarEmision");
   const elBtnCancelarEmision = document.getElementById("btnCancelarEmision");
 
+  const elLineaNumero = document.getElementById("lineaNumeroOrden");
+  const elValorNumero = document.getElementById("valorNumeroOrden");
+
   const elInputEvento = document.getElementById("inputEvento");
   const elValorEvento = document.getElementById("valorEventoImpreso");
   const elInputResponsable = document.getElementById("inputResponsable");
@@ -50,6 +54,11 @@
   // Se guarda tanto en memoria como en sessionStorage por si la página se recarga.
   let ordenAplicada = sessionStorage.getItem(CLAVE_APLICADA) === "true";
   let enviando = false;
+
+  // El número que la base asignó a esta orden. Se imprime en el papel y es lo
+  // único con lo que se puede encontrar la orden después para devolver el
+  // material, así que sobrevive a una recarga igual que `ordenAplicada`.
+  let idOrden = leerIdOrden();
 
   // Selección leída de sessionStorage. Puede venir mal formada o ausente;
   // nunca debe reventar la pantalla.
@@ -85,15 +94,30 @@
     });
   }
 
+  function leerIdOrden() {
+    let crudo;
+    try {
+      crudo = sessionStorage.getItem(CLAVE_ID);
+    } catch (e) {
+      return null;
+    }
+    const numero = Number(crudo);
+    return Number.isSafeInteger(numero) && numero > 0 ? numero : null;
+  }
+
   // Mismo contrato que la Principal (logica.js): quien escribe la selección
-  // borra `ordenAplicada`. Si las líneas cambian, la orden es otra y su
-  // descuento sigue pendiente; dejar la marca en "true" haría imprimir papel
-  // por material que nunca se descontó.
+  // borra `ordenAplicada` Y `ordenId`. Si las líneas cambian, la orden es otra y
+  // su descuento sigue pendiente; dejar la marca en "true" haría imprimir papel
+  // por material que nunca se descontó, y dejar el número haría que el papel
+  // nuevo llevara el de la orden anterior — con lo que alguien acabaría
+  // devolviendo una orden equivocada, que es peor que no llevar número.
   function guardarSeleccion() {
     ordenAplicada = false;
+    idOrden = null;
     try {
       sessionStorage.setItem(CLAVE_SELECCION, JSON.stringify(seleccion));
       sessionStorage.removeItem(CLAVE_APLICADA);
+      sessionStorage.removeItem(CLAVE_ID);
     } catch (e) {
       // Modo privado o storage lleno: seguimos con el estado en memoria.
     }
@@ -105,6 +129,7 @@
     try {
       sessionStorage.removeItem(CLAVE_SELECCION);
       sessionStorage.removeItem(CLAVE_APLICADA);
+      sessionStorage.removeItem(CLAVE_ID);
     } catch (e) {
       // Si no se puede limpiar, al menos la Principal arranca en blanco.
     }
@@ -339,13 +364,30 @@
     return div.innerHTML;
   }
 
-  function marcarOrdenAplicada() {
+  // El try/catch no es decorativo: `setItem` LANZA en modo privado o con la
+  // cuota llena, y esto se llama en la rama del 200. Sin envolver, la excepción
+  // caería en el catch de red de `emitirOrden` y el usuario vería "no se pudo
+  // conectar con el servidor" para una orden que sí se descontó, además de
+  // quedarse sin papel porque `window.print()` no llegaría a ejecutarse.
+  function marcarOrdenAplicada(id) {
     ordenAplicada = true;
+    idOrden = id;
     try {
       sessionStorage.setItem(CLAVE_APLICADA, "true");
+      if (id !== null) sessionStorage.setItem(CLAVE_ID, String(id));
     } catch (e) {
       // Si sessionStorage falla (modo privado, etc.) seguimos con el flag en memoria.
     }
+  }
+
+  // Se pinta desde `cerrarOrdenEnPantalla` y no en la rama del 200 porque ésa es
+  // la única puerta al estado "aplicada" — se entra por el POST y también por una
+  // recarga — y duplicar el pintado garantizaría que un día la reimpresión
+  // saliera sin número.
+  function pintarNumeroOrden() {
+    if (idOrden === null) return;
+    elValorNumero.textContent = String(idOrden);
+    elLineaNumero.hidden = false;
   }
 
   // Una orden aplicada es un documento cerrado: se reimprime, no se edita.
@@ -356,6 +398,7 @@
     elAvisoAplicada.hidden = false;
     elBtnImprimir.textContent = "Reimprimir";
     elContenidoAreas.querySelectorAll(".acciones-linea").forEach((nodo) => nodo.remove());
+    pintarNumeroOrden();
   }
 
   // No se pregunta si el papel salió, aunque el navegador tampoco sepa
@@ -409,7 +452,9 @@
       });
 
       if (respuesta.status === 200) {
-        marcarOrdenAplicada();
+        const datos = await respuesta.json().catch(() => ({}));
+        const id = Number(datos.id_orden);
+        marcarOrdenAplicada(Number.isSafeInteger(id) && id > 0 ? id : null);
         cerrarOrdenEnPantalla();
         window.print();
         return;

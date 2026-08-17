@@ -63,3 +63,28 @@ test('POST /api/ordenes funciona contra una base sin la 002 aplicada', async () 
   );
   assert.equal(fila.cantidad, 2);
 });
+
+test('devolver funciona contra una base sin la 003 aplicada', async () => {
+  const emitida = await fetch(`${base}/api/ordenes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lineas: [{ id_producto: 2, cantidad: 4 }] }),
+  });
+  assert.equal(emitida.status, 200);
+  const { id_orden } = await emitida.json();
+
+  const devuelta = await fetch(`${base}/api/ordenes/${id_orden}/devolucion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recibida_por: 'bodega' }),
+  });
+  assert.equal(devuelta.status, 200, 'el bloque DDL del arranque debe haber creado `devoluciones`');
+
+  // BT3 arranca sembrado en 30: salieron 4 y volvieron las 4.
+  const fila = await new Promise((res, rej) =>
+    db.get('SELECT cantidad FROM productos WHERE id_producto = 2', [], (e, r) =>
+      e ? rej(e) : res(r)
+    )
+  );
+  assert.equal(fila.cantidad, 30);
+});

@@ -309,9 +309,16 @@ function actualizarResumen() {
 // "el descuento de ESTA orden ya se hizo". Si la selección cambia, la orden
 // es otra y su descuento está pendiente. Sin este borrado, Orden del día
 // imprimiría papel por material que nunca se descontó.
+//
+// `ordenId` va en el mismo paquete y por el mismo motivo: es el número que se
+// imprime en el papel y que luego se teclea en Inventario para devolver el
+// material. Si sobreviviera a un cambio de selección, el papel de la orden nueva
+// llevaría el número de la anterior y alguien devolvería una orden equivocada
+// —irreversible— en vez de simplemente quedarse sin número.
 function guardarSeleccion() {
   sessionStorage.setItem("ordenSeleccion", JSON.stringify(seleccion));
   sessionStorage.removeItem("ordenAplicada");
+  sessionStorage.removeItem("ordenId");
 }
 
 // Recupera la selección guardada, ajustándola al stock que hay AHORA.

@@ -135,65 +135,9 @@ body {
   font-weight: var(--peso-medio);
 }
 
-/* ---------- Diálogo de confirmación antes de descontar ----------
-   <dialog> nativo, no el .modal de Inventario: aquí hace falta backdrop,
-   Escape y foco sin JS, y sobre todo no conmutar `style.display`, que es lo
-   que pelearía con el [hidden]{display:none!important} del que depende el
-   resto de la pantalla. El navegador oculta el <dialog> cerrado por sí solo. */
-
-.dialogo {
-  width: min(100% - var(--esp-5) * 2, 460px);
-  padding: var(--esp-5);
-  border: 0;
-  border-radius: var(--radio-lg);
-  background-color: var(--superficie);
-  box-shadow: var(--sombra-modal);
-  color: var(--tinta);
-}
-
-.dialogo::backdrop {
-  background-color: var(--velo-modal);
-}
-
-.dialogo[open] {
-  animation: entrada-dialogo var(--dur-lenta) var(--curva);
-}
-
-@keyframes entrada-dialogo {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dialogo[open] { animation: none; }
-}
-
-.dialogo__titulo {
-  margin: 0 0 var(--esp-4);
-  padding-bottom: var(--esp-3);
-  border-bottom: 1px solid var(--filete);
-  font-size: var(--texto-titulo);
-  color: var(--tinta-fuerte);
-}
-
-.dialogo__texto {
-  margin: 0;
-  font-size: var(--texto-sm);
-}
-
-.dialogo__nota {
-  margin: var(--esp-2) 0 0;
-  font-size: var(--texto-sm);
-  color: var(--tinta-tenue);
-}
-
-.dialogo__acciones {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--esp-2);
-  justify-content: flex-end;
-  margin-top: var(--esp-5);
-}
+/* El diálogo de confirmación antes de descontar usa la primitiva `.dialogo`,
+   que vive en base.css: la comparte con el de Inventario, que confirma la
+   devolución. */
 
 /* ---------- La hoja ---------- */
 

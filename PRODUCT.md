@@ -14,23 +14,38 @@ Dos personas, dos contextos físicos distintos, y el diseño tiene que servir a 
   catálogo, no quiere ver columnas que no le importan, y cada toque que falla le cuesta
   volver a empezar.
 - **El administrador.** Sentado, monitor grande, oficina iluminada. Usa **Inventario**.
-  Mantiene el catálogo: da de alta, corrige, desactiva lo que ya no sale, exporta. Quiere
+  Mantiene el catálogo: da de alta, corrige, desactiva lo que ya no sale, exporta. Y
+  **recibe el material que vuelve del evento**, con el papel de la orden en la mano. Quiere
   densidad y ver muchas filas de un vistazo, no tarjetas espaciadas.
 
 El trabajo a realizar es siempre el mismo y termina fuera de la pantalla: **producir una
-hoja de papel correcta que alguien se lleva al almacén.**
+hoja de papel correcta que alguien se lleva al almacén** — y, cuando ese material vuelve,
+dejar la cifra de la pantalla igual a la del estante otra vez.
 
 ## Product Purpose
 
 Inventario de almacén de Ok-producciones. El catálogo se administra en Inventario, se
 selecciona en la Principal, y en Orden del día se revisa y se imprime. **Al imprimir, el
-stock baja de verdad**: `POST /api/ordenes` es el único camino que escribe existencias.
+stock baja de verdad.**
 
-Dos reglas de negocio explican casi toda la interfaz:
+Pero el negocio es de ida y vuelta: el material sale a un evento y **regresa**. Así que el
+ciclo se cierra en Inventario, tecleando el N.º que la orden lleva impreso: se repone al
+stock todo lo que salió y queda constancia de cuándo volvió y quién lo recibió. Hay
+exactamente **dos caminos que escriben existencias** — `POST /api/ordenes` descuenta,
+`POST /api/ordenes/:id/devolucion` repone — y ninguno más.
+
+Tres reglas de negocio explican casi toda la interfaz:
 
 - `activo` separa "existe en el catálogo" de "se puede pedir hoy".
 - Imprimir dos veces descuenta una sola vez. Sacar dos copias del mismo papel es normal;
-  descontar dos veces deja el inventario mal y no hay forma de devolver material.
+  descontar dos veces deja el inventario corto.
+- Recibir dos veces la misma orden repone una sola vez. Es la regla espejo, y la que hace
+  falta con más rigor: devolver dos veces infla el inventario con material que no existe, y
+  eso no se descubre hasta que alguien va al estante a buscarlo.
+
+Lo que **no** existe a propósito: anular una devolución. Devolver la orden equivocada se
+corrige a mano desde el CRUD, así que el diálogo de confirmación muestra la identidad de la
+orden —fecha, evento, responsable y líneas— y no solo su número.
 
 Éxito es que el papel salga bien a la primera y que la cifra de la pantalla sea la del
 estante. Un error aquí se paga en el evento, no en la pantalla.
@@ -75,8 +90,11 @@ creerle al número que ve sin ir a contarlo al estante.
 4. **Una acción principal por pantalla.** Elegir en la Principal, administrar en
    Inventario, imprimir en Orden del día. Lo demás se subordina visualmente, sin excepción.
 
-5. **Lo irreversible se ve venir.** Imprimir descuenta stock y eliminar borra el producto.
-   Esas acciones se marcan como distintas antes de pulsarlas, no solo después.
+5. **Lo irreversible se ve venir.** Imprimir descuenta stock, recibir una devolución lo
+   repone, y eliminar borra el producto. Las tres se marcan como distintas antes de
+   pulsarlas, no solo después. Y cuando la acción se aplica a un registro concreto, el aviso
+   previo muestra **cuál** —no solo qué va a pasar—, porque acertar la acción sobre la orden
+   equivocada es el error que nadie detecta.
 
 ## Accessibility & Inclusion
 

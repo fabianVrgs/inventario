@@ -28,6 +28,166 @@
   padding: var(--esp-5) var(--esp-pagina) var(--esp-7);
 }
 
+/* ---------- Recibir devolución ----------
+   Sección sobre la tabla, delimitada con filete y espacio como todo lo demás
+   del sistema: nada de tarjeta con sombra. Se subordina visualmente al CRUD,
+   que sigue siendo la acción principal de la pantalla.
+
+   Contrato con devolucion.js — no renombrar, lo emite el JS:
+     .devolucion__aviso--error, --exito, --aviso, .devolucion__orden,
+     .devolucion__meta, .devolucion__recibida, .devolucion__lineas,
+     .devolucion__linea, .devolucion__linea--omitida, .devolucion__info,
+     .devolucion__nombre, .devolucion__nota, .devolucion__cantidad,
+     .devolucion__acciones */
+
+.devolucion {
+  margin-bottom: var(--esp-5);
+  padding-bottom: var(--esp-5);
+  border-bottom: 1px solid var(--filete);
+}
+
+.devolucion__titulo {
+  margin: 0;
+  font-size: var(--texto-titulo);
+  color: var(--tinta-fuerte);
+}
+
+.devolucion__ayuda {
+  margin: var(--esp-1) 0 var(--esp-3);
+  font-size: var(--texto-sm);
+  color: var(--tinta-suave);
+  max-width: 62ch;
+}
+
+.devolucion__buscador {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-2);
+}
+
+/* Ancho de un número de orden, no de un buscador de texto: el campo dice por su
+   tamaño cuántos dígitos espera. */
+.devolucion__buscador .campo {
+  flex: 0 1 12rem;
+  min-width: 0;
+}
+
+.devolucion__aviso {
+  margin: var(--esp-3) 0 0;
+  padding: var(--esp-3);
+  border-radius: var(--radio-md);
+  font-size: var(--texto-sm);
+  max-width: 78ch;
+}
+
+/* El color nunca va solo: los tres tonos acompañan un texto que ya dice qué
+   pasó, y por eso no hace falta iconografía. */
+.devolucion__aviso--error {
+  background-color: var(--peligro-lavado);
+  color: var(--peligro-texto);
+}
+
+.devolucion__aviso--exito {
+  background-color: var(--exito-lavado);
+  color: var(--exito-texto);
+}
+
+.devolucion__aviso--aviso {
+  background-color: var(--aviso-lavado);
+  color: var(--aviso-texto);
+}
+
+.devolucion__panel {
+  margin-top: var(--esp-4);
+}
+
+.devolucion__orden {
+  margin: 0;
+  font-size: var(--texto-base);
+  font-weight: var(--peso-fuerte);
+  color: var(--tinta-fuerte);
+}
+
+.devolucion__meta {
+  margin: var(--esp-1) 0 0;
+  font-size: var(--texto-sm);
+  color: var(--tinta-suave);
+}
+
+.devolucion__recibida {
+  margin: var(--esp-2) 0 0;
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  color: var(--exito-texto);
+}
+
+.devolucion__lineas {
+  margin: var(--esp-3) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--filete);
+  max-width: 62ch;
+}
+
+.devolucion__linea {
+  display: flex;
+  align-items: baseline;
+  gap: var(--esp-3);
+  padding: var(--esp-2) 0;
+  border-bottom: 1px solid var(--filete);
+}
+
+.devolucion__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.devolucion__nombre {
+  font-size: var(--texto-sm);
+  color: var(--tinta);
+}
+
+/* Una línea cuyo producto ya no existe no se atenúa con opacity —rompería el
+   contraste medido—; se tacha el nombre, igual que en las filas inactivas. */
+.devolucion__linea--omitida .devolucion__nombre {
+  text-decoration: line-through;
+  color: var(--tinta-suave);
+}
+
+.devolucion__nota {
+  font-size: var(--texto-etiqueta);
+  letter-spacing: normal;
+  color: var(--tinta-tenue);
+  text-transform: none;
+}
+
+.devolucion__cantidad {
+  flex: 0 0 auto;
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  color: var(--tinta-fuerte);
+  text-align: right;
+}
+
+.devolucion__acciones {
+  margin-top: var(--esp-4);
+}
+
+.devolucion__acciones .devolucion__nota {
+  display: block;
+  margin: var(--esp-2) 0 0;
+  max-width: 62ch;
+}
+
+/* Dentro del <dialog> de confirmación reutiliza las mismas piezas, sin el
+   filete superior que ahí no separa nada. */
+.devolucion__resumen .devolucion__lineas {
+  max-width: none;
+}
+
 /* ---------- Barra de herramientas ---------- */
 
 .barra-herramientas {

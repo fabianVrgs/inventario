@@ -44,7 +44,18 @@ const ESQUEMA_002 = `
   CREATE INDEX idx_orden_lineas_orden ON orden_lineas(id_orden);
 `;
 
-const ESQUEMA = ESQUEMA_001 + ESQUEMA_002;
+// Lo que añade la migración 003. Una fila por orden ya devuelta; el UNIQUE es
+// lo que impide devolver dos veces la misma.
+const ESQUEMA_003 = `
+  CREATE TABLE devoluciones (
+    id_devolucion INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_orden      INTEGER NOT NULL UNIQUE REFERENCES ordenes(id_orden),
+    recibida_en   TEXT NOT NULL,
+    recibida_por  TEXT
+  );
+`;
+
+const ESQUEMA = ESQUEMA_001 + ESQUEMA_002 + ESQUEMA_003;
 
 const DATOS = `
   INSERT INTO areas (id_area, nombre) VALUES
@@ -99,12 +110,13 @@ function crearBaseSinOrdenes() {
 function sembrar(db) {
   return new Promise((resolve, reject) => {
     db.exec(
-      `DELETE FROM orden_lineas;
+      `DELETE FROM devoluciones;
+       DELETE FROM orden_lineas;
        DELETE FROM ordenes;
        DELETE FROM productos;
        DELETE FROM areas;
        DELETE FROM sqlite_sequence
-         WHERE name IN ('productos', 'areas', 'ordenes', 'orden_lineas');
+         WHERE name IN ('productos', 'areas', 'ordenes', 'orden_lineas', 'devoluciones');
        ${DATOS}`,
       (err) => (err ? reject(err) : resolve())
     );
