@@ -262,3 +262,116 @@ test('POST /api/ordenes rechaza cantidad cero o negativa', async () => {
   assert.equal(res.status, 400);
   assert.equal(await cantidadDe(1), 4);
 });
+
+// ------------------------------------------------- registro de las órdenes
+
+const consultar = (sql, params = []) =>
+  new Promise((resolve, reject) =>
+    db.all(sql, params, (err, filas) => (err ? reject(err) : resolve(filas)))
+  );
+
+test('POST /api/ordenes deja registrada la orden con sus líneas', async () => {
+  const res = await enviar('POST', '/api/ordenes', {
+    lineas: [
+      { id_producto: 1, cantidad: 3 },
+      { id_producto: 2, cantidad: 10 },
+    ],
+    evento: 'Feria de agosto',
+    responsable: 'Bodega',
+  });
+  assert.equal(res.status, 200);
+
+  const { id_orden } = await res.json();
+  assert.ok(Number.isInteger(id_orden), 'la respuesta debe traer el id de la orden');
+
+  const [orden] = await consultar('SELECT * FROM ordenes WHERE id_orden = ?', [id_orden]);
+  assert.equal(orden.evento, 'Feria de agosto');
+  assert.equal(orden.responsable, 'Bodega');
+  assert.ok(!Number.isNaN(Date.parse(orden.creada_en)), 'creada_en debe ser una fecha ISO');
+
+  const lineas = await consultar(
+    'SELECT * FROM orden_lineas WHERE id_orden = ? ORDER BY id_producto',
+    [id_orden]
+  );
+  assert.equal(lineas.length, 2);
+  assert.deepEqual(
+    lineas.map((l) => [l.id_producto, l.nombre, l.cantidad]),
+    [[1, 'vim2', 3], [2, 'BT3', 10]]
+  );
+});
+
+test('POST /api/ordenes guarda el nombre que tenía el producto al salir', async () => {
+  const res = await enviar('POST', '/api/ordenes', {
+    lineas: [{ id_producto: 3, cantidad: 2 }],
+  });
+  assert.equal(res.status, 200);
+  const { id_orden } = await res.json();
+
+  // El catálogo cambia después: el registro histórico no debe moverse con él.
+  await enviar('PUT', '/api/productos/3', { nombre: 'Otro nombre', cantidad: 38, id_area: 2 });
+
+  const [linea] = await consultar('SELECT * FROM orden_lineas WHERE id_orden = ?', [id_orden]);
+  assert.equal(linea.nombre, 'Cable XLR', 'el nombre del registro es el del momento de la salida');
+});
+
+test('POST /api/ordenes registra las líneas repetidas ya sumadas', async () => {
+  const res = await enviar('POST', '/api/ordenes', {
+    lineas: [
+      { id_producto: 1, cantidad: 1 },
+      { id_producto: 1, cantidad: 2 },
+    ],
+  });
+  assert.equal(res.status, 200);
+  const { id_orden } = await res.json();
+
+  const lineas = await consultar('SELECT * FROM orden_lineas WHERE id_orden = ?', [id_orden]);
+  assert.equal(lineas.length, 1, 'una fila por producto, no una por línea enviada');
+  assert.equal(lineas[0].cantidad, 3);
+});
+
+test('POST /api/ordenes acepta evento y responsable en blanco', async () => {
+  const res = await enviar('POST', '/api/ordenes', {
+    lineas: [{ id_producto: 1, cantidad: 1 }],
+    evento: '   ',
+    responsable: '',
+  });
+  assert.equal(res.status, 200);
+  const { id_orden } = await res.json();
+
+  const [orden] = await consultar('SELECT * FROM ordenes WHERE id_orden = ?', [id_orden]);
+  assert.equal(orden.evento, null, 'en blanco se guarda como NULL, no como cadena vacía');
+  assert.equal(orden.responsable, null);
+});
+
+test('POST /api/ordenes no registra nada cuando responde 409', async () => {
+  const res = await enviar('POST', '/api/ordenes', {
+    lineas: [
+      { id_producto: 2, cantidad: 10 }, // cabe
+      { id_producto: 1, cantidad: 99 }, // no cabe
+    ],
+    evento: 'La que no salió',
+  });
+  assert.equal(res.status, 409);
+
+  // El registro va en la MISMA transacción que el descuento: si no sale
+  // material, no puede quedar constancia de que salió.
+  assert.deepEqual(await consultar('SELECT * FROM ordenes'), []);
+  assert.deepEqual(await consultar('SELECT * FROM orden_lineas'), []);
+});
+
+test('POST /api/ordenes no registra nada cuando responde 400', async () => {
+  const res = await enviar('POST', '/api/ordenes', {
+    lineas: [{ id_producto: 1, cantidad: -2 }],
+  });
+  assert.equal(res.status, 400);
+  assert.deepEqual(await consultar('SELECT * FROM ordenes'), []);
+});
+
+test('POST /api/ordenes rechaza evento o responsable que no sean texto', async () => {
+  const res = await enviar('POST', '/api/ordenes', {
+    lineas: [{ id_producto: 1, cantidad: 1 }],
+    evento: { nombre: 'inyección' },
+  });
+  assert.equal(res.status, 400);
+  assert.equal(await cantidadDe(1), 4);
+});
