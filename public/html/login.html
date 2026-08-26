@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Entrar — Ok-producciones</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/login.css" />
+</head>
+
+<body class="pagina-login">
+
+<!-- Sin .barra-app: no hay adónde navegar desde aquí, y una barra con enlaces
+     que llevan todos de vuelta al login es ruido. La marca se queda, porque es
+     lo que dice de quién es esta pantalla antes de escribir nada. -->
+<main class="acceso">
+
+  <div class="acceso__tarjeta">
+    <div class="acceso__marca">
+      <img src="/img/logo.jpg" alt="" class="acceso__logo">
+      <p class="acceso__nombre">Ok-producciones<br><span>Almacén</span></p>
+    </div>
+
+    <!-- PASO 1: usuario y contraseña. -->
+    <form class="acceso__form" id="formAcceso" novalidate>
+      <h1 class="acceso__titulo">Entrar</h1>
+
+      <div class="acceso__campo">
+        <label for="usuario">Usuario</label>
+        <input type="text" id="usuario" class="campo" autocomplete="username"
+               autocapitalize="none" spellcheck="false" required autofocus>
+      </div>
+
+      <div class="acceso__campo">
+        <label for="clave">Contraseña</label>
+        <input type="password" id="clave" class="campo" autocomplete="current-password" required>
+      </div>
+
+      <button type="submit" class="btn btn--primario acceso__enviar" id="btnEntrar">Entrar</button>
+    </form>
+
+    <!-- PASO 2: segundo factor. Oculto hasta que el servidor lo pida; se
+         muestra conmutando [hidden], que base.css marca !important. -->
+    <form class="acceso__form" id="formCodigo" hidden novalidate>
+      <h1 class="acceso__titulo">Código de verificación</h1>
+      <p class="acceso__ayuda">
+        Escribe el código de seis dígitos de tu aplicación de autenticación.
+        También sirve uno de tus códigos de respaldo.
+      </p>
+
+      <div class="acceso__campo">
+        <label for="codigo">Código</label>
+        <input type="text" id="codigo" class="campo cifra" inputmode="numeric"
+               autocomplete="one-time-code" autocapitalize="characters"
+               spellcheck="false" maxlength="11" required>
+      </div>
+
+      <button type="submit" class="btn btn--primario acceso__enviar" id="btnVerificar">Verificar</button>
+      <button type="button" class="btn btn--fantasma acceso__volver" id="btnVolver">Volver</button>
+    </form>
+
+    <!-- role="alert" para que un lector de pantalla anuncie el fallo sin que
+         haya que ir a buscarlo: quien no ve la pantalla no sabe que apareció. -->
+    <p class="acceso__aviso" id="avisoAcceso" role="alert" hidden></p>
+  </div>
+
+</main>
+
+<script src="/js/login.js"></script>
+</body>
+</html>

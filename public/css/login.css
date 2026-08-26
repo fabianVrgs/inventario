@@ -1,0 +1,129 @@
+/* ============================================================================
+   login.css — la pantalla de acceso.
+
+   Se carga después de base.css, de donde salen TODOS los tokens y las
+   primitivas (.btn, .campo, .cifra). Aquí sólo está lo que no existe en
+   ninguna otra pantalla: centrar una tarjeta en la ventana.
+
+   Por qué una hoja propia y no un bloque en base.css: base.css es la capa
+   compartida por las pantallas de la aplicación, y ésta es la única que se
+   sirve SIN sesión. Mantenerla aparte deja claro qué CSS ve un desconocido.
+
+   `.form-group` no se reutiliza a propósito: vive en style-inventario.css, que
+   es la hoja de otra pantalla, y cargarla entera aquí traería consigo modales,
+   tablas y barras de herramientas que en el login no existen.
+   ============================================================================ */
+
+.pagina-login {
+  background-color: var(--papel);
+}
+
+.acceso {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--esp-pagina);
+}
+
+/* Tarjeta: la única de la aplicación que va con sombra sin ser modal ni barra.
+   Es deliberado — aquí no hay nada más en pantalla contra lo que apoyarse, y
+   un filete de 1px sobre papel casi del mismo tono no llega a leerse como
+   objeto. Se usa --sombra-hoja, la de la orden impresa, no la de modal. */
+.acceso__tarjeta {
+  width: 100%;
+  max-width: 380px;
+  background-color: var(--superficie);
+  border: 1px solid var(--filete);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-hoja);
+  padding: var(--esp-6) var(--esp-5);
+}
+
+.acceso__marca {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-3);
+  padding-bottom: var(--esp-5);
+  margin-bottom: var(--esp-5);
+  border-bottom: 1px solid var(--filete);
+}
+
+.acceso__logo {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radio-md);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.acceso__nombre {
+  margin: 0;
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-fuerte);
+  line-height: var(--interlineado-titulo);
+  color: var(--tinta-fuerte);
+}
+
+.acceso__nombre span {
+  font-weight: var(--peso-normal);
+  color: var(--tinta-tenue);
+}
+
+.acceso__titulo {
+  margin: 0 0 var(--esp-5);
+  font-size: var(--texto-headline);
+  font-weight: var(--peso-fuerte);
+  line-height: var(--interlineado-titulo);
+  letter-spacing: var(--tracking-titulo);
+  color: var(--tinta-fuerte);
+}
+
+.acceso__ayuda {
+  margin: calc(var(--esp-5) * -1 + var(--esp-2)) 0 var(--esp-5);
+  font-size: var(--texto-sm);
+  line-height: var(--interlineado);
+  color: var(--tinta-suave);
+}
+
+.acceso__campo {
+  margin-bottom: var(--esp-4);
+}
+
+.acceso__campo label {
+  display: block;
+  margin-bottom: var(--esp-2);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  color: var(--tinta);
+}
+
+.acceso__campo .campo {
+  width: 100%;
+}
+
+/* El botón ocupa el ancho: es la única acción de la pantalla y no compite con
+   nada. Y --objetivo-tactil porque esto se teclea desde el móvil del almacén. */
+.acceso__enviar {
+  width: 100%;
+  margin-top: var(--esp-2);
+  min-height: var(--objetivo-tactil);
+}
+
+.acceso__volver {
+  width: 100%;
+  margin-top: var(--esp-2);
+}
+
+/* El aviso NO usa el rojo de --peligro a secas: aquí el mensaje más frecuente
+   es "usuario o contraseña incorrectos", que es un tropiezo normal y no una
+   alarma. El lavado con su texto medido da el contraste sin gritar. */
+.acceso__aviso {
+  margin: var(--esp-4) 0 0;
+  padding: var(--esp-3);
+  border-radius: var(--radio-md);
+  background-color: var(--peligro-lavado);
+  color: var(--peligro-texto);
+  font-size: var(--texto-sm);
+  line-height: var(--interlineado);
+}

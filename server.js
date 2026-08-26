@@ -148,6 +148,12 @@ const MINUTOS_RETO_TOTP = 5;
 
 const EN_PRODUCCION = process.env.NODE_ENV === 'production';
 
+// Express anuncia `X-Powered-By: Express` en cada respuesta. No es una
+// vulnerabilidad por sí sola, pero es información gratis: le dice a quien esté
+// tanteando qué pila tiene delante y por tanto qué fallos conocidos probar
+// primero. Callarlo no defiende de nada, pero tampoco ayuda a nadie.
+app.disable('x-powered-by');
+
 // Activar esto sin un proxy inverso delante sería contraproducente: haría
 // creíble un `X-Forwarded-For` que cualquiera puede inventar, y el límite de
 // intentos por IP dejaría de servir para nada. Por eso es explícito y no
@@ -431,7 +437,20 @@ app.use((req, res, next) => {
 
 // 7. Estáticos. Ya detrás del guardia: a partir de aquí, todo lo que sirva este
 //    middleware lo pide alguien con sesión (o está en la lista pública).
-app.use(express.static('public'));
+//
+//    `setHeaders` corrige algo que se descubrió probándolo con curl: el
+//    `Cache-Control: no-store` que puso el middleware 1 lo PISA `express.static`
+//    con su propio `public, max-age=0`, porque escribe la cabecera después. Sin
+//    esto, el botón "atrás" del navegador puede repintar el inventario entero
+//    desde la caché después de cerrar sesión. Las hojas de estilo y los scripts
+//    conservan su caché normal: ahí no hay nada privado.
+app.use(
+  express.static('public', {
+    setHeaders: (res, rutaArchivo) => {
+      if (rutaArchivo.endsWith('.html')) res.setHeader('Cache-Control', 'no-store');
+    },
+  })
+);
 
 function exigirSuperadmin(req, res, next) {
   if (req.cuenta?.rol !== 'superadmin') {
@@ -444,14 +463,21 @@ function exigirSuperadmin(req, res, next) {
 // Pantallas
 // ---------------------------------------------------------------------------
 
+// `sendFile` también escribe su propio Cache-Control, así que estas dos rutas
+// repiten el no-store por la misma razón que `express.static` de arriba.
+function enviarPantalla(res, archivo) {
+  res.setHeader('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'public', 'html', archivo));
+}
+
 app.get('/login', (req, res) => {
   // Con sesión abierta, la pantalla de login no tiene nada que ofrecer.
   if (req.cuenta) return res.redirect(302, '/');
-  res.sendFile(path.join(__dirname, 'public', 'html', 'login.html'));
+  enviarPantalla(res, 'login.html');
 });
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'html', 'index.html'));
+  enviarPantalla(res, 'index.html');
 });
 
 // ---------------------------------------------------------------------------
