@@ -3,11 +3,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { once } = require('node:events');
 const { crearBaseTemporal, sembrar } = require('./helpers/db');
+const { sembrarCuentas, iniciarSesion } = require('./helpers/sesion');
 
 let servidor;
 let base;
 let dirTemporal;
 let db;
+let cookie;
 
 before(async () => {
   const { dir, archivo } = await crearBaseTemporal();
@@ -22,6 +24,11 @@ before(async () => {
   servidor = app.listen(0); // puerto efímero: no choca con el 3000 en uso
   await once(servidor, 'listening');
   base = `http://127.0.0.1:${servidor.address().port}`;
+
+  // Una sola vez: sembrar las cuentas y abrir sesión cuesta scrypt, y la sesión
+  // dura doce horas, así que no hay motivo para repetirlo en cada test.
+  await sembrarCuentas(db);
+  cookie = await iniciarSesion(base, 'superadmin');
 });
 
 // Cada test arranca con los mismos datos, sin importar qué mutó el anterior.
@@ -36,11 +43,16 @@ after(async () => {
   if (dirTemporal) fs.rmSync(dirTemporal, { recursive: true, force: true });
 });
 
-const get = (ruta) => fetch(`${base}${ruta}`);
+// Desde que el guardia deniega por defecto, TODA petición a /api/* necesita
+// sesión. La cookie se pide una vez en `before` y se reenvía aquí, así que los
+// tests de negocio siguen leyéndose igual que antes. Va la del superadmin
+// porque esta suite incluye el borrado de productos, que es su privilegio; los
+// tests del reparto de permisos viven en auth.test.js.
+const get = (ruta) => fetch(`${base}${ruta}`, { headers: { Cookie: cookie } });
 const enviar = (metodo, ruta, cuerpo) =>
   fetch(`${base}${ruta}`, {
     method: metodo,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: JSON.stringify(cuerpo),
   });
 
