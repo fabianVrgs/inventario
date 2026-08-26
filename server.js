@@ -226,6 +226,13 @@ function registrarAcceso(usuario, resultado, req) {
 // dueño: basta con saber su nombre de usuario y fallar cinco veces a propósito.
 // El retraso hace inviable la fuerza bruta sin regalar esa palanca a nadie.
 //
+// Los tres primeros fallos son gratis: teclear mal la contraseña tres veces es
+// lo normal, y castigarlo antes molesta al dueño mucho más de lo que estorba a
+// quien ataca. La espera se fija AL FALLAR el cuarto, así que el quinto intento
+// es el primero que se encuentra la puerta cerrada. De ahí en adelante se
+// duplica —2 s, 4 s, 8 s…— hasta el techo de quince minutos, que es lo que
+// convierte un diccionario de un millón de palabras en varios años.
+//
 // Se cuenta por IP y por usuario a la vez: sólo por IP, una botnet reparte los
 // intentos entre mil direcciones; sólo por usuario, se prueban mil usuarios
 // distintos desde la misma máquina.
