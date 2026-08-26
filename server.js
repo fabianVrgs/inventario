@@ -16,20 +16,25 @@ const db = new sqlite3.Database(dbPath, (err) => {
   }
 });
 
-// `db/inventario.db3` está versionado con la 001 aplicada pero sin la 002 ni la
-// 003, así que recién clonado no tiene estas tablas y POST /api/ordenes responde
-// 500 (`no such table: ordenes`). Crearlas al arrancar es idempotente y deja
-// la app usable sin correr el runner de migraciones a mano.
+// `db/inventario.db3` está versionado con la 001 aplicada pero sin las
+// migraciones siguientes, así que recién clonado no tiene estas tablas y
+// POST /api/ordenes responde 500 (`no such table: ordenes`). Crearlas al
+// arrancar es idempotente y deja la app usable sin correr el runner a mano.
 //
 // Se encola aquí, antes de declarar cualquier ruta, para que sqlite3 lo
 // procese en esta conexión antes de la primera consulta de una petición.
-// El DDL debe seguir igual al de db/migrations/002-registro-de-ordenes.sql y
-// db/migrations/003-devoluciones.sql.
+// El DDL debe seguir igual al de db/migrations/002-registro-de-ordenes.sql,
+// 003-devoluciones.sql y 004-cuentas.sql — son las mismas definiciones escritas
+// dos veces, y si cambia una tiene que cambiar la otra.
 //
-// Este bloque es también la razón por la que la 003 añade una tabla en vez de
-// una columna a `ordenes`: `CREATE TABLE IF NOT EXISTS` no añade columnas a una
-// tabla que ya existe, y `ALTER TABLE ... ADD COLUMN` no admite `IF NOT EXISTS`
-// en SQLite, así que no hay forma idempotente de asegurarla desde aquí.
+// De la 004 se replican los CREATE pero NO sus dos DROP: aquí solo se asegura
+// lo que debe existir. Borrar `usuarios` es cosa de la migración, que se corre
+// una vez y con copia de seguridad delante.
+//
+// Este bloque es también la razón por la que la 003 y la 004 añaden tablas en
+// vez de columnas: `CREATE TABLE IF NOT EXISTS` no añade columnas a una tabla
+// que ya existe, y `ALTER TABLE ... ADD COLUMN` no admite `IF NOT EXISTS` en
+// SQLite, así que no hay forma idempotente de asegurarlas desde aquí.
 db.serialize(() => {
   db.exec(
     `CREATE TABLE IF NOT EXISTS ordenes (
@@ -54,10 +59,53 @@ db.serialize(() => {
        id_orden      INTEGER NOT NULL UNIQUE REFERENCES ordenes(id_orden),
        recibida_en   TEXT NOT NULL,
        recibida_por  TEXT
-     );`,
+     );
+
+     CREATE TABLE IF NOT EXISTS cuentas (
+       id_cuenta        INTEGER PRIMARY KEY AUTOINCREMENT,
+       usuario          TEXT NOT NULL UNIQUE COLLATE NOCASE,
+       hash             TEXT NOT NULL,
+       rol              TEXT NOT NULL CHECK (rol IN ('admin', 'superadmin')),
+       totp_secreto     TEXT,
+       totp_ultimo_paso INTEGER,
+       creada_en        TEXT NOT NULL,
+       activa           INTEGER NOT NULL DEFAULT 1
+     );
+
+     CREATE TABLE IF NOT EXISTS sesiones (
+       id_sesion  INTEGER PRIMARY KEY AUTOINCREMENT,
+       hash_token TEXT NOT NULL UNIQUE,
+       id_cuenta  INTEGER NOT NULL REFERENCES cuentas(id_cuenta),
+       creada_en  TEXT NOT NULL,
+       vista_en   TEXT NOT NULL,
+       expira_en  TEXT NOT NULL,
+       ip         TEXT,
+       agente     TEXT
+     );
+
+     CREATE INDEX IF NOT EXISTS idx_sesiones_cuenta ON sesiones(id_cuenta);
+
+     CREATE TABLE IF NOT EXISTS codigos_respaldo (
+       id_codigo INTEGER PRIMARY KEY AUTOINCREMENT,
+       id_cuenta INTEGER NOT NULL REFERENCES cuentas(id_cuenta),
+       hash      TEXT NOT NULL,
+       usado_en  TEXT
+     );
+
+     CREATE INDEX IF NOT EXISTS idx_codigos_respaldo_cuenta ON codigos_respaldo(id_cuenta);
+
+     CREATE TABLE IF NOT EXISTS accesos (
+       id_acceso   INTEGER PRIMARY KEY AUTOINCREMENT,
+       ocurrido_en TEXT NOT NULL,
+       usuario     TEXT,
+       resultado   TEXT NOT NULL,
+       ip          TEXT
+     );
+
+     CREATE INDEX IF NOT EXISTS idx_accesos_fecha ON accesos(ocurrido_en);`,
     (errEsquema) => {
       if (errEsquema) {
-        console.error('❌ Error al asegurar las tablas de órdenes:', errEsquema.message);
+        console.error('❌ Error al asegurar las tablas:', errEsquema.message);
       }
     }
   );

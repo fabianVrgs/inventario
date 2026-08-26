@@ -55,7 +55,54 @@ const ESQUEMA_003 = `
   );
 `;
 
-const ESQUEMA = ESQUEMA_001 + ESQUEMA_002 + ESQUEMA_003;
+// Lo que añade la migración 004: autenticación. `cuentas` nace vacía a
+// propósito — cada test siembra las que necesita con test/helpers/sesion.js.
+const ESQUEMA_004 = `
+  CREATE TABLE cuentas (
+    id_cuenta        INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario          TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    hash             TEXT NOT NULL,
+    rol              TEXT NOT NULL CHECK (rol IN ('admin', 'superadmin')),
+    totp_secreto     TEXT,
+    totp_ultimo_paso INTEGER,
+    creada_en        TEXT NOT NULL,
+    activa           INTEGER NOT NULL DEFAULT 1
+  );
+
+  CREATE TABLE sesiones (
+    id_sesion  INTEGER PRIMARY KEY AUTOINCREMENT,
+    hash_token TEXT NOT NULL UNIQUE,
+    id_cuenta  INTEGER NOT NULL REFERENCES cuentas(id_cuenta),
+    creada_en  TEXT NOT NULL,
+    vista_en   TEXT NOT NULL,
+    expira_en  TEXT NOT NULL,
+    ip         TEXT,
+    agente     TEXT
+  );
+
+  CREATE INDEX idx_sesiones_cuenta ON sesiones(id_cuenta);
+
+  CREATE TABLE codigos_respaldo (
+    id_codigo INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_cuenta INTEGER NOT NULL REFERENCES cuentas(id_cuenta),
+    hash      TEXT NOT NULL,
+    usado_en  TEXT
+  );
+
+  CREATE INDEX idx_codigos_respaldo_cuenta ON codigos_respaldo(id_cuenta);
+
+  CREATE TABLE accesos (
+    id_acceso   INTEGER PRIMARY KEY AUTOINCREMENT,
+    ocurrido_en TEXT NOT NULL,
+    usuario     TEXT,
+    resultado   TEXT NOT NULL,
+    ip          TEXT
+  );
+
+  CREATE INDEX idx_accesos_fecha ON accesos(ocurrido_en);
+`;
+
+const ESQUEMA = ESQUEMA_001 + ESQUEMA_002 + ESQUEMA_003 + ESQUEMA_004;
 
 const DATOS = `
   INSERT INTO areas (id_area, nombre) VALUES
