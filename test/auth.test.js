@@ -350,6 +350,52 @@ test('un POST con nuestro propio Origin pasa', async () => {
   assert.equal(respuesta.status, 201);
 });
 
+test('detrás de un proxy HTTPS, el Origin del navegador pasa', async () => {
+  // El caso que rompió el despliegue: el navegador manda `Origin: https://…`
+  // pero el proxy inverso habla HTTP con nosotros, así que `req.protocol` dice
+  // "http". Comparando la cadena entera fallaba y devolvía 403 en cada acción,
+  // login incluido. Se comparan anfitriones, que es lo que el CSRF pregunta.
+  const cookie = await iniciarSesion(base, 'superadmin');
+  const anfitrion = new URL(base).host;
+
+  const respuesta = await conCookie(cookie, '/api/productos', {
+    method: 'POST',
+    headers: {
+      Origin: `https://${anfitrion}`,
+      'X-Forwarded-Proto': 'https',
+    },
+    body: JSON.stringify({ nombre: 'emitido tras un proxy', cantidad: 1 }),
+  });
+
+  assert.equal(respuesta.status, 201);
+});
+
+test('un Origin con nuestro anfitrión pero otro puerto se rechaza', async () => {
+  // El puerto forma parte del anfitrión, así que otra aplicación en la misma
+  // máquina sigue siendo otro origen.
+  const cookie = await iniciarSesion(base, 'superadmin');
+
+  const respuesta = await conCookie(cookie, '/api/productos', {
+    method: 'POST',
+    headers: { Origin: 'http://127.0.0.1:1' },
+    body: JSON.stringify({ nombre: 'desde otro puerto', cantidad: 1 }),
+  });
+
+  assert.equal(respuesta.status, 403);
+});
+
+test('un Origin ilegible (null, un sandbox) se rechaza', async () => {
+  const cookie = await iniciarSesion(base, 'superadmin');
+
+  const respuesta = await conCookie(cookie, '/api/productos', {
+    method: 'POST',
+    headers: { Origin: 'null' },
+    body: JSON.stringify({ nombre: 'desde un sandbox', cantidad: 1 }),
+  });
+
+  assert.equal(respuesta.status, 403);
+});
+
 test('un GET con Origin ajeno NO se rechaza', async () => {
   // Un GET no cambia nada, y bloquearlo rompería enlaces legítimos sin ganar
   // nada: lo que hay que parar son las peticiones con efectos.
