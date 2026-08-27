@@ -10,10 +10,13 @@ const path = require('node:path');
 
 const ESQUEMA = `inventario_test_${process.pid}`;
 
-// Se fija ANTES de requerir db.js, y el orden es lo único que separa a los
-// tests de la base real: db.js registra su hook de search_path al cargarse.
-// Si un archivo de test requiriera este helper y fijara la variable después,
-// el hook ya estaría puesto y todo caería en `public`.
+// Se fija ANTES de requerir db.js. El hook de `pool.on('connect', ...)` lee
+// ESQUEMA_BD dentro de su propio callback, no al registrarse, así que lo que
+// importa no es el orden respecto al `require` sino respecto a la primera
+// conexión real que abra el pool: si esa primera conexión ocurriera antes de
+// fijar la variable, el `SET search_path` de esa conexión se perdería y
+// (con el pool reutilizándola) todo caería en `public`. Fijarla aquí, antes
+// de tocar el pool por primera vez, es lo que lo garantiza.
 process.env.ESQUEMA_BD = ESQUEMA;
 
 const { pool, consultar } = require('../../db.js');
@@ -31,6 +34,22 @@ async function crearEsquema() {
 
 async function borrarEsquema() {
   await pool.query(`DROP SCHEMA IF EXISTS ${ESQUEMA} CASCADE`);
+}
+
+// Cinturón y tirantes para TODO lo que trunca. Se llama antes de cualquier
+// TRUNCATE en este helper y en helpers/sesion.js: si el aislamiento por
+// esquema fallara por cualquier motivo, esto es lo que impide que una
+// corrida de tests borre el inventario o las cuentas reales de `public`.
+// Una sola función con nombre en vez de repetir el mismo SELECT en cada
+// sitio que trunca.
+async function exigirEsquemaDePruebas() {
+  const { rows } = await consultar('SELECT current_schema() AS esquema');
+  if (rows[0].esquema !== ESQUEMA) {
+    throw new Error(
+      `Se esperaba estar en el esquema "${ESQUEMA}" y la conexión apuntaba a ` +
+      `"${rows[0].esquema}". Abortado antes del TRUNCATE.`
+    );
+  }
 }
 
 // Los mismos datos que sembraba la versión SQLite, literales.
@@ -58,17 +77,7 @@ const DATOS_PRODUCTOS = `
 // —orden_lineas.id_producto no tiene clave foránea a propósito— así que no
 // arrastra nada que no esté ya nombrado.
 async function sembrar() {
-  // Cinturón y tirantes. Esta función ejecuta TRUNCATE, así que antes se
-  // asegura de que NO está apuntando a `public`: si el aislamiento por esquema
-  // fallara por cualquier motivo, esto es lo que impide que una corrida de
-  // tests borre el inventario real del almacén.
-  const { rows } = await consultar('SELECT current_schema() AS esquema');
-  if (rows[0].esquema !== ESQUEMA) {
-    throw new Error(
-      `sembrar() apuntaba a "${rows[0].esquema}" y no a "${ESQUEMA}". ` +
-      'Abortado antes del TRUNCATE.'
-    );
-  }
+  await exigirEsquemaDePruebas();
 
   await consultar(`
     TRUNCATE areas, productos, ordenes, orden_lineas, devoluciones
@@ -83,4 +92,4 @@ async function sembrar() {
   await consultar('ALTER TABLE productos ALTER COLUMN id_producto RESTART WITH 5');
 }
 
-module.exports = { crearEsquema, borrarEsquema, sembrar, ESQUEMA };
+module.exports = { crearEsquema, borrarEsquema, sembrar, exigirEsquemaDePruebas, ESQUEMA };

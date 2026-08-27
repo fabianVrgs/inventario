@@ -5,7 +5,18 @@
 // dos cuentas y devuelve la cookie con la que hacer las peticiones.
 
 const auth = require('../../auth.js');
-const { consultar } = require('../../db.js');
+
+// Se importa el helper de test, no el db.js de la raíz directamente. No es
+// por sus símbolos —sólo se usan `consultar` y `exigirEsquemaDePruebas`,
+// que este archivo podría reexportar igual de bien—: es para que el grafo de
+// módulos garantice el orden. `./db.js` fija `process.env.ESQUEMA_BD` ANTES
+// de requerir el db.js de la raíz; si aquí se requiriera ese db.js
+// directamente, un archivo de test que importara sólo `helpers/sesion`
+// (sin pasar antes por `helpers/db`) truncaría cuentas contra `public` sin
+// que nada lo impidiera. Requerir `./db.js` hace ese orden imposible de
+// saltarse, en vez de depender de que cada archivo importe en el orden
+// correcto.
+const { consultar, exigirEsquemaDePruebas } = require('./db.js');
 
 // Contraseñas de prueba, nunca de despliegue. Cumplen el mínimo de 12
 // caracteres para no tener que meter una excepción en el validador sólo para
@@ -35,6 +46,8 @@ async function hashDe(clave) {
 async function sembrarCuentas(opciones = {}) {
   const secreto = opciones.totp ? auth.secretoTotp() : null;
 
+  await exigirEsquemaDePruebas();
+
   // sqlite_sequence no existe en Postgres: RESTART IDENTITY hace ese trabajo.
   await consultar(`
     TRUNCATE cuentas, sesiones, codigos_respaldo, retos_totp
@@ -59,6 +72,8 @@ async function sembrarCuentas(opciones = {}) {
 // claro, que es la única vez que existe fuera de su hash.
 async function sembrarCodigoRespaldo(usuario) {
   const [codigo] = auth.generarCodigosRespaldo(1);
+
+  await exigirEsquemaDePruebas();
 
   await consultar(
     `INSERT INTO codigos_respaldo (id_cuenta, hash)
