@@ -70,6 +70,10 @@ function enHoras(horas) {
   return new Date(Date.now() + horas * 3600 * 1000).toISOString();
 }
 
+function enMinutos(minutos) {
+  return new Date(Date.now() + minutos * 60 * 1000).toISOString();
+}
+
 // Express trae `res.cookie` para escribir, pero no nada para leer sin
 // `cookie-parser`. Son seis líneas y evitan una dependencia.
 function leerCookie(req, nombre) {
@@ -135,10 +139,19 @@ function registrarAcceso(usuario, resultado, req) {
 // intentos entre mil direcciones; sólo por usuario, se prueban mil usuarios
 // distintos desde la misma máquina.
 //
-// Vive en memoria y se pierde al reiniciar. Es aceptable: quien ataca no decide
-// cuándo reiniciamos, y la alternativa —escribir en la base en cada intento
-// fallido— convierte el propio login en un modo de castigar al disco.
-const intentos = new Map();
+// El contador vive en la base y no en un Map porque en serverless hay N
+// instancias: cada una contaría sus propios fallos, así que los tres de
+// gracia se multiplicarían por el número de instancias y la defensa contra
+// fuerza bruta dejaría de valer.
+//
+// La objeción original —"escribir en la base en cada intento fallido convierte
+// el login en un modo de castigar al disco"— razonaba sobre fsync en un disco
+// local. Contra Postgres, con los volúmenes de un almacén, es ruido.
+//
+// Se guarda `ultimo_en` y NO el instante de desbloqueo ya calculado: así
+// anotar un fallo es UN solo INSERT ... ON CONFLICT para las dos claves a la
+// vez, en vez de SELECT + calcular + UPDATE. La espera se aplica al leer, que
+// es donde esperaTras() ya vive.
 const FALLOS_DE_GRACIA = 3;
 const ESPERA_MAXIMA_MS = 15 * 60 * 1000;
 
@@ -148,31 +161,38 @@ function esperaTras(fallos) {
 }
 
 // Devuelve los milisegundos que faltan, o 0 si puede pasar.
-function bloqueoRestante(claves) {
+async function bloqueoRestante(claves) {
+  const { rows } = await consultar(
+    'SELECT fallos, ultimo_en FROM intentos_login WHERE clave = ANY($1::text[])',
+    [claves]
+  );
+
   let restante = 0;
-  for (const clave of claves) {
-    const registro = intentos.get(clave);
-    if (registro) restante = Math.max(restante, registro.hasta - Date.now());
+  for (const fila of rows) {
+    const hasta = Date.parse(fila.ultimo_en) + esperaTras(fila.fallos);
+    restante = Math.max(restante, hasta - Date.now());
   }
   return Math.max(0, restante);
 }
 
-function anotarFallo(claves) {
-  for (const clave of claves) {
-    const registro = intentos.get(clave) || { fallos: 0, hasta: 0 };
-    registro.fallos += 1;
-    registro.hasta = Date.now() + esperaTras(registro.fallos);
-    intentos.set(clave, registro);
-  }
+async function anotarFallo(claves) {
+  await consultar(
+    `INSERT INTO intentos_login (clave, fallos, ultimo_en)
+     SELECT c, 1, $2 FROM unnest($1::text[]) AS c
+     ON CONFLICT (clave) DO UPDATE
+       SET fallos = intentos_login.fallos + 1,
+           ultimo_en = EXCLUDED.ultimo_en`,
+    [claves, ahora()]
+  );
 }
 
-function limpiarFallos(claves) {
-  for (const clave of claves) intentos.delete(clave);
+async function limpiarFallos(claves) {
+  await consultar('DELETE FROM intentos_login WHERE clave = ANY($1::text[])', [claves]);
 }
 
 // Sólo para los tests: cada uno necesita empezar sin el castigo del anterior.
-function reiniciarLimites() {
-  intentos.clear();
+async function reiniciarLimites() {
+  await consultar('DELETE FROM intentos_login');
 }
 
 function clavesDeIntento(req, usuario) {
@@ -438,11 +458,34 @@ app.get('/', (req, res) => {
 // Retos de segundo factor pendientes: contraseña ya verificada, código todavía
 // no. NO son una sesión y por eso no son una cookie — son un pagaré de cinco
 // minutos que sólo sirve para canjearlo en /api/auth/totp.
-const retos = new Map();
+//
+// Vivían en un Map de proceso. En Vercel eso significa que el paso 2 del login
+// cae con frecuencia en una instancia que nunca vio el reto, y la
+// verificación "caduca" sin haber caducado.
+async function purgarRetos() {
+  await consultar('DELETE FROM retos_totp WHERE expira_en <= $1', [ahora()]);
+}
 
-function purgarRetos() {
-  const instante = Date.now();
-  for (const [clave, reto] of retos) if (reto.expira <= instante) retos.delete(clave);
+async function guardarReto(reto, idCuenta) {
+  await consultar(
+    'INSERT INTO retos_totp (reto, id_cuenta, expira_en) VALUES ($1, $2, $3)',
+    [reto, idCuenta, enMinutos(MINUTOS_RETO_TOTP)]
+  );
+}
+
+async function tomarReto(reto) {
+  if (!reto) return null;
+  const { rows } = await consultar(
+    'SELECT id_cuenta, expira_en FROM retos_totp WHERE reto = $1',
+    [String(reto)]
+  );
+  const fila = rows[0];
+  if (!fila || Date.parse(fila.expira_en) <= Date.now()) return null;
+  return fila;
+}
+
+async function consumirReto(reto) {
+  await consultar('DELETE FROM retos_totp WHERE reto = $1', [String(reto)]);
 }
 
 async function abrirSesion(cuenta, req, res, respuesta) {
@@ -486,7 +529,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   const claves = clavesDeIntento(req, usuario);
-  const restante = bloqueoRestante(claves);
+  const restante = await bloqueoRestante(claves);
   if (restante > 0) {
     registrarAcceso(usuario, 'bloqueado', req);
     res.setHeader('Retry-After', String(Math.ceil(restante / 1000)));
@@ -515,20 +558,17 @@ app.post('/api/auth/login', async (req, res) => {
     const correcta = await auth.verificar(clave, hash);
 
     if (!cuenta || !correcta) {
-      anotarFallo(claves);
+      await anotarFallo(claves);
       registrarAcceso(usuario, 'clave', req);
       return res.status(401).json({ error: CREDENCIALES_MALAS });
     }
 
-    limpiarFallos(claves);
+    await limpiarFallos(claves);
 
     if (cuenta.totp_secreto) {
-      purgarRetos();
+      await purgarRetos();
       const reto = auth.nuevoToken();
-      retos.set(reto, {
-        id_cuenta: cuenta.id_cuenta,
-        expira: Date.now() + MINUTOS_RETO_TOTP * 60 * 1000,
-      });
+      await guardarReto(reto, cuenta.id_cuenta);
       return res.json({ requiere_totp: true, reto });
     }
 
@@ -543,16 +583,16 @@ app.post('/api/auth/login', async (req, res) => {
 // de seis dígitos de la app como uno de los códigos de respaldo en papel, en el
 // mismo campo — quien ha perdido el móvil no está para elegir pestaña.
 app.post('/api/auth/totp', async (req, res) => {
-  purgarRetos();
+  await purgarRetos();
 
-  const pendiente = retos.get(req.body?.reto);
+  const pendiente = await tomarReto(req.body?.reto);
   if (!pendiente) {
     return res.status(401).json({ error: 'La verificación caducó. Vuelve a iniciar sesión.' });
   }
 
   const codigo = String(req.body?.codigo ?? '').trim();
   const claves = clavesDeIntento(req, `reto:${pendiente.id_cuenta}`);
-  const restante = bloqueoRestante(claves);
+  const restante = await bloqueoRestante(claves);
   if (restante > 0) {
     res.setHeader('Retry-After', String(Math.ceil(restante / 1000)));
     return res.status(429).json({
@@ -574,8 +614,8 @@ app.post('/api/auth/totp', async (req, res) => {
 
     if (veredicto.ok) {
       // El reto se consume pase lo que pase después: un pagaré se cobra una vez.
-      retos.delete(req.body.reto);
-      limpiarFallos(claves);
+      await consumirReto(req.body.reto);
+      await limpiarFallos(claves);
       // Guardar el paso es lo que impide reutilizar el mismo código dentro de
       // sus 30 segundos de vida. Se espera al UPDATE: si la sesión se abriera
       // antes de que el paso quede escrito, el mismo código valdría dos veces.
@@ -586,8 +626,8 @@ app.post('/api/auth/totp', async (req, res) => {
       return await abrirSesion(cuenta, req, res, {});
     }
 
-    await canjearCodigoDeRespaldo(cuenta, codigo, req, res, () => {
-      anotarFallo(claves);
+    await canjearCodigoDeRespaldo(cuenta, codigo, req, res, async () => {
+      await anotarFallo(claves);
       registrarAcceso(cuenta.usuario, 'totp', req);
       res.status(401).json({ error: 'Código incorrecto o ya utilizado.' });
     });
@@ -602,13 +642,13 @@ app.post('/api/auth/totp', async (req, res) => {
 // permanente y sin segundo factor.
 async function canjearCodigoDeRespaldo(cuenta, codigo, req, res, alFallar) {
   const normalizado = auth.normalizarCodigoRespaldo(codigo);
-  if (!normalizado) return alFallar();
+  if (!normalizado) return await alFallar();
 
   const { rows: filas } = await consultar(
     'SELECT id_codigo, hash FROM codigos_respaldo WHERE id_cuenta = $1 AND usado_en IS NULL',
     [cuenta.id_cuenta]
   );
-  if (filas.length === 0) return alFallar();
+  if (filas.length === 0) return await alFallar();
 
   for (const fila of filas) {
     if (await auth.verificar(normalizado, fila.hash)) {
@@ -619,12 +659,12 @@ async function canjearCodigoDeRespaldo(cuenta, codigo, req, res, alFallar) {
         ahora(),
         fila.id_codigo,
       ]);
-      retos.delete(req.body.reto);
+      await consumirReto(req.body.reto);
       return await abrirSesion(cuenta, req, res, { codigo_respaldo_usado: true });
     }
   }
 
-  alFallar();
+  await alFallar();
 }
 
 app.post('/api/auth/salir', async (req, res) => {

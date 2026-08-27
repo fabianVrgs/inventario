@@ -43,10 +43,10 @@ before(async () => {
 beforeEach(async () => {
   await sembrar();
   await sembrarCuentas();
-  // El límite de intentos vive en memoria del proceso. Sin reiniciarlo, el test
-  // que prueba la fuerza bruta dejaría a los siguientes bloqueados por IP —
-  // todos salen de 127.0.0.1.
-  app.locals.reiniciarLimites();
+  // El límite de intentos vive en la tabla `intentos_login`. Sin reiniciarlo,
+  // el test que prueba la fuerza bruta dejaría a los siguientes bloqueados
+  // por IP — todos salen de 127.0.0.1.
+  await app.locals.reiniciarLimites();
 });
 
 after(async () => {
@@ -463,6 +463,29 @@ test('con TOTP activo, la contraseña sola no abre sesión', async () => {
   assert.ok(cuerpo.reto);
   assert.equal(respuesta.headers.get('set-cookie'), null, 'todavía no hay sesión que dar');
   assert.ok(secreto);
+});
+
+test('el reto de segundo factor vive en la base, no en memoria del proceso', async () => {
+  // Esto es el bug entero que la migración arregla: en Vercel hay N instancias,
+  // y con un Map de proceso el paso 2 del login cae con frecuencia en una
+  // instancia que nunca vio el reto, así que la verificación "caduca" sin haber
+  // caducado.
+  await sembrarCuentas({ totp: true });
+
+  const paso1 = await entrar(USUARIOS.superadmin, CLAVES.superadmin);
+  const { requiere_totp, reto } = await paso1.json();
+  assert.equal(requiere_totp, true);
+
+  // La comprobación real: el reto está en la tabla, y apunta a la cuenta que
+  // acaba de autenticarse con contraseña.
+  const guardado = await app.locals.pool.query(
+    `SELECT r.id_cuenta, c.usuario
+     FROM retos_totp r JOIN cuentas c ON c.id_cuenta = r.id_cuenta
+     WHERE r.reto = $1`,
+    [reto]
+  );
+  assert.equal(guardado.rowCount, 1, 'el reto debe vivir en la base, no en un Map');
+  assert.equal(guardado.rows[0].usuario, USUARIOS.superadmin);
 });
 
 test('el código correcto canjea el reto por una sesión', async () => {
