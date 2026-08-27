@@ -5,6 +5,7 @@
 // dos cuentas y devuelve la cookie con la que hacer las peticiones.
 
 const auth = require('../../auth.js');
+const { consultar } = require('../../db.js');
 
 // Contraseñas de prueba, nunca de despliegue. Cumplen el mínimo de 12
 // caracteres para no tener que meter una excepción en el validador sólo para
@@ -29,34 +30,25 @@ async function hashDe(clave) {
   return cacheHashes.get(clave);
 }
 
-function ejecutar(db, sql, parametros = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, parametros, function (err) {
-      if (err) return reject(err);
-      resolve(this);
-    });
-  });
-}
-
 // Siembra las dos cuentas. `opciones.totp` activa el segundo factor en el
 // superadmin y devuelve su secreto, para los tests que lo necesiten.
-async function sembrarCuentas(db, opciones = {}) {
+async function sembrarCuentas(opciones = {}) {
   const secreto = opciones.totp ? auth.secretoTotp() : null;
 
-  await ejecutar(db, 'DELETE FROM sesiones');
-  await ejecutar(db, 'DELETE FROM codigos_respaldo');
-  await ejecutar(db, 'DELETE FROM cuentas');
-  await ejecutar(db, "DELETE FROM sqlite_sequence WHERE name IN ('cuentas', 'sesiones', 'codigos_respaldo')");
+  // sqlite_sequence no existe en Postgres: RESTART IDENTITY hace ese trabajo.
+  await consultar(`
+    TRUNCATE cuentas, sesiones, codigos_respaldo, retos_totp
+    RESTART IDENTITY CASCADE
+  `);
 
-  await ejecutar(
-    db,
-    'INSERT INTO cuentas (usuario, hash, rol, creada_en, activa) VALUES (?, ?, ?, ?, 1)',
+  await consultar(
+    'INSERT INTO cuentas (usuario, hash, rol, creada_en, activa) VALUES ($1, $2, $3, $4, 1)',
     [USUARIOS.admin, await hashDe(CLAVES.admin), 'admin', new Date().toISOString()]
   );
 
-  await ejecutar(
-    db,
-    'INSERT INTO cuentas (usuario, hash, rol, totp_secreto, creada_en, activa) VALUES (?, ?, ?, ?, ?, 1)',
+  await consultar(
+    `INSERT INTO cuentas (usuario, hash, rol, totp_secreto, creada_en, activa)
+     VALUES ($1, $2, $3, $4, $5, 1)`,
     [USUARIOS.superadmin, await hashDe(CLAVES.superadmin), 'superadmin', secreto, new Date().toISOString()]
   );
 
@@ -65,13 +57,12 @@ async function sembrarCuentas(db, opciones = {}) {
 
 // Añade un código de respaldo canjeable a la cuenta indicada y lo devuelve en
 // claro, que es la única vez que existe fuera de su hash.
-async function sembrarCodigoRespaldo(db, usuario) {
+async function sembrarCodigoRespaldo(usuario) {
   const [codigo] = auth.generarCodigosRespaldo(1);
 
-  await ejecutar(
-    db,
+  await consultar(
     `INSERT INTO codigos_respaldo (id_cuenta, hash)
-     SELECT id_cuenta, ? FROM cuentas WHERE usuario = ?`,
+     SELECT id_cuenta, $1 FROM cuentas WHERE usuario = $2`,
     [await auth.hashear(auth.normalizarCodigoRespaldo(codigo)), usuario]
   );
 

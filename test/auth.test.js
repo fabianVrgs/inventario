@@ -42,8 +42,8 @@ before(async () => {
 });
 
 beforeEach(async () => {
-  await sembrar(db);
-  await sembrarCuentas(db);
+  await sembrar();
+  await sembrarCuentas();
   // El límite de intentos vive en memoria del proceso. Sin reiniciarlo, el test
   // que prueba la fuerza bruta dejaría a los siguientes bloqueados por IP —
   // todos salen de 127.0.0.1.
@@ -454,7 +454,7 @@ test('los intentos fallidos quedan registrados en la bitácora', async () => {
 // ---------------------------------------------------------------------------
 
 test('con TOTP activo, la contraseña sola no abre sesión', async () => {
-  const { secreto } = await sembrarCuentas(db, { totp: true });
+  const { secreto } = await sembrarCuentas({ totp: true });
 
   const respuesta = await entrar(USUARIOS.superadmin, CLAVES.superadmin);
   assert.equal(respuesta.status, 200);
@@ -467,7 +467,7 @@ test('con TOTP activo, la contraseña sola no abre sesión', async () => {
 });
 
 test('el código correcto canjea el reto por una sesión', async () => {
-  const { secreto } = await sembrarCuentas(db, { totp: true });
+  const { secreto } = await sembrarCuentas({ totp: true });
   const cookie = await iniciarSesion(base, 'superadmin', { secreto });
 
   const respuesta = await conCookie(cookie, '/api/auth/yo');
@@ -478,7 +478,7 @@ test('el código correcto canjea el reto por una sesión', async () => {
 test('el mismo código no sirve dos veces', async () => {
   // Anti-replay. Un código vale 30 segundos: sin esto, quien lo vea por encima
   // del hombro entra con él mientras siga en ventana.
-  const { secreto } = await sembrarCuentas(db, { totp: true });
+  const { secreto } = await sembrarCuentas({ totp: true });
   const codigo = auth.codigoPara(secreto, auth.pasoActual());
 
   const primero = await entrar(USUARIOS.superadmin, CLAVES.superadmin);
@@ -499,7 +499,7 @@ test('el mismo código no sirve dos veces', async () => {
 });
 
 test('un reto ya canjeado no se puede reutilizar', async () => {
-  const { secreto } = await sembrarCuentas(db, { totp: true });
+  const { secreto } = await sembrarCuentas({ totp: true });
 
   const login = await entrar(USUARIOS.superadmin, CLAVES.superadmin);
   const { reto } = await login.json();
@@ -521,7 +521,7 @@ test('un reto ya canjeado no se puede reutilizar', async () => {
 });
 
 test('un reto inventado no abre nada', async () => {
-  await sembrarCuentas(db, { totp: true });
+  await sembrarCuentas({ totp: true });
 
   const respuesta = await fetch(`${base}/api/auth/totp`, {
     method: 'POST',
@@ -533,8 +533,8 @@ test('un reto inventado no abre nada', async () => {
 });
 
 test('un código de respaldo entra, y sólo una vez', async () => {
-  await sembrarCuentas(db, { totp: true });
-  const codigo = await sembrarCodigoRespaldo(db, USUARIOS.superadmin);
+  await sembrarCuentas({ totp: true });
+  const codigo = await sembrarCodigoRespaldo(USUARIOS.superadmin);
 
   const canjear = async () => {
     const login = await entrar(USUARIOS.superadmin, CLAVES.superadmin);

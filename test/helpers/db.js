@@ -1,173 +1,86 @@
+// Cada ARCHIVO de test tiene su propio esquema Postgres. El runner de node
+// ejecuta cada archivo en su propio proceso y los corre en paralelo, así que
+// contra un esquema compartido se pisarían: sembrar() vacía las tablas en cada
+// beforeEach.
+//
+// Antes esto se resolvía con un archivo .db3 temporal por proceso. El esquema
+// hace exactamente lo mismo.
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
-const sqlite3 = require('sqlite3');
 
-// Esquema equivalente al de db/inventario.db3 tras la migración 001.
-// Se recrea en un archivo temporal para que los tests nunca escriban
-// sobre la base versionada.
-const ESQUEMA_001 = `
-  CREATE TABLE areas (
-    id_area INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre TEXT NOT NULL UNIQUE
-  );
+const ESQUEMA = `inventario_test_${process.pid}`;
 
-  CREATE TABLE productos (
-    id_producto INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre TEXT NOT NULL,
-    marca TEXT,
-    descripcion TEXT,
-    cantidad INTEGER NOT NULL DEFAULT 0,
-    activo INTEGER NOT NULL DEFAULT 1,
-    id_area INTEGER REFERENCES areas(id_area)
-  );
-`;
+// Se fija ANTES de requerir db.js, y el orden es lo único que separa a los
+// tests de la base real: db.js registra su hook de search_path al cargarse.
+// Si un archivo de test requiriera este helper y fijara la variable después,
+// el hook ya estaría puesto y todo caería en `public`.
+process.env.ESQUEMA_BD = ESQUEMA;
 
-// Lo que añade la migración 002. Separado a propósito: `crearBaseSinOrdenes`
-// omite este bloque para reproducir una base a la que aún no se le aplicó.
-const ESQUEMA_002 = `
-  CREATE TABLE ordenes (
-    id_orden    INTEGER PRIMARY KEY AUTOINCREMENT,
-    creada_en   TEXT NOT NULL,
-    evento      TEXT,
-    responsable TEXT
-  );
+const { pool, consultar } = require('../../db.js');
 
-  CREATE TABLE orden_lineas (
-    id_linea    INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_orden    INTEGER NOT NULL REFERENCES ordenes(id_orden),
-    id_producto INTEGER NOT NULL REFERENCES productos(id_producto),
-    nombre      TEXT NOT NULL,
-    cantidad    INTEGER NOT NULL
-  );
+// El mismo DDL que producción, leído del archivo real: si el esquema cambia y
+// aquí no, los tests correrían contra un modelo que ya no existe.
+const DDL = fs.readFileSync(path.join(__dirname, '..', '..', 'db', 'esquema.sql'), 'utf8');
 
-  CREATE INDEX idx_orden_lineas_orden ON orden_lineas(id_orden);
-`;
+async function crearEsquema() {
+  await pool.query(`DROP SCHEMA IF EXISTS ${ESQUEMA} CASCADE`);
+  await pool.query(`CREATE SCHEMA ${ESQUEMA}`);
+  await consultar(DDL);
+  return ESQUEMA;
+}
 
-// Lo que añade la migración 003. Una fila por orden ya devuelta; el UNIQUE es
-// lo que impide devolver dos veces la misma.
-const ESQUEMA_003 = `
-  CREATE TABLE devoluciones (
-    id_devolucion INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_orden      INTEGER NOT NULL UNIQUE REFERENCES ordenes(id_orden),
-    recibida_en   TEXT NOT NULL,
-    recibida_por  TEXT
-  );
-`;
+async function borrarEsquema() {
+  await pool.query(`DROP SCHEMA IF EXISTS ${ESQUEMA} CASCADE`);
+}
 
-// Lo que añade la migración 004: autenticación. `cuentas` nace vacía a
-// propósito — cada test siembra las que necesita con test/helpers/sesion.js.
-const ESQUEMA_004 = `
-  CREATE TABLE cuentas (
-    id_cuenta        INTEGER PRIMARY KEY AUTOINCREMENT,
-    usuario          TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    hash             TEXT NOT NULL,
-    rol              TEXT NOT NULL CHECK (rol IN ('admin', 'superadmin')),
-    totp_secreto     TEXT,
-    totp_ultimo_paso INTEGER,
-    creada_en        TEXT NOT NULL,
-    activa           INTEGER NOT NULL DEFAULT 1
-  );
-
-  CREATE TABLE sesiones (
-    id_sesion  INTEGER PRIMARY KEY AUTOINCREMENT,
-    hash_token TEXT NOT NULL UNIQUE,
-    id_cuenta  INTEGER NOT NULL REFERENCES cuentas(id_cuenta),
-    creada_en  TEXT NOT NULL,
-    vista_en   TEXT NOT NULL,
-    expira_en  TEXT NOT NULL,
-    ip         TEXT,
-    agente     TEXT
-  );
-
-  CREATE INDEX idx_sesiones_cuenta ON sesiones(id_cuenta);
-
-  CREATE TABLE codigos_respaldo (
-    id_codigo INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_cuenta INTEGER NOT NULL REFERENCES cuentas(id_cuenta),
-    hash      TEXT NOT NULL,
-    usado_en  TEXT
-  );
-
-  CREATE INDEX idx_codigos_respaldo_cuenta ON codigos_respaldo(id_cuenta);
-
-  CREATE TABLE accesos (
-    id_acceso   INTEGER PRIMARY KEY AUTOINCREMENT,
-    ocurrido_en TEXT NOT NULL,
-    usuario     TEXT,
-    resultado   TEXT NOT NULL,
-    ip          TEXT
-  );
-
-  CREATE INDEX idx_accesos_fecha ON accesos(ocurrido_en);
-`;
-
-const ESQUEMA = ESQUEMA_001 + ESQUEMA_002 + ESQUEMA_003 + ESQUEMA_004;
-
-const DATOS = `
+// Los mismos datos que sembraba la versión SQLite, literales.
+const DATOS_AREAS = `
   INSERT INTO areas (id_area, nombre) VALUES
     (1, 'luces'),
-    (2, 'Sonido');
+    (2, 'Sonido')
+`;
 
+const DATOS_PRODUCTOS = `
   INSERT INTO productos (id_producto, nombre, marca, descripcion, cantidad, activo, id_area) VALUES
     (1, 'vim2',      'Clay Paky', 'Cabeza móvil',          4,  1, 1),
     (2, 'BT3',       'yamaha',    'Bafle de tres vías',    30, 1, 2),
     (3, 'Cable XLR', 'Proel',     'Cable XLR de 5 metros', 40, 1, 2),
-    (4, 'Array',     'rcf',       'Line array',            15, 0, 2);
+    (4, 'Array',     'rcf',       'Line array',            15, 0, 2)
 `;
 
-// Crea la base temporal con el esquema vacío y devuelve su ruta.
-function crearBaseTemporal() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'inventario-test-'));
-  const archivo = path.join(dir, 'inventario.db3');
-
-  return new Promise((resolve, reject) => {
-    const db = new sqlite3.Database(archivo, (err) => {
-      if (err) return reject(err);
-
-      db.exec(ESQUEMA, (err) => {
-        if (err) return reject(err);
-        db.close((err) => (err ? reject(err) : resolve({ dir, archivo })));
-      });
-    });
-  });
-}
-
-// Crea una base con la 001 aplicada pero SIN la 002, ya sembrada: reproduce
-// db/inventario.db3 tal como está versionada en el repo, donde las tablas de
-// órdenes no existen todavía.
-function crearBaseSinOrdenes() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'inventario-test-sin-ordenes-'));
-  const archivo = path.join(dir, 'inventario.db3');
-
-  return new Promise((resolve, reject) => {
-    const db = new sqlite3.Database(archivo, (err) => {
-      if (err) return reject(err);
-
-      db.exec(ESQUEMA_001 + DATOS, (err) => {
-        if (err) return reject(err);
-        db.close((err) => (err ? reject(err) : resolve({ dir, archivo })));
-      });
-    });
-  });
-}
-
-// Deja la base en el estado sembrado. Se llama antes de cada test para que
-// ninguno dependa de las mutaciones del anterior.
-function sembrar(db) {
-  return new Promise((resolve, reject) => {
-    db.exec(
-      `DELETE FROM devoluciones;
-       DELETE FROM orden_lineas;
-       DELETE FROM ordenes;
-       DELETE FROM productos;
-       DELETE FROM areas;
-       DELETE FROM sqlite_sequence
-         WHERE name IN ('productos', 'areas', 'ordenes', 'orden_lineas', 'devoluciones');
-       ${DATOS}`,
-      (err) => (err ? reject(err) : resolve())
+// OJO con qué se vacía aquí. Esto corre en el beforeEach de cada test, mientras
+// que las cuentas se siembran UNA vez en el before. Incluir `cuentas` en el
+// TRUNCATE dejaría sin dueño la sesión con la que el archivo entero hace sus
+// peticiones, y la suite fallaría con 401 a partir del segundo test.
+//
+// RESTART IDENTITY no es cosmético: varios tests asumen id_producto = 1 y = 2.
+// El CASCADE es seguro: nada fuera de esta lista referencia a estas tablas
+// —orden_lineas.id_producto no tiene clave foránea a propósito— así que no
+// arrastra nada que no esté ya nombrado.
+async function sembrar() {
+  // Cinturón y tirantes. Esta función ejecuta TRUNCATE, así que antes se
+  // asegura de que NO está apuntando a `public`: si el aislamiento por esquema
+  // fallara por cualquier motivo, esto es lo que impide que una corrida de
+  // tests borre el inventario real del almacén.
+  const { rows } = await consultar('SELECT current_schema() AS esquema');
+  if (rows[0].esquema !== ESQUEMA) {
+    throw new Error(
+      `sembrar() apuntaba a "${rows[0].esquema}" y no a "${ESQUEMA}". ` +
+      'Abortado antes del TRUNCATE.'
     );
-  });
+  }
+
+  await consultar(`
+    TRUNCATE areas, productos, ordenes, orden_lineas, devoluciones
+    RESTART IDENTITY CASCADE
+  `);
+  await consultar(DATOS_AREAS);
+  await consultar(DATOS_PRODUCTOS);
+
+  // Con ids explícitos la secuencia se queda en 1; sin esto, el primer alta de
+  // producto de cualquier test chocaría con la clave primaria.
+  await consultar('ALTER TABLE areas ALTER COLUMN id_area RESTART WITH 3');
+  await consultar('ALTER TABLE productos ALTER COLUMN id_producto RESTART WITH 5');
 }
 
-module.exports = { crearBaseTemporal, crearBaseSinOrdenes, sembrar };
+module.exports = { crearEsquema, borrarEsquema, sembrar, ESQUEMA };

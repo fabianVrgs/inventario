@@ -27,12 +27,12 @@ before(async () => {
 
   // Una sola vez: sembrar las cuentas y abrir sesión cuesta scrypt, y la sesión
   // dura doce horas, así que no hay motivo para repetirlo en cada test.
-  await sembrarCuentas(db);
+  await sembrarCuentas();
   cookie = await iniciarSesion(base, 'superadmin');
 });
 
 // Cada test arranca con los mismos datos, sin importar qué mutó el anterior.
-beforeEach(() => sembrar(db));
+beforeEach(() => sembrar());
 
 after(async () => {
   if (servidor) {

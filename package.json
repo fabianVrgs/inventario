@@ -4,6 +4,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node --env-file=.env server.js",
+    "pretest": "node --env-file=.env scripts/limpiar-esquemas-de-prueba.js",
     "test": "node --env-file=.env --test \"test/**/*.test.js\""
   },
   "keywords": [],
