@@ -587,6 +587,58 @@ a {
   border-radius: var(--radio-md) var(--radio-md) 0 0;
 }
 
+/* ---- Sesión en la barra ----------------------------------------------------
+   Lo inyecta sesion.js después del <nav>, así que este bloque describe un DOM
+   que no está escrito en ningún .html. Va al final de la barra, separado por un
+   filete: no es navegación, es de quién es la sesión.
+
+   `margin-left: auto` empuja el bloque al extremo cuando hay sitio y se anula
+   solo cuando la barra envuelve en móvil, porque entonces el bloque cae a una
+   línea propia y el auto no tiene contra qué empujar. */
+.barra-app__sesion {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  margin-left: auto;
+  padding-left: var(--esp-3);
+  border-left: 1px solid var(--filete);
+}
+
+.barra-app__usuario {
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  color: var(--tinta-tenue);
+  /* Un nombre largo no puede empujar "Salir" fuera de la pantalla. */
+  max-width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Mismo tamaño de objetivo que los enlaces de al lado: se pulsa con el pulgar,
+   y salirse por accidente en mitad de una orden cuesta rehacerla entera. */
+.barra-app__salir {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--objetivo-tactil);
+  padding: 0 var(--esp-3);
+  border: 1px solid var(--filete-fuerte);
+  border-radius: var(--radio-md);
+  background-color: transparent;
+  font-family: inherit;
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  color: var(--tinta-suave);
+  cursor: pointer;
+  transition: color var(--dur-media) var(--curva),
+              background-color var(--dur-media) var(--curva);
+}
+
+.barra-app__salir:hover {
+  color: var(--tinta-fuerte);
+  background-color: var(--papel-hundido);
+}
+
 /* ---- Cabecera de pantalla -------------------------------------------------- */
 
 .cabecera-pantalla {

@@ -12,11 +12,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { once } = require('node:events');
 const { crearBaseSinOrdenes } = require('./helpers/db');
+const { sembrarCuentas, iniciarSesion } = require('./helpers/sesion');
 
 let servidor;
 let base;
 let dirTemporal;
 let db;
+let cookie;
 
 before(async () => {
   const { dir, archivo } = await crearBaseSinOrdenes();
@@ -31,6 +33,12 @@ before(async () => {
   servidor = app.listen(0);
   await once(servidor, 'listening');
   base = `http://127.0.0.1:${servidor.address().port}`;
+
+  // Que esto funcione contra una base con sólo la 001 es en sí una comprobación
+  // del bloque DDL del arranque: sembrar cuentas exige que `cuentas` exista, y
+  // aquí nadie ha corrido la 004.
+  await sembrarCuentas(db);
+  cookie = await iniciarSesion(base, 'superadmin');
 });
 
 after(async () => {
@@ -45,7 +53,7 @@ after(async () => {
 test('POST /api/ordenes funciona contra una base sin la 002 aplicada', async () => {
   const respuesta = await fetch(`${base}/api/ordenes`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: JSON.stringify({
       evento: 'Feria de agosto',
       responsable: 'bodega',
@@ -67,7 +75,7 @@ test('POST /api/ordenes funciona contra una base sin la 002 aplicada', async () 
 test('devolver funciona contra una base sin la 003 aplicada', async () => {
   const emitida = await fetch(`${base}/api/ordenes`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: JSON.stringify({ lineas: [{ id_producto: 2, cantidad: 4 }] }),
   });
   assert.equal(emitida.status, 200);
@@ -75,7 +83,7 @@ test('devolver funciona contra una base sin la 003 aplicada', async () => {
 
   const devuelta = await fetch(`${base}/api/ordenes/${id_orden}/devolucion`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: JSON.stringify({ recibida_por: 'bodega' }),
   });
   assert.equal(devuelta.status, 200, 'el bloque DDL del arranque debe haber creado `devoluciones`');

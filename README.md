@@ -12,33 +12,113 @@ literalmente lo que corre en el navegador.
 
 Requiere Node 18 o superior (probado en 24.13.0).
 
-    npm install     # sqlite3 compila nativo; puede tardar la primera vez
-    npm start       # http://localhost:3000
+    npm install                                        # sqlite3 compila nativo; tarda la primera vez
+    node scripts/cuenta.js crear almacen --rol admin
+    node scripts/cuenta.js crear erick --rol superadmin --sin-totp
+    npm start                                          # http://localhost:3000
+
+**El paso de las cuentas no se puede saltar.** No hay ninguna cuenta por defecto
+—una aplicación que se despliega con `admin`/`admin` ya está comprometida antes
+de arrancar— y sin al menos una no se puede entrar a ninguna pantalla. El
+servidor lo avisa al arrancar y, con `NODE_ENV=production`, se niega a arrancar:
+mejor un fallo ruidoso que una aplicación publicada a la que nadie puede entrar.
+
+Las cuentas **no viajan en el repositorio** a propósito. `db/inventario.db3` sí
+está versionada (trae los datos de arranque del almacén), pero su tabla `cuentas`
+se queda vacía para que ningún hash de contraseña acabe en GitHub.
 
 `PORT` cambia el puerto. `DB_PATH` cambia la base de datos.
 
+### Cuentas de prueba
+
+> ⚠️ **Estas contraseñas son de prueba y están escritas en un archivo público
+> del repositorio.** Valen para probar en local. **Cámbialas antes de publicar
+> nada** y no las reutilices en ninguna otra parte: lo que se escribe en un
+> README queda en el historial de git para siempre, aunque después se borre.
+> (Es exactamente lo que pasó con el `admin`/`1234` que había en la base.)
+
+| Rol | Usuario | Contraseña |
+|---|---|---|
+| `admin` | `almacen` | `Almacen2026Prueba!` |
+| `superadmin` | `erick` | `Super2026Prueba!` |
+
+El script pide la contraseña por teclado y **sin eco**; nunca por argumento,
+porque `argv` acaba en el historial del shell y es visible en `ps` para todos los
+usuarios de la máquina. Para automatizar, por tubería:
+
+    echo 'Almacen2026Prueba!' | node scripts/cuenta.js crear almacen --rol admin
+
+### Qué puede cada rol
+
+| | `admin` | `superadmin` |
+|---|---|---|
+| Elegir material y emitir órdenes | ✅ | ✅ |
+| Recibir devoluciones | ✅ | ✅ |
+| Alta, edición, activar/desactivar | ✅ | ✅ |
+| **Borrar** un producto | ❌ | ✅ |
+| Gestionar cuentas y ver la bitácora | ❌ | ✅ |
+
+El criterio del reparto no es "es peligrosa" sino **"es irreversible"**.
+Desactivar un producto se deshace con un clic y editarlo también; borrarlo se
+lleva la fila por delante y deja huérfanas sus `orden_lineas`, y con ellas la
+devolución de esa orden. Todo lo demás se queda en el almacén, que es quien
+trabaja con esto todo el día.
+
+### Antes de publicar
+
+    node scripts/cuenta.js clave erick        # contraseña de verdad, mínimo 12 caracteres
+    node scripts/cuenta.js clave almacen
+    node scripts/cuenta.js totp erick         # segundo factor + 8 códigos de respaldo
+    node scripts/cuenta.js cerrar-sesiones    # cierra lo que quedara abierto
+
+`totp` imprime una URI `otpauth://` para el QR y ocho códigos de respaldo **una
+sola vez**: en la base sólo quedan el secreto y el hash de cada código, así que
+no se pueden volver a consultar. Apúntalos en papel — son la única forma de
+entrar si pierdes el móvil, y sin ellos perder el móvil es perder la cuenta que
+gestiona las cuentas.
+
+Órdenes completas del script:
+
+    node scripts/cuenta.js listar
+    node scripts/cuenta.js crear <usuario> --rol admin|superadmin [--sin-totp]
+    node scripts/cuenta.js clave <usuario>              # cambia la clave Y cierra sus sesiones
+    node scripts/cuenta.js rol <usuario> <rol>
+    node scripts/cuenta.js baja <usuario> | alta <usuario>
+    node scripts/cuenta.js totp <usuario>
+    node scripts/cuenta.js cerrar-sesiones [usuario]
+
 ## Cómo está organizado
 
-    server.js              backend completo: conexión, middlewares y todas las rutas
+    server.js              backend: conexión, middlewares, guardia y todas las rutas
+    auth.js                criptografía: scrypt, tokens de sesión, TOTP
+    scripts/cuenta.js      alta y gestión de cuentas (la única forma de crear una)
     public/                lo que sirve express.static, tal cual corre en el navegador
-      html/                una página por pantalla
+      html/                una página por pantalla, más login.html
       css/                 base.css (tokens y primitivas) + una hoja por pantalla
-      js/                  un archivo por pantalla
+      js/                  un archivo por pantalla, más sesion.js (compartido)
       img/
     db/
       inventario.db3       la base, versionada (trae los datos de arranque)
       migrations/          *.sql numerados + run.js, el runner
     test/
-      api.test.js          la suite completa
+      api.test.js          reglas de negocio
+      auth.test.js         guardia, roles, sesiones, CSRF, fuerza bruta, TOTP
+      cripto.test.js       auth.js, sin levantar servidor
+      arranque.test.js     la app contra una base sin migrar
       helpers/db.js        recrea el esquema en una base temporal
+      helpers/sesion.js    siembra cuentas y devuelve la cookie
     DESIGN.md              el sistema visual: tokens, primitivas, decisiones
     PRODUCT.md             para qué existe cada pantalla y qué se dejó fuera
     CLAUDE.md              guía para agentes; incluye las trampas del repo
 
 Cada pantalla es su propio trío `html` + `css` + `js`, sin nada compartido
-salvo `base.css`. **Los nombres todavía no coinciden entre sí** (`index.html`
-va con `logica.js` y `style.css`; `inventario.html` con `edit.js`), que es la
-deuda más visible del repo.
+salvo `base.css` y `sesion.js`. **Los nombres todavía no coinciden entre sí**
+(`index.html` va con `logica.js` y `style.css`; `inventario.html` con
+`edit.js`), que es la deuda más visible del repo.
+
+`auth.js` es lo único que se sacó de `server.js`: son funciones puras, se
+prueban sin levantar servidor, y es el código donde un fallo silencioso cuesta
+más caro. El resto del backend sigue en un solo archivo.
 
 ## Las tres pantallas
 
@@ -93,13 +173,21 @@ la Principal arranca en limpio en vez de rehidratar una orden ya consumida.
 
 ## Probar
 
-    npm test                                        # los 55 tests de API
-    node --test test/api.test.js                    # un solo archivo
+    npm test                                        # los 105 tests
+    node --test test/auth.test.js                   # un solo archivo
     node --test --test-name-pattern "elimina el producto"   # un solo test
 
 Runner nativo de Node, cero dependencias de test. Los tests levantan la app
 en un puerto efímero contra una base temporal: **nunca escriben sobre
 `db/inventario.db3`**.
+
+Desde que el guardia deniega por defecto, toda la suite necesita sesión:
+`test/helpers/sesion.js` siembra las cuentas y devuelve la cookie, y los tests
+de negocio se leen igual que antes. Los que más valen son los de `auth.test.js`
+que comprueban que algo **no** pasa: que el hash guardado en `sesiones` no sirve
+como cookie, que el rol no escala desde el cliente, que el admin recibe 403 al
+borrar **y el producto sigue existiendo después**, y que un código TOTP no vale
+dos veces.
 
 El glob de `npm test` va entrecomillado a propósito. Sin comillas lo expande
 el shell, y `node --test test/` falla con `MODULE_NOT_FOUND` porque Node
@@ -109,15 +197,31 @@ resuelve la ruta como módulo y no como directorio.
 
 Todo vive en `server.js`.
 
+**Todas las rutas exigen sesión** salvo `/api/auth/login` y `/api/auth/totp`. El
+guardia **deniega por defecto**: bloquea lo que no esté en una lista blanca corta
+en vez de proteger ruta por ruta. Así una ruta nueva nace protegida, y olvidarse
+del candado deja fuera al usuario legítimo —que se nota en el acto— en vez de
+dejar entrar a cualquiera, que no se nota nunca.
+
+Las peticiones a `/api/*` sin sesión reciben `401`; la navegación a una pantalla
+HTML, un `302` al login.
+
 | Método | Ruta | Para qué |
 |---|---|---|
+| POST | `/api/auth/login` | Entrar. Devuelve la cookie, o `{ requiere_totp, reto }` |
+| POST | `/api/auth/totp` | Canjear el reto con el código de 6 dígitos o uno de respaldo |
+| POST | `/api/auth/salir` | Cerrar sesión: borra la fila y vence la cookie |
+| GET | `/api/auth/yo` | `{ usuario, rol }`, para pintar la barra |
+| GET | `/api/cuentas` | Listar cuentas — **sólo superadmin** |
+| PATCH | `/api/cuentas/:id/activa` | Dar de alta o de baja — **sólo superadmin** |
+| GET | `/api/accesos` | Bitácora de los últimos 200 accesos — **sólo superadmin** |
 | GET | `/api/productos` | Catálogo completo, con el nombre del área |
 | GET | `/api/productos?activo=1` | Sólo lo disponible (lo que consume la Principal) |
 | GET | `/api/productos/:id` | Detalle |
 | POST | `/api/productos` | Crear. Nace `activo = 1` |
 | PUT | `/api/productos/:id` | Editar |
 | PATCH | `/api/productos/:id/activo` | Activar / desactivar |
-| DELETE | `/api/productos/:id` | Eliminar |
+| DELETE | `/api/productos/:id` | Eliminar — **sólo superadmin** |
 | GET | `/api/areas` | Poblar el selector de área |
 | POST | `/api/ordenes` | Confirmar la orden, descontar y registrarla |
 | GET | `/api/ordenes/:id` | Leer una orden emitida y si ya se devolvió |
@@ -216,8 +320,43 @@ en ninguna parte. Por eso borrar un producto desde el CRUD deja sus
 `orden_lineas` apuntando a un id que ya no existe, y la devolución tiene que
 tratar ese caso a mano.
 
-Las tablas `usuarios` e `historial_login` existen pero ninguna ruta ni
-pantalla las usa: **no hay autenticación**, quedó explícitamente para después.
+La autenticación vive en cuatro tablas aparte, que no se relacionan con las de
+inventario:
+
+    cuentas                              sesiones
+    ┌──────────────────┬──────────────┐  ┌────────────┬─────────────────────┐
+    │ id_cuenta        │ INTEGER PK   │◄─┤ id_cuenta  │ FK → cuentas        │
+    │ usuario          │ UNIQUE NOCASE│  │ hash_token │ SHA-256 DEL token   │
+    │ hash             │ scrypt$N$r$p │  │ creada_en  │ TEXT NOT NULL       │
+    │ rol              │ admin|superad│  │ vista_en   │ corte por inactivid.│
+    │ totp_secreto     │ base32, NULL │  │ expira_en  │ techo absoluto      │
+    │ totp_ultimo_paso │ anti-replay  │  │ ip, agente │ TEXT                │
+    │ creada_en, activa│              │  └────────────┴─────────────────────┘
+    └──────────────────┴──────────────┘
+                                         codigos_respaldo      accesos
+                                         ┌───────────┬────┐   ┌─────────────┐
+                                         │ id_cuenta │ FK │   │ ocurrido_en │
+                                         │ hash      │    │   │ usuario     │
+                                         │ usado_en  │NULL│   │ resultado   │
+                                         └───────────┴────┘   │ ip          │
+                                                              └─────────────┘
+
+Dos decisiones que conviene entender antes de tocar nada:
+
+- **De la sesión se guarda el SHA-256 del token, nunca el token.** Quien se lleve
+  el archivo `.db3` no se lleva ni una sesión utilizable: de un hash no se vuelve
+  atrás. Es la misma idea que hashear la contraseña, aplicada a la credencial
+  temporal. Y estar en la base y no en un JWT es lo que hace que cerrar una
+  sesión sea borrar una fila, con efecto inmediato.
+- **`accesos.usuario` guarda lo que se TECLEÓ**, exista o no esa cuenta, y por
+  eso es texto suelto y no una clave foránea: los intentos contra nombres
+  inventados son justo los que delatan un ataque, y una FK los haría imposibles
+  de registrar.
+
+La migración **004** se llevó `usuarios` e `historial_login`. La primera contenía
+una fila, `admin` / `1234`, **con la contraseña en texto plano**; como la base
+está versionada, esa contraseña sigue en el historial de git y no puede
+reutilizarse nunca.
 
 No hay CLI de sqlite3 instalado. Para inspeccionar la base:
 
@@ -240,6 +379,11 @@ antes de correr cualquier migración.
   una base ya migrada. Copia previa: `db/inventario.db3.pre-002.bak`.
 - **003** añadió `devoluciones`. También aditiva; revertirla es un `DROP TABLE`.
   Copia previa: `db/inventario.db3.pre-003.bak`.
+- **004** añadió `cuentas`, `sesiones`, `codigos_respaldo` y `accesos`. **No es
+  puramente aditiva**, al contrario que la 002 y la 003: sus dos `DROP` se llevan
+  `usuarios` e `historial_login`, así que revertirla no es un `DROP` limpio y
+  recuperar aquellas tablas exige el respaldo. Copia previa:
+  `db/inventario.db3.pre-004.bak`.
 
 Al añadir una migración, actualiza también el esquema de
 `test/helpers/db.js`: es el que recrean los tests.
@@ -266,10 +410,67 @@ migración 001.
   valores que no cuadraban con su producto; siguen recuperables desde el
   respaldo de la base.
 
+## Cómo está protegido
+
+Nada de esto es "100% seguro" —eso no existe— pero cierra los vectores conocidos,
+de modo que el eslabón más débil sea la contraseña y no el código.
+
+| Amenaza | Qué la para |
+|---|---|
+| Entrar sin credenciales | Guardia que **deniega por defecto**: todo exige sesión salvo la pantalla de login y sus recursos. |
+| Robo de sesión por XSS | Cookie `HttpOnly` — el token no toca `localStorage` jamás. Más CSP `script-src 'self'`, cero manejadores en línea, y escapado de todo lo que teclea el usuario. |
+| CSRF | `SameSite=Strict`, y además rechazo de todo método con efectos cuyo `Origin` no sea el propio. |
+| Fuerza bruta | Retraso creciente por IP **y** por usuario (2 s, 4 s, 8 s… hasta 15 min). Sin bloqueo de cuenta: bloquear regala una forma de dejar fuera al dueño sabiendo sólo su usuario. |
+| Enumerar usuarios | Mismo mensaje **y mismo tiempo** para usuario inexistente y contraseña mala, verificando contra un hash señuelo. |
+| Robo del archivo `.db3` | scrypt N=2^16 (64 MiB por intento) con sal por cuenta; de las sesiones sólo el SHA-256 del token. |
+| Contraseña del superadmin filtrada | Segundo factor TOTP, con anti-replay: un código no sirve dos veces. |
+| Escalada de admin a superadmin | El rol se relee de la base en cada petición. No hay nada firmado ni en la cookie que el cliente pueda tocar. |
+| Escucha de red | HTTPS obligatorio en producción (cookie `Secure` + HSTS). Lo termina el proxy inverso. |
+
+**Lo que NO cubre**, dicho claramente: malware en el dispositivo del operario,
+alguien que agarre la tablet ya desbloqueada, un compromiso del proveedor de
+hosting, y —el más probable de todos— que reutilices tu contraseña y aparezca en
+una filtración. Ese último es justo el que cubre el TOTP, y por eso va de serie
+en el superadmin.
+
+La sesión dura **12 horas** como techo absoluto y se cierra sola tras **2 horas**
+sin actividad: una tablet olvidada encima de una caja no se queda abierta.
+
+Cerrar sesión borra también las tres claves de `sessionStorage`. Sin eso, quien
+entre después en la misma tablet heredaría la selección del turno anterior — y
+con `ordenId` heredado devolvería una orden ajena, que no se deshace.
+
+## Publicar en internet
+
+La aplicación no termina TLS ella misma: eso lo hace un proxy inverso delante.
+
+    NODE_ENV=production CONFIAR_EN_PROXY=1 npm start
+
+- `NODE_ENV=production` marca la cookie como `Secure` y hace que el servidor se
+  niegue a arrancar sin cuentas.
+- `CONFIAR_EN_PROXY=1` hace que se lean `X-Forwarded-For` y `X-Forwarded-Proto`.
+  **Actívalo sólo si hay un proxy de verdad delante**: sin él, cualquiera se
+  inventa esas cabeceras y el límite de intentos por IP deja de servir para nada.
+- `ORIGEN_PERMITIDO=https://tu-dominio` si el `Host` que llega no coincide con el
+  dominio público.
+
+Recomendado: **Cloudflare Tunnel** desde la propia máquina. Da HTTPS y dominio
+sin abrir un puerto del router, oculta la IP y —lo importante— el `.db3` se queda
+en un disco tuyo.
+
+> ⚠️ En **Railway y Render el disco es efímero**: cada redeploy borra
+> `db/inventario.db3` y con él todo el inventario. Si vas por ahí, monta un
+> volumen persistente antes de meter un solo dato real.
+
+Haz copia del `.db3` con regularidad. Es un solo archivo: copiarlo es la copia de
+seguridad entera.
+
 ## Fuera de alcance
 
-- **Usuarios y login.** Diferido explícitamente. Las órdenes guardan el
-  responsable como texto tecleado, no como un usuario del sistema.
+- **Recuperar la contraseña por correo.** Añadiría un vector de ataque completo
+  —secuestrar el buzón— para dos personas que se sientan a un metro. Se recupera
+  con `scripts/cuenta.js` desde el servidor.
+- **Registro público, verificación por email, OAuth.** Son dos cuentas.
 - **Deshacer una orden ya emitida.** Ajustar la orden se puede hasta el momento
   de imprimir. Después el descuento es de una sola vía: lo que existe es
   **recibir la devolución**, que es otra operación con su propia constancia, no

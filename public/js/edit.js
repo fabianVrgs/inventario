@@ -20,6 +20,24 @@ const btnCancelar = document.getElementById('btnCancelar');
 const btnDescargarCSV = document.getElementById('btnDescargarCSV');
 const selectArea = document.getElementById('itemArea');
 
+// 🔧 Helper: convierte texto en algo que se puede meter dentro de innerHTML sin
+// que el navegador lo interprete como marcado.
+//
+// Las filas de esta tabla se arman con plantillas de texto, y `nombre`, `marca`
+// y `descripcion` los escribe una persona en un formulario. Sin esto, guardar un
+// producto llamado `<img src=x onerror="...">` deja código ajeno almacenado en la
+// base que se ejecuta en el navegador de quien abra Inventario después — un XSS
+// almacenado, que es el peor de los tres tipos porque no hace falta engañar a
+// nadie para que pulse un enlace: basta con esperar.
+//
+// El mismo helper existe en orden.js con este nombre. La Content-Security-Policy
+// es la red por si algún día se escapa uno; esto es el suelo.
+function escapar(texto) {
+    const div = document.createElement('div');
+    div.textContent = texto ?? '';
+    return div.innerHTML;
+}
+
 // 🔧 Helper: procesa una respuesta fetch. Si no fue ok, extrae el
 // mensaje de error del backend (o uno genérico) y lanza una excepción.
 // Así ningún flujo reporta éxito cuando la petición realmente falló.
@@ -114,24 +132,24 @@ function renderizarTabla(datos = productosFiltrados) {
 
         row.innerHTML = `
             <td>${item.id_producto}</td>
-            <td><strong>${item.nombre}</strong></td>
-            <td>${item.marca ?? ''}</td>
-            <td>${item.descripcion ?? ''}</td>
-            <td>${item.area ?? ''}</td>
-            <td>${item.cantidad}</td>
+            <td><strong>${escapar(item.nombre)}</strong></td>
+            <td>${escapar(item.marca)}</td>
+            <td>${escapar(item.descripcion)}</td>
+            <td>${escapar(item.area)}</td>
+            <td>${Number(item.cantidad)}</td>
             <td><span class="badge ${
                   activo ? 'badge-activo' : 'badge-inactivo'
             }">${activo ? 'Activo' : 'Inactivo'}</span></td>
             <td>
                 <div class="actions">
-                    <button class="btn-action btn-detail" title="Ver detalle" aria-label="Ver detalle" onclick="verDetalle(${item.id_producto})">${ICONOS.ver}</button>
-                    <button class="btn-action btn-edit" title="Editar" aria-label="Editar" onclick="editarItem(${item.id_producto})">${ICONOS.editar}</button>
+                    <button class="btn-action btn-detail" title="Ver detalle" aria-label="Ver detalle" data-accion="ver" data-id="${item.id_producto}">${ICONOS.ver}</button>
+                    <button class="btn-action btn-edit" title="Editar" aria-label="Editar" data-accion="editar" data-id="${item.id_producto}">${ICONOS.editar}</button>
                     <button class="btn-action btn-toggle" title="${
                           activo ? 'Desactivar' : 'Reactivar'
                     }" aria-label="${
                           activo ? 'Desactivar' : 'Reactivar'
-                    }" onclick="alternarActivo(${item.id_producto})">${activo ? ICONOS.desactivar : ICONOS.reactivar}</button>
-                    <button class="btn-action btn-delete" title="Eliminar" aria-label="Eliminar" onclick="eliminarItem(${item.id_producto})">${ICONOS.eliminar}</button>
+                    }" data-accion="alternar" data-id="${item.id_producto}">${activo ? ICONOS.desactivar : ICONOS.reactivar}</button>
+                    <button class="btn-action btn-delete" title="Eliminar" aria-label="Eliminar" data-accion="eliminar" data-id="${item.id_producto}">${ICONOS.eliminar}</button>
                 </div>
             </td>
         `;
@@ -139,6 +157,33 @@ function renderizarTabla(datos = productosFiltrados) {
         tablaInventario.appendChild(row);
     });
 }
+
+// Un solo listener en el <tbody> para las cuatro acciones de todas las filas,
+// en vez de un `onclick=` por botón.
+//
+// El motivo es la Content-Security-Policy: `script-src 'self'` no ejecuta
+// JavaScript escrito dentro de un atributo del HTML, y esa prohibición es justo
+// la mitad útil de la cabecera — es lo que hace que un `<img onerror=...>` que
+// se cuele en un campo de texto no llegue a ejecutarse. Permitir los manejadores
+// en línea exigiría 'unsafe-inline', que los devuelve a los dos.
+//
+// Delegar también sale gratis en corrección: las filas se repintan enteras en
+// cada búsqueda, y los listeners por botón habría que volver a colgarlos cada
+// vez. Éste sobrevive a los repintados porque cuelga del contenedor.
+const ACCIONES_DE_FILA = {
+    ver: verDetalle,
+    editar: editarItem,
+    alternar: alternarActivo,
+    eliminar: eliminarItem,
+};
+
+tablaInventario.addEventListener('click', (evento) => {
+    const boton = evento.target.closest('[data-accion]');
+    if (!boton || !tablaInventario.contains(boton)) return;
+
+    const accion = ACCIONES_DE_FILA[boton.dataset.accion];
+    if (accion) accion(Number(boton.dataset.id));
+});
 
 // 🔍 Función para filtrar los productos al buscar
 function filtrarInventario() {
@@ -304,6 +349,14 @@ buscarInput.addEventListener('input', filtrarInventario);
 btnNuevoItem.addEventListener('click', () => abrirModal());
 btnCancelar.addEventListener('click', cerrarModal);
 btnDescargarCSV.addEventListener('click', descargarCSV);
+
+// Los botones de los dos modales de esta pantalla. Antes llevaban `onclick=` en
+// el HTML; la Content-Security-Policy no ejecuta eso, así que ahora se cuelgan
+// aquí. Es también la razón por la que estas funciones ya no necesitan ser
+// globales para funcionar.
+document.getElementById('btnCerrarDetalle').addEventListener('click', cerrarModalDetalle);
+document.getElementById('btnCancelarEliminar').addEventListener('click', cerrarModalEliminar);
+document.getElementById('btnConfirmarEliminar').addEventListener('click', confirmarEliminar);
 
 // Cierra el modal al hacer clic fuera del contenido
 modalItem.addEventListener('click', (e) => {

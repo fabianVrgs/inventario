@@ -353,6 +353,22 @@
   color: var(--peligro);
 }
 
+/* Borrar es sólo del superadmin. La clase la pone sesion.js en <html> según lo
+   que responde /api/auth/yo.
+
+   ESTO ES MAQUILLAJE Y NO UNA DEFENSA: quien quiera puede quitar la clase desde
+   las herramientas del navegador, o llamar a DELETE /api/productos/:id con curl
+   y su cookie. El candado de verdad es `exigirSuperadmin` en el servidor, que
+   responde 403, y hay un test que lo comprueba precisamente así. Lo que hace
+   esta regla es no ofrecerle a nadie un botón que va a fallar.
+
+   Se esconde en vez de deshabilitarse porque un botón apagado invita a
+   preguntarse qué hay que hacer para encenderlo, y la respuesta —"ser otra
+   persona"— no está en esta pantalla. */
+:root.rol-admin .btn-delete {
+  display: none;
+}
+
 /* ---------- Estado vacío / error de la tabla ---------- */
 
 .no-results {

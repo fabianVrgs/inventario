@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Qué es
 
-Inventario de almacén para "Ok-producciones": Express 5 + SQLite3 sirviendo un frontend estático de HTML/CSS/JS sin framework ni build step. Todo el código de la aplicación vive en dos lugares: `server.js` (backend completo, monolítico) y `public/` (frontend).
+Inventario de almacén para "Ok-producciones": Express 5 + SQLite3 sirviendo un frontend estático de HTML/CSS/JS sin framework ni build step. El código vive en `server.js` (backend, monolítico), `auth.js` (criptografía de la autenticación), `public/` (frontend) y `scripts/cuenta.js` (alta de cuentas). **Dos dependencias en total**: `express` y `sqlite3`. Antes de añadir una tercera, mira si `node:crypto` ya lo hace — es lo que se hizo con scrypt y TOTP.
 
 El código y los comentarios están en español. Mantén ese idioma al escribir código o mensajes de commit aquí.
 
@@ -13,7 +13,12 @@ El código y los comentarios están en español. Mantén ese idioma al escribir 
 ```bash
 npm install          # instala dependencias (sqlite3 compila nativo vía node-gyp/prebuild)
 npm start            # arranca en http://localhost:3000 (PORT lo cambia)
-npm test             # suite de API con el runner nativo de node
+npm test             # 105 tests con el runner nativo de node
+
+# Sin cuentas no se puede entrar a ninguna pantalla: no hay ninguna por defecto.
+node scripts/cuenta.js crear almacen --rol admin
+node scripts/cuenta.js crear erick --rol superadmin --sin-totp
+node scripts/cuenta.js listar
 ```
 
 Un solo test: `node --test --test-name-pattern "elimina el producto"`.
@@ -33,24 +38,35 @@ node -e "const s=require('sqlite3');new s.Database('./db/inventario.db3').all('S
 
 ## Arquitectura
 
-**Backend — `server.js`.** Un solo archivo con todo: conexión a SQLite, middlewares, rutas y `app.listen()`. Las consultas usan la API de callbacks de `sqlite3` (`db.all` / `db.get` / `db.run`), no promesas. En `db.run` se usa `function(err)` (no arrow) porque el handler depende de `this.lastID` y `this.changes`.
+**Backend — `server.js` y `auth.js`.** `server.js` sigue siendo el monolito: conexión a SQLite, middlewares, guardia, rutas y `app.listen()`. `auth.js` es lo único que se sacó — scrypt, tokens de sesión, TOTP y códigos de respaldo—, porque no tiene ni una petición HTTP y se prueba sin levantar servidor (`test/cripto.test.js`). Las consultas usan la API de callbacks de `sqlite3` (`db.all` / `db.get` / `db.run`), no promesas. En `db.run` se usa `function(err)` (no arrow) porque el handler depende de `this.lastID` y `this.changes`.
 
-Orden inusual del archivo, importante al editar: la ruta `/` y `app.listen()` están declaradas **antes** de los middlewares y de las rutas `/api/*`. Funciona porque `listen` es asíncrono, pero cualquier middleware nuevo debe registrarse antes de las rutas que deba afectar.
+**El orden inusual del archivo YA NO EXISTE.** La ruta `/` y `app.listen()` estaban declaradas antes de los middlewares; ahora el archivo va en el orden normal: middlewares → rutas → manejador de errores → `listen`. Se cambió al añadir la autenticación, porque aquel orden convertía en trampa permanente la regla que el guardia necesita: **un middleware registrado después de `express.static` no llega a ejecutarse**, y `express.static` sirve `/html/inventario.html` a quien lo pida. Al añadir un middleware nuevo, colócalo donde le toque en esa cadena.
+
+El manejador de errores también se movió al final. Estaba entre los middlewares, donde Express nunca lo llamaba —los de cuatro argumentos sólo atrapan lo lanzado en algo registrado antes que ellos—, así que respondía el de por defecto: con la traza completa fuera de producción.
 
 Tres ganchos existen solo para poder testear, no los quites: `DB_PATH` (env) elige la base, `app.listen()` está envuelto en `require.main === module` para que importar el módulo no abra puerto, y el final exporta la app con la conexión colgada en `app.locals.db` para cerrarla en el teardown.
 
-Al abrir la conexión, `server.js` crea `ordenes` y `orden_lineas` con `CREATE TABLE
-IF NOT EXISTS`. No es una migración: es porque `db/inventario.db3` está versionado
-con la 001 aplicada pero **sin la 002**, y recién clonado `POST /api/ordenes` moría
-con `no such table: ordenes`. Si cambias el DDL de la 002, cambia también ese
-bloque — son la misma definición escrita dos veces.
+Al abrir la conexión, `server.js` crea con `CREATE TABLE IF NOT EXISTS` todo lo
+que añaden la 002, la 003 y la 004. No es una migración: es porque
+`db/inventario.db3` está versionado con la 001 aplicada pero **sin las
+siguientes**, y recién clonado `POST /api/ordenes` moría con `no such table:
+ordenes`. Si cambias el DDL de una de esas migraciones, cambia también ese
+bloque — son la misma definición escrita dos veces. De la 004 se replican los
+`CREATE` pero **no sus dos `DROP`**: ahí sólo se asegura lo que debe existir.
 
 **Tests — `test/`.** Runner nativo de Node, cero dependencias extra. `test/helpers/db.js` recrea el esquema en una base temporal sembrada; los tests levantan la app en puerto efímero (`listen(0)`) y la consultan con `fetch`. Nunca escriben sobre `db/inventario.db3`.
 
-Una trampa al añadir tests: `process.env.DB_PATH` debe fijarse **antes** del
-`require('../server.js')`, porque la conexión se abre al cargar el módulo. El orden entre
-tests sí da igual: `beforeEach` llama a `sembrar()` y deja la base en el estado inicial,
-así que ninguno depende de lo que mutó el anterior.
+Dos trampas al añadir tests:
+
+- `process.env.DB_PATH` debe fijarse **antes** del `require('../server.js')`, porque la
+  conexión se abre al cargar el módulo. El orden entre tests sí da igual: `beforeEach`
+  llama a `sembrar()` y deja la base en el estado inicial.
+- **Toda petición a `/api/*` necesita sesión.** `test/helpers/sesion.js` siembra las
+  cuentas y devuelve la cookie; `api.test.js` la pide una vez en `before` y la reenvía
+  desde sus helpers `get`/`enviar`. Y si el test provoca logins fallidos, hay que llamar
+  a `app.locals.reiniciarLimites()` en el `beforeEach`: el contador de intentos vive en
+  memoria del proceso y todos los tests salen de la misma IP, así que uno dejaría
+  bloqueados a los siguientes.
 
 **Modelo de datos — `db/inventario.db3`** (versionado en git):
 
@@ -100,8 +116,11 @@ ordenes                               │  orden_lineas
 - Las **`REFERENCES` son decorativas**: no hay `PRAGMA foreign_keys = ON` en ninguna parte.
   De ahí las líneas huérfanas — borrar un producto deja sus `orden_lineas` apuntando a un id
   que ya no está, y la devolución trata ese caso a mano.
-- `usuarios`, `historial_login` — existen pero ninguna ruta ni UI las usa. No hay
-  autenticación; quedó explícitamente para después.
+- **`usuarios` e `historial_login` YA NO EXISTEN**: la 004 las borró. `usuarios`
+  tenía una fila, `admin` / `1234`, con la contraseña **en texto plano**; como la
+  base está versionada, esa contraseña sigue en el historial de git y no puede
+  reutilizarse jamás. Las sustituyen `cuentas`, `sesiones`, `codigos_respaldo` y
+  `accesos` (ver «Autenticación», más abajo).
 
 Las migraciones van en `db/migrations/`, aplicadas con el runner:
 
@@ -118,8 +137,10 @@ la 003).
 
 La **002** y la **003** son puramente aditivas (solo `CREATE TABLE` / `CREATE INDEX`): una
 versión vieja de la app sigue funcionando contra una base migrada, y revertirlas es un
-`DROP` de sus tablas. Si añades una migración, **el esquema de `test/helpers/db.js` tiene
-que reflejarla** o los tests correrán contra un modelo que ya no existe.
+`DROP` de sus tablas. La **004** (`db/inventario.db3.pre-004.bak`) **no lo es**: además de
+crear las cuatro tablas de autenticación, borra `usuarios` e `historial_login`, así que
+revertirla exige el respaldo. Si añades una migración, **el esquema de `test/helpers/db.js`
+tiene que reflejarla** o los tests correrán contra un modelo que ya no existe.
 
 Y el bloque de arranque de `server.js` **obliga a que una migración aditiva cree una tabla
 y no añada una columna**: `CREATE TABLE IF NOT EXISTS` no añade columnas a una tabla que ya
@@ -128,8 +149,9 @@ puede asegurar de forma idempotente desde ahí. De ahí que la 003 sea la tabla 
 y no un `ordenes.devuelta_en`.
 
 **Frontend — `public/`.** Servido como estático (`express.static('public')`), por lo que
-las rutas absolutas son `/css/...`, `/js/...`, `/html/...`. Tres pantallas con roles
-separados:
+las rutas absolutas son `/css/...`, `/js/...`, `/html/...`. **Todo esto va detrás del
+guardia** salvo `/login`, `/js/login.js`, `/css/*` y `/img/*`. Tres pantallas de
+aplicación con roles separados, más el login:
 
 - `html/index.html` + `js/logica.js` — principal. Lista lo disponible
   (`/api/productos?activo=1`) agrupado por área y arma la selección con cantidad.
@@ -156,6 +178,52 @@ separados:
   Bajo 700px ese botón pasa a `fixed` abajo. En el estado vacío se oculta el **botón**,
   nunca la barra.
 
+- `html/login.html` + `js/login.js` + `css/login.css` — **lo único que se sirve sin
+  sesión**, y por eso va en archivos propios: así se lee de un vistazo qué CSS y qué
+  JavaScript puede ver un desconocido. Dos pasos, el segundo sólo si la cuenta tiene
+  TOTP. `login.js` va **en IIFE**, por la misma razón que `devolucion.js`.
+- `js/sesion.js` — compartido por las TRES pantallas de aplicación, y cargado
+  **siempre primero**: envuelve `window.fetch` y sólo cubre lo que se pida después de
+  estar cargado. Pinta la barra de sesión, trata el 401 (no el 403: ése significa "tu
+  sesión vale, pero esto no es para ti") y, al salir, borra las tres claves de
+  `sessionStorage`. **En IIFE por obligación**, igual que `devolucion.js`.
+
+**Autenticación.** Dos roles: `admin` (todo lo operativo) y `superadmin` (además,
+cuentas, bitácora y **borrar** productos — el criterio es «irreversible», no
+«peligroso»). Ocho cosas que muerden si se editan a ciegas:
+
+- **El guardia DENIEGA POR DEFECTO.** Bloquea todo lo que no esté en `RUTAS_PUBLICAS`
+  en vez de proteger ruta por ruta, así que **una ruta nueva nace protegida**. No lo
+  inviertas: el olvido, así, deja fuera al usuario legítimo —se nota en el acto— en
+  vez de dejar entrar a cualquiera, que no se nota nunca.
+- **En la tabla `sesiones` se guarda el SHA-256 del token, nunca el token.** Llevarse
+  el `.db3` no entrega ninguna sesión viva. Por eso no hay JWT: revocarlo exigiría una
+  lista negra, que es esta tabla con pasos de más.
+- **Nada de `localStorage` para el token.** La cookie es `HttpOnly` y eso es justo lo
+  que hace que un XSS no pueda leerla.
+- **`app.use(cors())` se quitó** y no debe volver: respondía `Access-Control-Allow-Origin: *`
+  a todo internet, y con cookies de sesión eso contradice la política de origen que nos
+  protege. El frontend es del mismo origen y nunca lo necesitó.
+- **El guardia de `Origin` acepta que FALTE**, y no es un descuido: los navegadores lo
+  mandan siempre en peticiones con efectos, y quien no lo manda es `curl`, que no tiene
+  ninguna cookie ajena que aprovechar. Exigirlo rompería los tests y la API sin ganar nada.
+- **El límite de intentos NO bloquea cuentas**, sólo retrasa. Bloquear regala una forma
+  de dejar fuera al dueño sabiendo sólo su usuario. Tres fallos son gratis; la espera se
+  fija al fallar el cuarto, así que el quinto intento es el primero que ve un 429.
+- **El TOTP lleva anti-replay** (`cuentas.totp_ultimo_paso`) y rechaza cualquier paso
+  **menor o igual** al último consumido, no sólo el igual: el paso anterior sigue dentro
+  de la ventana de ±1.
+- **`cuentas` se queda VACÍA en la base versionada**, a propósito, para que ningún hash
+  de contraseña llegue a GitHub. Las cuentas se crean con `scripts/cuenta.js` en cada
+  despliegue, y el servidor avisa al arrancar si no hay ninguna (en producción, no
+  arranca).
+
+`server.js` también fija `Cache-Control: no-store` en el HTML **dos veces**: en el
+middleware de cabeceras y otra vez en `express.static` (opción `setHeaders`) y en
+`enviarPantalla`. No es redundancia: `express.static` y `sendFile` escriben su propio
+`public, max-age=0` DESPUÉS y pisan el primero, y sin eso el botón «atrás» repinta el
+inventario entero desde la caché tras cerrar sesión.
+
 **Capa de diseño.** `public/css/base.css` se carga antes que la hoja de cada pantalla y
 contiene todos los tokens, el reset y las primitivas. El sistema está descrito en
 `DESIGN.md` (visual) y `PRODUCT.md` (estratégico), ambos en la raíz. Tres cosas que
@@ -164,6 +232,15 @@ muerden si se editan a ciegas:
 - Los colores son **OKLCH**, con un bloque `@supports not (color: oklch(...))` que los
   repite en hex. Si cambias un token, recalcula también su hex.
 - `[hidden] { display: none !important }` es obligatorio (ver el contrato de `orden.js`).
+- **No vuelvas a escribir `onclick=` ni ningún manejador en atributo, ni un `<style>` o
+  un `style=` en el markup.** La CSP es `script-src 'self'; style-src 'self'` y el
+  navegador no los ejecuta. Había siete `onclick` y se pasaron a `addEventListener`
+  (los cuatro de las filas, con delegación en el `<tbody>`). Poner `'unsafe-inline'`
+  para recuperarlos anularía justo la mitad de la cabecera que sirve contra XSS.
+- **Todo lo que teclea el usuario se escapa antes de ir a `innerHTML`.** `edit.js`
+  interpolaba `nombre`, `marca`, `descripcion` y `area` en crudo: un producto llamado
+  `<img src=x onerror="...">` quedaba almacenado y se ejecutaba al abrir Inventario.
+  `edit.js` tiene `escapar()` y `orden.js` `escaparHtml()`; usa el que corresponda.
 - **No pongas `position: sticky` en el `thead` de Inventario.** El `overflow-x: auto` de
   `.table-container` lo vuelve scrollport en los dos ejes y la cabecera acaba empujada
   sobre la primera fila. Está documentado en el propio CSS.
