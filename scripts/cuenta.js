@@ -12,22 +12,18 @@
 //   node scripts/cuenta.js totp <usuario>
 //   node scripts/cuenta.js cerrar-sesiones [usuario]
 //
-// La base sale de DB_PATH o, si no está, de ./db/inventario.db3. A diferencia
-// del runner de migraciones —que exige la ruta siempre para que sea imposible
-// migrar la base real por accidente— aquí sí hay valor por defecto: crear una
-// cuenta no destruye nada, y obligar a escribir la ruta cada vez sólo
-// conseguiría que se copie y pegue sin mirar. Aun así se imprime cuál es.
+// La base sale de DATABASE_URL (o DATABASE_URL_TEST, que db.js prioriza) y del
+// esquema en ESQUEMA_BD — sin ella, `public`, que es la base real. Se imprime
+// cuál esquema se usa, nunca la cadena de conexión: ahí va la contraseña.
 
 'use strict';
 
-const path = require('node:path');
 // Para `stty`: es como se apaga el eco en las terminales donde node no puede
 // usar el modo crudo. Ver hayTerminal() y apagarEco(), más abajo.
 const { execFileSync } = require('node:child_process');
-const sqlite3 = require('sqlite3').verbose();
+const { consultar, pool } = require('../db.js');
 const auth = require('../auth.js');
 
-const RUTA_BASE = path.resolve(process.env.DB_PATH || './db/inventario.db3');
 const ROLES = ['admin', 'superadmin'];
 
 // Mínimo largo, no "una mayúscula y un símbolo". Las reglas de composición
@@ -259,29 +255,19 @@ async function pedirClaveNueva() {
 // Base de datos
 // ---------------------------------------------------------------------------
 
-const db = new sqlite3.Database(RUTA_BASE, sqlite3.OPEN_READWRITE, (err) => {
-  if (err) fallar(`No se pudo abrir la base ${RUTA_BASE}: ${err.message}`);
-});
-
-const consultar = (sql, parametros = []) =>
-  new Promise((resolve, reject) =>
-    db.all(sql, parametros, (err, filas) => (err ? reject(err) : resolve(filas)))
-  );
-
-const unaFila = (sql, parametros = []) =>
-  new Promise((resolve, reject) =>
-    db.get(sql, parametros, (err, fila) => (err ? reject(err) : resolve(fila)))
-  );
-
-const ejecutar = (sql, parametros = []) =>
-  new Promise((resolve, reject) =>
-    db.run(sql, parametros, function (err) {
-      return err ? reject(err) : resolve(this);
-    })
-  );
+// Envoltorios finos sobre `consultar` de db.js. `ejecutar` devuelve el número
+// de filas afectadas (antes `this.changes` de sqlite3); las órdenes que lo
+// usan para un UPDATE/DELETE de "cuántas sesiones cerré" se ajustan abajo.
+const ejecutar = async (sql, parametros = []) => (await consultar(sql, parametros)).rowCount;
+const unaFila = async (sql, parametros = []) => (await consultar(sql, parametros)).rows[0];
+const todas = async (sql, parametros = []) => (await consultar(sql, parametros)).rows;
 
 async function buscarCuenta(usuario) {
-  const cuenta = await unaFila('SELECT * FROM cuentas WHERE usuario = ?', [usuario]);
+  // lower(usuario) = lower($1): Postgres no tiene COLLATE NOCASE, y el índice
+  // único de la base es sobre lower(usuario). Comparar en crudo dejaría de
+  // encontrar "Erick" al teclear "erick", que es justo lo que ese índice
+  // impide que existan como dos cuentas distintas.
+  const cuenta = await unaFila('SELECT * FROM cuentas WHERE lower(usuario) = lower($1)', [usuario]);
   if (!cuenta) fallar(`No existe la cuenta "${usuario}".`);
   return cuenta;
 }
@@ -298,14 +284,14 @@ async function activarTotp(idCuenta, usuario) {
   const secreto = auth.secretoTotp();
   const codigos = auth.generarCodigosRespaldo();
 
-  await ejecutar('UPDATE cuentas SET totp_secreto = ?, totp_ultimo_paso = NULL WHERE id_cuenta = ?', [
+  await ejecutar('UPDATE cuentas SET totp_secreto = $1, totp_ultimo_paso = NULL WHERE id_cuenta = $2', [
     secreto,
     idCuenta,
   ]);
 
-  await ejecutar('DELETE FROM codigos_respaldo WHERE id_cuenta = ?', [idCuenta]);
+  await ejecutar('DELETE FROM codigos_respaldo WHERE id_cuenta = $1', [idCuenta]);
   for (const codigo of codigos) {
-    await ejecutar('INSERT INTO codigos_respaldo (id_cuenta, hash) VALUES (?, ?)', [
+    await ejecutar('INSERT INTO codigos_respaldo (id_cuenta, hash) VALUES ($1, $2)', [
       idCuenta,
       await auth.hashear(auth.normalizarCodigoRespaldo(codigo)),
     ]);
@@ -329,7 +315,7 @@ async function activarTotp(idCuenta, usuario) {
 
 const ordenes = {
   async listar() {
-    const filas = await consultar(
+    const filas = await todas(
       `SELECT usuario, rol, activa, creada_en, totp_secreto IS NOT NULL AS con_totp
        FROM cuentas ORDER BY id_cuenta`
     );
@@ -360,7 +346,11 @@ const ordenes = {
       fallar('El usuario admite letras, números, punto, guion y guion bajo, entre 3 y 32 caracteres.');
     }
 
-    const repetido = await unaFila('SELECT id_cuenta FROM cuentas WHERE usuario = ?', [usuario]);
+    // lower(usuario) = lower($1): mismo motivo que en buscarCuenta. Sin esto,
+    // el alta parece válida y es el índice único de la base —no este script—
+    // quien la rechaza, con el error feo de una restricción violada en vez
+    // del aviso claro de "ese usuario ya existe".
+    const repetido = await unaFila('SELECT id_cuenta FROM cuentas WHERE lower(usuario) = lower($1)', [usuario]);
     if (repetido) fallar(`Ya existe la cuenta "${usuario}".`);
 
     const clave = await pedirClaveNueva();
@@ -369,8 +359,10 @@ const ordenes = {
     const hash = await auth.hashear(clave);
     console.log('listo.');
 
-    const resultado = await ejecutar(
-      'INSERT INTO cuentas (usuario, hash, rol, creada_en, activa) VALUES (?, ?, ?, ?, 1)',
+    // RETURNING id_cuenta en vez de this.lastID: aquí sí hace falta la fila
+    // (no sólo el conteo de cambios), así que se usa unaFila y no ejecutar.
+    const fila = await unaFila(
+      'INSERT INTO cuentas (usuario, hash, rol, creada_en, activa) VALUES ($1, $2, $3, $4, 1) RETURNING id_cuenta',
       [usuario, hash, rol, new Date().toISOString()]
     );
 
@@ -380,7 +372,7 @@ const ordenes = {
     // gestionar cuentas y borrar productos, y una contraseña reutilizada que
     // aparezca en una filtración es el escenario más probable de todos.
     if (rol === 'superadmin' && !argumentos['sin-totp']) {
-      await activarTotp(resultado.lastID, usuario);
+      await activarTotp(fila.id_cuenta, usuario);
     } else if (rol === 'superadmin') {
       console.log('⚠️  Creada SIN segundo factor (--sin-totp). Actívalo antes de publicar:');
       console.log(`   node scripts/cuenta.js totp ${usuario}`);
@@ -422,7 +414,7 @@ const ordenes = {
     const clave = await pedirClaveNueva();
 
     process.stdout.write('Calculando el hash… ');
-    await ejecutar('UPDATE cuentas SET hash = ? WHERE id_cuenta = ?', [
+    await ejecutar('UPDATE cuentas SET hash = $1 WHERE id_cuenta = $2', [
       await auth.hashear(clave),
       cuenta.id_cuenta,
     ]);
@@ -431,8 +423,8 @@ const ordenes = {
     // Cambiar la contraseña sin cerrar las sesiones abiertas no sirve de nada
     // durante las siguientes doce horas — y si se cambia es, muchas veces,
     // precisamente porque se sospecha que alguien tiene una.
-    const borradas = await ejecutar('DELETE FROM sesiones WHERE id_cuenta = ?', [cuenta.id_cuenta]);
-    console.log(`✅ Contraseña cambiada. Sesiones cerradas: ${borradas.changes}.`);
+    const borradas = await ejecutar('DELETE FROM sesiones WHERE id_cuenta = $1', [cuenta.id_cuenta]);
+    console.log(`✅ Contraseña cambiada. Sesiones cerradas: ${borradas}.`);
   },
 
   async rol(argumentos) {
@@ -440,29 +432,31 @@ const ordenes = {
     const nuevo = argumentos._[1];
     if (!ROLES.includes(nuevo)) fallar(`El rol debe ser ${ROLES.join(' o ')}.`);
 
-    await ejecutar('UPDATE cuentas SET rol = ? WHERE id_cuenta = ?', [nuevo, cuenta.id_cuenta]);
+    await ejecutar('UPDATE cuentas SET rol = $1 WHERE id_cuenta = $2', [nuevo, cuenta.id_cuenta]);
     console.log(`✅ "${cuenta.usuario}" pasa a ${nuevo}.`);
   },
 
   async baja(argumentos) {
     const cuenta = await buscarCuenta(argumentos._[0]);
 
+    // count(*)::int: sin el cast, `pg` devuelve el bigint como cadena
+    // ("0") para no perder precisión, y `=== 0` nunca sería cierto.
     const superadmins = await unaFila(
-      "SELECT count(*) AS total FROM cuentas WHERE rol = 'superadmin' AND activa = 1 AND id_cuenta != ?",
+      "SELECT count(*)::int AS total FROM cuentas WHERE rol = 'superadmin' AND activa = 1 AND id_cuenta != $1",
       [cuenta.id_cuenta]
     );
     if (cuenta.rol === 'superadmin' && superadmins.total === 0) {
       fallar('Es el último superadmin activo. Dar de baja al último cierra la gestión de cuentas por dentro.');
     }
 
-    await ejecutar('UPDATE cuentas SET activa = 0 WHERE id_cuenta = ?', [cuenta.id_cuenta]);
-    const borradas = await ejecutar('DELETE FROM sesiones WHERE id_cuenta = ?', [cuenta.id_cuenta]);
-    console.log(`✅ "${cuenta.usuario}" de baja. Sesiones cerradas: ${borradas.changes}.`);
+    await ejecutar('UPDATE cuentas SET activa = 0 WHERE id_cuenta = $1', [cuenta.id_cuenta]);
+    const borradas = await ejecutar('DELETE FROM sesiones WHERE id_cuenta = $1', [cuenta.id_cuenta]);
+    console.log(`✅ "${cuenta.usuario}" de baja. Sesiones cerradas: ${borradas}.`);
   },
 
   async alta(argumentos) {
     const cuenta = await buscarCuenta(argumentos._[0]);
-    await ejecutar('UPDATE cuentas SET activa = 1 WHERE id_cuenta = ?', [cuenta.id_cuenta]);
+    await ejecutar('UPDATE cuentas SET activa = 1 WHERE id_cuenta = $1', [cuenta.id_cuenta]);
     console.log(`✅ "${cuenta.usuario}" reactivada.`);
   },
 
@@ -475,13 +469,13 @@ const ordenes = {
   async 'cerrar-sesiones'(argumentos) {
     if (argumentos._[0]) {
       const cuenta = await buscarCuenta(argumentos._[0]);
-      const r = await ejecutar('DELETE FROM sesiones WHERE id_cuenta = ?', [cuenta.id_cuenta]);
-      console.log(`✅ Sesiones cerradas de "${cuenta.usuario}": ${r.changes}.`);
+      const r = await ejecutar('DELETE FROM sesiones WHERE id_cuenta = $1', [cuenta.id_cuenta]);
+      console.log(`✅ Sesiones cerradas de "${cuenta.usuario}": ${r}.`);
       return;
     }
 
     const r = await ejecutar('DELETE FROM sesiones');
-    console.log(`✅ Todas las sesiones cerradas: ${r.changes}.`);
+    console.log(`✅ Todas las sesiones cerradas: ${r}.`);
   },
 };
 
@@ -531,19 +525,23 @@ async function principal() {
     process.exit(1);
   }
 
-  console.log(`Base de datos: ${RUTA_BASE}\n`);
+  // Sólo el esquema, nunca la cadena de conexión: DATABASE_URL lleva la
+  // contraseña, y este script tiene prohibido imprimirla.
+  console.log(`Esquema: ${process.env.ESQUEMA_BD || 'public'}\n`);
   await ordenes[orden](analizar(resto));
 }
 
 principal()
-  .then(() => {
+  .then(async () => {
     // stdin resumido mantiene vivo el bucle de eventos y el proceso no
     // terminaría nunca después de preguntar la contraseña.
     process.stdin.pause();
-    db.close();
+    // Sin esto el proceso se queda colgado esperando conexiones ociosas: es
+    // un script de un solo uso, no un servidor de larga vida.
+    await pool.end();
   })
-  .catch((err) => {
+  .catch(async (err) => {
     process.stdin.pause();
-    db.close();
+    await pool.end();
     fallar(err.message);
   });
