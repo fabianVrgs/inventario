@@ -3,9 +3,10 @@ const assert = require('node:assert/strict');
 const { once } = require('node:events');
 
 // El require de ./helpers/db YA fijó process.env.ESQUEMA_BD en su nivel
-// superior, y por eso va arriba del todo: server.js carga db.js, y db.js
-// consulta la variable en cada conexión. La regla de antes —fijar DB_PATH
-// antes del require— sigue viva, sólo que ahora la cumple el helper.
+// superior, y por eso va arriba del todo: server.js carga db.js, y db.js lee
+// esa variable UNA sola vez, al cargarse el módulo (no en cada conexión). La
+// regla de antes —fijar DB_PATH antes del require— sigue viva, sólo que ahora
+// la cumple el helper.
 const { crearEsquema, borrarEsquema, sembrar } = require('./helpers/db');
 const { sembrarCuentas, iniciarSesion } = require('./helpers/sesion');
 
@@ -271,6 +272,17 @@ test('POST /api/ordenes rechaza cantidad cero o negativa', async () => {
   });
   assert.equal(res.status, 400);
   assert.equal(await cantidadDe(1), 4);
+});
+
+// Con Postgres, un id_producto no entero llegaba hasta `ANY($1::int[])`
+// dentro de la transacción y el 22P02 acababa como 500 en vez de 400. Sin
+// este test, ese arreglo no queda protegido de una regresión futura.
+test('POST /api/ordenes rechaza un id_producto que no es entero', async () => {
+  const res = await enviar('POST', '/api/ordenes', {
+    lineas: [{ id_producto: 1.5, cantidad: 1 }],
+  });
+  assert.equal(res.status, 400);
+  assert.equal(await cantidadDe(1), 4, 'un 400 no puede haber tocado el stock');
 });
 
 // ------------------------------------------------- registro de las órdenes

@@ -673,7 +673,17 @@ app.get('/api/cuentas', exigirSuperadmin, async (req, res) => {
 });
 
 app.patch('/api/cuentas/:id/activa', exigirSuperadmin, async (req, res) => {
-  const id = Number(req.params.id);
+  // `Number('abc')` da NaN, que colado en `WHERE id_cuenta = $2` no casaba con
+  // nada en SQLite (0 filas, 404) pero en Postgres es un 22P02 al intentar
+  // convertirlo a entero: 500 donde antes había 404. Se valida aquí en vez de
+  // reutilizar `idProductoValido` porque esto no es un producto — mismo
+  // criterio (entero positivo o rechazo), función propia para no mezclar los
+  // dos dominios.
+  const texto = String(req.params.id).trim();
+  const id = /^\d+$/.test(texto) ? Number(texto) : NaN;
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return res.status(404).json({ error: 'Cuenta no encontrada.' });
+  }
   const activa = req.body?.activa ? 1 : 0;
 
   // Quedarse sin ningún superadmin activo dejaría la gestión de cuentas cerrada
@@ -725,10 +735,18 @@ app.get('/api/productos', async (req, res) => {
   const params = [];
 
   if (activo !== undefined) {
-    // El valor llega como texto de la query string; el ::int lo deja explícito
-    // en vez de dejar que Postgres adivine el tipo del parámetro.
+    // El valor llega como texto de la query string (o como array si `activo`
+    // se repite: Express junta `?activo=1&activo=2` en ['1','2']). En SQLite,
+    // `activo = 'abc'` o `activo = '1,2'` simplemente no casaban con ninguna
+    // fila y la respuesta era 200 []. Postgres es estricto: el ::int de abajo
+    // lanzaría 22P02 con cualquiera de esos valores, convirtiendo un 200 []
+    // en un 500. Se valida ANTES de tocar la base para conservar la respuesta
+    // de siempre en vez de sumar un código de estado nuevo.
+    const texto = Array.isArray(activo) ? String(activo) : activo;
+    if (!/^\d+$/.test(texto)) return res.json([]);
+
     sql += ' WHERE p.activo = $1::int';
-    params.push(activo);
+    params.push(Number(texto));
   }
 
   try {
@@ -773,8 +791,16 @@ function validarProducto({ nombre, cantidad }) {
   if (!nombre) {
     return 'El nombre del producto es obligatorio.';
   }
-  if (cantidad !== undefined && (typeof cantidad !== 'number' || cantidad < 0)) {
-    return 'La cantidad no puede ser negativa.';
+  // `Number.isInteger` es la parte nueva: una `cantidad` como 1.5 pasaba este
+  // chequeo y llegaba a una columna `INTEGER` de Postgres, que la rechaza con
+  // 22P02 — 500 donde correspondía 400. SQLite, sin tipos estrictos, la habría
+  // aceptado y truncado en silencio, que tampoco es lo que se quiere; ahora se
+  // rechaza explícitamente en los dos motores.
+  if (
+    cantidad !== undefined &&
+    (typeof cantidad !== 'number' || !Number.isInteger(cantidad) || cantidad < 0)
+  ) {
+    return 'La cantidad debe ser un entero mayor o igual a cero.';
   }
   return null;
 }
@@ -813,6 +839,14 @@ app.post('/api/productos', async (req, res) => {
       id_area: id_area ?? null,
     });
   } catch (err) {
+    // 23503 es foreign_key_violation: un `id_area` que no existe. SQLite no
+    // aplicaba la FK (server.js la documenta como "decorativa" en el esquema
+    // viejo) así que esto colaba y dejaba el producto huérfano; Postgres sí la
+    // aplica y lo rechaza. Se traduce a 400 en vez de dejar que suba como 500,
+    // igual que el 23505 de la devolución.
+    if (err.code === '23503') {
+      return res.status(400).json({ error: 'El área indicada no existe.' });
+    }
     console.error('[productos:alta]', err.message);
     res.status(500).json({ error: 'Error interno.' });
   }
@@ -849,6 +883,10 @@ app.put('/api/productos/:id', async (req, res) => {
 
     res.json({ mensaje: 'Producto reemplazado correctamente' });
   } catch (err) {
+    // Mismo 23503 que en el alta: un `id_area` inexistente.
+    if (err.code === '23503') {
+      return res.status(400).json({ error: 'El área indicada no existe.' });
+    }
     console.error('[productos:edicion]', err.message);
     res.status(500).json({ error: 'Error interno.' });
   }
@@ -916,11 +954,20 @@ app.post('/api/ordenes', async (req, res) => {
     const { id_producto, cantidad } = linea || {};
     if (
       typeof id_producto !== 'number' ||
+      !Number.isInteger(id_producto) ||
+      id_producto <= 0 ||
       typeof cantidad !== 'number' ||
       !Number.isInteger(cantidad) ||
       cantidad <= 0
     ) {
-      return res.status(400).json({ error: 'Cada línea debe tener id_producto y una cantidad entera positiva.' });
+      // `id_producto` entero es obligatorio: sin este chequeo, un
+      // `{ id_producto: 1.5 }` llegaba hasta `ANY($1::int[])` dentro de la
+      // transacción, Postgres lo rechazaba con 22P02 (invalid_text_representation
+      // para un cast de int) y el catch genérico respondía 500 — donde SQLite,
+      // sin tipos estrictos, simplemente no encontraba el producto y daba 409.
+      return res.status(400).json({
+        error: 'Cada línea debe tener un id_producto entero positivo y una cantidad entera positiva.',
+      });
     }
   }
 
@@ -1269,7 +1316,9 @@ consultar('SELECT count(*)::int AS total FROM cuentas WHERE activa = 1')
   .then(({ rows }) => {
     if (rows[0].total === 0) {
       console.error('❌ No hay ninguna cuenta activa. Crea una con:');
-      console.error('   node scripts/cuenta.js crear <usuario> --rol superadmin');
+      // Con --env-file=.env: sin él, cuenta.js no tiene DATABASE_URL y falla
+      // justo en el despliegue nuevo que este aviso existe para cubrir.
+      console.error('   node --env-file=.env scripts/cuenta.js crear <usuario> --rol superadmin');
       // El `process.exit(1)` se queda sólo en el camino de `node server.js`:
       // al importarse (tests, Vercel) matar el proceso se llevaría por delante
       // a quien hizo el `require`, así que ahí sólo se avisa fuerte.

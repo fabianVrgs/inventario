@@ -10,13 +10,17 @@ const path = require('node:path');
 
 const ESQUEMA = `inventario_test_${process.pid}`;
 
-// Se fija ANTES de requerir db.js. El hook de `pool.on('connect', ...)` lee
-// ESQUEMA_BD dentro de su propio callback, no al registrarse, así que lo que
-// importa no es el orden respecto al `require` sino respecto a la primera
-// conexión real que abra el pool: si esa primera conexión ocurriera antes de
-// fijar la variable, el `SET search_path` de esa conexión se perdería y
-// (con el pool reutilizándola) todo caería en `public`. Fijarla aquí, antes
-// de tocar el pool por primera vez, es lo que lo garantiza.
+// Se fija ANTES de requerir db.js, y aquí SÍ importa el orden respecto al
+// `require`: db.js lee ESQUEMA_BD una sola vez, al cargarse (al construir el
+// Pool), no en cada conexión. Si algo requiriera `../../db.js` antes de que
+// esta línea corriera, el pool nacería sin `options: -c search_path=...` y
+// ya no habría forma de arreglarlo después: todas las conexiones de ese pool
+// vivirían en `public` — la base real del almacén — y `sembrar()` haría
+// TRUNCATE ahí en cada test. El guardia de abajo existe precisamente para que
+// ese olvido no pueda pasar en silencio.
+if (require.cache[require.resolve('../../db.js')]) {
+  throw new Error('db.js ya estaba cargado: ESQUEMA_BD llega tarde y el aislamiento no se aplicaría.');
+}
 process.env.ESQUEMA_BD = ESQUEMA;
 
 const { pool, consultar } = require('../../db.js');

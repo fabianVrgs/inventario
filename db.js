@@ -46,6 +46,18 @@ const enVercel = process.env.VERCEL === '1';
 // añada un archivo de test nuevo debe entrar por ahí.
 const esquema = process.env.ESQUEMA_BD;
 
+// Va interpolado en `options` de abajo, así que un valor con espacios o
+// punto y coma podría colar opciones extra en el paquete de arranque de la
+// conexión (`-c search_path=x -c otra_cosa=y`, por ejemplo). Sólo minúsculas,
+// dígitos y guión bajo — que es exactamente lo que genera
+// `test/helpers/db.js` (`inventario_test_<pid>`) — puede llegar hasta aquí.
+if (esquema && !/^[a-z0-9_]+$/.test(esquema)) {
+  throw new Error(
+    `ESQUEMA_BD tiene un valor inválido: "${esquema}". Sólo se permiten ` +
+    'minúsculas, dígitos y guión bajo.'
+  );
+}
+
 const pool = new Pool({
   connectionString: cadena,
   ssl: { ca, rejectUnauthorized: true },
@@ -90,12 +102,25 @@ async function enTransaccion(fn) {
     await cliente.query("SET LOCAL lock_timeout = '3s'");
     const resultado = await fn(cliente);
     await cliente.query('COMMIT');
+    cliente.release();
     return resultado;
   } catch (err) {
-    await cliente.query('ROLLBACK').catch(() => {});
+    // pg 8.23 no cancela la consulta al agotar `query_timeout`: rechaza la
+    // promesa pero la sentencia sigue corriendo del lado del servidor. Si es
+    // el propio ROLLBACK el que se topa con ese timeout, el `.catch(() => {})`
+    // de antes se tragaba el fallo y el `finally` devolvía al pool un cliente
+    // con la transacción todavía abierta — el único punto por el que una
+    // transacción podría cruzar de esta petición a la siguiente, justo lo que
+    // esta migración vino a cerrar. Por eso el resultado del ROLLBACK decide
+    // cómo se suelta el cliente: si falló, `release(true)` le dice a `pg` que
+    // lo DESTRUYA en vez de devolverlo al pool para que otra petición lo
+    // reutilice con una transacción colgada dentro.
+    const rollbackFallo = await cliente.query('ROLLBACK').then(
+      () => false,
+      () => true
+    );
+    cliente.release(rollbackFallo);
     throw err;
-  } finally {
-    cliente.release();
   }
 }
 

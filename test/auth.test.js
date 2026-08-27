@@ -11,9 +11,10 @@ const assert = require('node:assert/strict');
 const { once } = require('node:events');
 
 // El require de ./helpers/db YA fijó process.env.ESQUEMA_BD en su nivel
-// superior, y por eso va arriba del todo: server.js carga db.js, y db.js
-// consulta la variable en cada conexión. La regla de antes —fijar DB_PATH
-// antes del require— sigue viva, sólo que ahora la cumple el helper.
+// superior, y por eso va arriba del todo: server.js carga db.js, y db.js lee
+// esa variable UNA sola vez, al cargarse el módulo (no en cada conexión). La
+// regla de antes —fijar DB_PATH antes del require— sigue viva, sólo que ahora
+// la cumple el helper.
 const { crearEsquema, borrarEsquema, sembrar } = require('./helpers/db');
 const {
   CLAVES,
@@ -196,8 +197,9 @@ test('un token inventado no abre nada', async () => {
 });
 
 test('el hash de la tabla no sirve como cookie', async () => {
-  // Lo que se guarda es el SHA-256 del token. Quien se lleve el .db3 tiene eso
-  // y nada más: presentarlo como si fuera la cookie no puede funcionar.
+  // Lo que se guarda es el SHA-256 del token. Quien se lleve un volcado de la
+  // base tiene eso y nada más: presentarlo como si fuera la cookie no puede
+  // funcionar.
   await iniciarSesion(base, 'admin');
   const fila = await filaDeSesion();
 
