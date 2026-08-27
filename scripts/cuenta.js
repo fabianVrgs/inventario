@@ -387,6 +387,36 @@ const ordenes = {
     }
   },
 
+  // Comprueba una contraseña contra la guardada, sin abrir sesión ni tocar
+  // nada. Existe para separar dos preguntas que desde la pantalla de login se
+  // confunden: "¿es incorrecta la contraseña?" y "¿está capturando bien lo que
+  // tecleo esta terminal?".
+  //
+  // Por eso informa de CUÁNTOS caracteres recibió. Si tecleas dieciséis y dice
+  // tres, el problema es el prompt y no la contraseña. El número no revela nada
+  // que no sepa ya quien está sentado delante.
+  async probar(argumentos) {
+    const cuenta = await buscarCuenta(argumentos._[0]);
+    const clave = await preguntarOculto('Contraseña a comprobar: ');
+
+    console.log(`\nSe capturaron ${clave.length} caracteres.`);
+    if (clave.length === 0) {
+      console.log('⚠️  No se recibió nada: el problema está en la terminal, no en la contraseña.');
+      return;
+    }
+
+    process.stdout.write('Comprobando… ');
+    const coincide = await auth.verificar(clave, cuenta.hash);
+
+    console.log(
+      coincide
+        ? `\n✅ COINCIDE con la contraseña guardada de "${cuenta.usuario}".`
+        : `\n❌ NO coincide con la guardada de "${cuenta.usuario}".\n` +
+            `   Si el número de caracteres es el que esperabas, la contraseña\n` +
+            `   guardada es otra: cámbiala con "node scripts/cuenta.js clave ${cuenta.usuario}".`
+    );
+  },
+
   async clave(argumentos) {
     const cuenta = await buscarCuenta(argumentos._[0]);
     const clave = await pedirClaveNueva();
@@ -493,6 +523,7 @@ async function principal() {
     console.error('  listar');
     console.error('  crear <usuario> --rol admin|superadmin [--sin-totp]');
     console.error('  clave <usuario>');
+    console.error('  probar <usuario>   comprueba una contraseña sin abrir sesión');
     console.error('  rol <usuario> <admin|superadmin>');
     console.error('  baja <usuario>   |  alta <usuario>');
     console.error('  totp <usuario>');
