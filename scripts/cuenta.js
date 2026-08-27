@@ -21,6 +21,9 @@
 'use strict';
 
 const path = require('node:path');
+// Para `stty`: es como se apaga el eco en las terminales donde node no puede
+// usar el modo crudo. Ver hayTerminal() y apagarEco(), más abajo.
+const { execFileSync } = require('node:child_process');
 const sqlite3 = require('sqlite3').verbose();
 const auth = require('../auth.js');
 
@@ -46,44 +49,154 @@ function fallar(mensaje) {
 }
 
 // ---------------------------------------------------------------------------
-// Entrada por teclado
+// Entrada por teclado: lector de líneas sobre stdin
 // ---------------------------------------------------------------------------
-
-// Entrada por tubería: se lee TODO stdin una sola vez y se reparte por líneas.
 //
-// Sin esto, la segunda pregunta se colgaba para siempre: la primera consumía el
-// flujo hasta 'end', y volver a esperar 'end' sobre un flujo ya terminado no
-// dispara nada. Se descubrió al probar `echo clave | node scripts/cuenta.js`.
-let lineasPendientes = null;
+// Se engancha UNA vez al flujo y va repartiendo líneas según se piden. La
+// primera versión leía todo stdin de golpe con readFileSync(0) y tenía dos
+// fallos que sólo se ven usándolo desde una terminal de verdad:
+//
+//   1. readFileSync(0) espera al FIN DEL FLUJO, no al salto de línea. Pulsar
+//      Enter no hacía nada; habría hecho falta un Ctrl+D.
+//   2. La rama sin terminal no imprimía el aviso, así que el programa se
+//      quedaba mudo esperando algo que nadie sabía que tenía que escribir.
+//
+// Repartir por líneas y no por flujo entero resuelve además el motivo por el
+// que aquello existía: dos preguntas seguidas sobre el mismo stdin.
+let bufer = '';
+let enEspera = [];
+let flujoTerminado = false;
+let enganchado = false;
 
-function leerLineaDeTuberia() {
-  if (lineasPendientes === null) {
-    const fs = require('node:fs');
-    let bruto = '';
-    try {
-      bruto = fs.readFileSync(0, 'utf8');
-    } catch {
-      bruto = '';
+function engancharStdin() {
+  if (enganchado) return;
+  enganchado = true;
+
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (trozo) => {
+    bufer += trozo;
+    repartir();
+  });
+  process.stdin.on('end', () => {
+    flujoTerminado = true;
+    repartir();
+  });
+}
+
+function repartir() {
+  while (enEspera.length > 0) {
+    const salto = bufer.indexOf('\n');
+
+    if (salto !== -1) {
+      const linea = bufer.slice(0, salto);
+      bufer = bufer.slice(salto + 1);
+      enEspera.shift()(linea.replace(/\r$/, ''));
+      continue;
     }
-    lineasPendientes = bruto.split(/\r?\n/);
+
+    // Sin salto final: si el flujo ya acabó, lo que quede es la última línea.
+    // Es el caso de `printf 'clave' | node …`, sin \n al final.
+    if (flujoTerminado) {
+      const linea = bufer;
+      bufer = '';
+      enEspera.shift()(linea.replace(/\r$/, ''));
+      continue;
+    }
+
+    return; // aún no hay línea completa; se resolverá al llegar más datos
   }
-  return (lineasPendientes.shift() ?? '').trim();
+}
+
+function leerLinea() {
+  engancharStdin();
+  process.stdin.resume();
+  return new Promise((resolve) => {
+    enEspera.push(resolve);
+    repartir();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// ¿Hay una persona al otro lado?
+// ---------------------------------------------------------------------------
+//
+// `process.stdin.isTTY` NO basta en Windows. Git Bash usa mintty, que entrega
+// stdin por una tubería aunque la sesión sea interactiva, así que ahí isTTY es
+// false y sin embargo hay alguien tecleando. Tratarlo como una tubería es lo
+// que dejaba el programa mudo.
+//
+// La prueba fiable es preguntarle a `stty`: si responde, hay una terminal
+// detrás. Si no existe el mandato o falla, es una tubería de verdad.
+let interactivo = null;
+
+function hayTerminal() {
+  if (interactivo !== null) return interactivo;
+
+  if (process.stdin.isTTY) {
+    interactivo = true;
+    return true;
+  }
+
+  try {
+    execFileSync('stty', ['-a'], { stdio: ['inherit', 'ignore', 'ignore'] });
+    interactivo = true;
+  } catch {
+    interactivo = false;
+  }
+  return interactivo;
+}
+
+// Apaga el eco de la terminal con `stty` para las consolas donde node no puede
+// usar el modo crudo (otra vez mintty). Devuelve cómo volver a encenderlo, o
+// null si no se pudo — y entonces hay que AVISAR de que se va a ver lo tecleado,
+// porque una contraseña visible que el usuario cree oculta es peor que una que
+// sabe que se ve.
+function apagarEco() {
+  try {
+    execFileSync('stty', ['-echo'], { stdio: ['inherit', 'ignore', 'ignore'] });
+    return () => {
+      try {
+        execFileSync('stty', ['echo'], { stdio: ['inherit', 'ignore', 'ignore'] });
+      } catch {
+        /* si no se puede restaurar, la terminal se arregla al cerrarla */
+      }
+    };
+  } catch {
+    return null;
+  }
 }
 
 // La contraseña NUNCA se pasa por argumento. `argv` acaba en el historial del
 // shell, queda en los logs de cualquier CI y es visible en `ps` para todos los
 // usuarios de la máquina mientras el proceso corre. Se pide por stdin y sin eco.
-function preguntarOculto(mensaje) {
+async function preguntarOculto(mensaje) {
+  const stdin = process.stdin;
+
+  // El aviso se imprime SIEMPRE, en los tres caminos. Que faltara en uno de
+  // ellos era el fallo: el programa esperaba en silencio.
+  process.stdout.write(mensaje);
+
+  // Camino 2: hay terminal pero node no puede ponerla en modo crudo (mintty).
+  // Se apaga el eco con stty y se lee una línea normal.
+  if (!stdin.isTTY) {
+    const restaurarEco = hayTerminal() ? apagarEco() : null;
+
+    if (hayTerminal() && !restaurarEco) {
+      process.stdout.write('\n⚠️  Esta terminal no deja ocultar lo que escribes; se verá.\n' + mensaje);
+    }
+
+    const linea = await leerLinea();
+
+    if (restaurarEco) restaurarEco();
+    // El salto lo escribimos nosotros: con el eco apagado, el Enter no se ve.
+    if (hayTerminal()) process.stdout.write('\n');
+
+    return linea.trim();
+  }
+
+  // Camino 1: terminal de verdad (PowerShell, cmd, Windows Terminal). Modo
+  // crudo, carácter a carácter y sin eco.
   return new Promise((resolve) => {
-    const stdin = process.stdin;
-
-    // Sin terminal (una tubería, un script de despliegue) no hay eco que
-    // ocultar: se lee la línea tal cual. Es lo que permite
-    // `echo "$CLAVE" | node scripts/cuenta.js crear …` sin que la contraseña
-    // pase nunca por argv.
-    if (!stdin.isTTY) return resolve(leerLineaDeTuberia());
-
-    process.stdout.write(mensaje);
     stdin.setRawMode(true);
     stdin.resume();
     stdin.setEncoding('utf8');
@@ -134,7 +247,7 @@ async function pedirClaveNueva() {
   // La confirmación existe para atrapar una errata al teclear a ciegas. Por
   // tubería no hay errata posible —lo que llega es lo que el script mandó— así
   // que pedir la línea dos veces sólo sería una trampa para quien automatice.
-  if (process.stdin.isTTY) {
+  if (hayTerminal()) {
     const repetida = await preguntarOculto('Repítela: ');
     if (clave !== repetida) fallar('Las dos contraseñas no coinciden.');
   }
@@ -392,8 +505,14 @@ async function principal() {
 }
 
 principal()
-  .then(() => db.close())
+  .then(() => {
+    // stdin resumido mantiene vivo el bucle de eventos y el proceso no
+    // terminaría nunca después de preguntar la contraseña.
+    process.stdin.pause();
+    db.close();
+  })
   .catch((err) => {
+    process.stdin.pause();
     db.close();
     fallar(err.message);
   });
