@@ -7,14 +7,29 @@ const ESQUEMA = `db_test_${process.pid}`;
 process.env.ESQUEMA_BD = ESQUEMA;
 
 const { pool, consultar, enTransaccion } = require('../db.js');
+// Sólo el candado, NO test/helpers/db.js: este archivo prueba db.js
+// directamente, con su propio ESQUEMA_BD fijado arriba, y helpers/db.js fija
+// el suyo propio (con un guardia que revienta si db.js ya estaba cargado).
+// Importarlo aquí para nada más que el candado heredaría ese conflicto de
+// mala manera sin ganar nada a cambio — candado.js no toca `ESQUEMA_BD` ni
+// requiere `db.js`, así que da igual desde qué archivo se use.
+const { conCandadoDeDDL } = require('./helpers/candado.js');
 
 before(async () => {
-  await pool.query(`CREATE SCHEMA IF NOT EXISTS ${ESQUEMA}`);
+  // Mismo candado que test/helpers/db.js: sin él, dos procesos de test
+  // haciendo CREATE/DROP SCHEMA a la vez pueden acabar en
+  // `deadlock detected` (40P01) por contención en el catálogo de Postgres,
+  // aunque sus esquemas no colisionen entre sí.
+  await conCandadoDeDDL(pool, async (cliente) => {
+    await cliente.query(`CREATE SCHEMA IF NOT EXISTS ${ESQUEMA}`);
+  });
   await consultar('CREATE TABLE caja (n integer)');
 });
 
 after(async () => {
-  await pool.query(`DROP SCHEMA IF EXISTS ${ESQUEMA} CASCADE`);
+  await conCandadoDeDDL(pool, async (cliente) => {
+    await cliente.query(`DROP SCHEMA IF EXISTS ${ESQUEMA} CASCADE`);
+  });
   await pool.end();
 });
 
