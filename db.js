@@ -23,6 +23,29 @@ if (!cadena) {
 // instancia, y que el pooler haga el multiplexado.
 const enVercel = process.env.VERCEL === '1';
 
+// Los tests aíslan cada archivo en su propio esquema. En producción no se fija
+// y todo vive en `public`.
+//
+// ESQUEMA_BD se lee AQUÍ, al construir el pool (es decir, al cargar el
+// módulo), y no dentro de un callback posterior — y eso ya no es un peligro:
+// `pool.on('connect')` no espera a su manejador, así que un `SET search_path`
+// disparado ahí queda suelto (sin `await` ni `catch` posibles) y el cliente
+// se entrega a quien lo pidió mientras la consulta sigue en vuelo; si se
+// rechaza, la conexión se queda con el search_path por defecto y nadie se
+// entera. Se vio de verdad: 1 de cada 5 corridas de la suite fallaba con
+// `relation "ordenes" does not exist`.
+//
+// La alternativa es pasar el esquema en `options`, que Postgres aplica en el
+// paquete de arranque de la conexión, del lado del servidor, antes de que
+// ninguna consulta pueda ejecutarse — no hay ventana de carrera posible. El
+// costo es el contrato: quien cargue `db.js` debe haber fijado `ESQUEMA_BD`
+// ANTES del `require`, porque se lee una sola vez aquí y no en cada conexión.
+// `test/helpers/db.js` la fija en su nivel superior antes de requerir este
+// módulo, y `test/helpers/sesion.js` requiere ese helper (nunca `db.js`
+// directo) precisamente para heredar ese orden por el grafo de módulos. Quien
+// añada un archivo de test nuevo debe entrar por ahí.
+const esquema = process.env.ESQUEMA_BD;
+
 const pool = new Pool({
   connectionString: cadena,
   ssl: { ca, rejectUnauthorized: true },
@@ -39,20 +62,8 @@ const pool = new Pool({
   connectionTimeoutMillis: enVercel ? 4000 : 10000,
   idleTimeoutMillis: enVercel ? 10000 : 30000,
   query_timeout: enVercel ? 5000 : 20000,
-});
-
-// Los tests aíslan cada archivo en su propio esquema. En producción no se fija
-// y todo vive en `public`.
-//
-// ESQUEMA_BD se lee DENTRO del callback y no al cargar el módulo, y no es un
-// detalle de estilo: si se leyera arriba, bastaría con que un archivo de test
-// requiriese este módulo antes de fijar la variable para que el hook quedara
-// registrado con `undefined` y el search_path no se aplicara nunca. Los tests
-// correrían entonces contra `public` — es decir, contra los datos reales del
-// almacén, ejecutando TRUNCATE sobre ellos.
-pool.on('connect', (cliente) => {
-  const esquema = process.env.ESQUEMA_BD;
-  if (esquema) cliente.query(`SET search_path TO ${esquema}`);
+  // Sólo cuando hay esquema de pruebas; en producción se omite y todo vive en `public`.
+  ...(esquema ? { options: `-c search_path=${esquema}` } : {}),
 });
 
 // El pooler cierra las conexiones ociosas de forma rutinaria. Cuando lo hace, el
