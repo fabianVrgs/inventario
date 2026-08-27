@@ -351,16 +351,49 @@ app.use(express.json({ limit: '100kb' }));
 //    en toda petición con efectos (POST, PUT, PATCH, DELETE), tanto de fetch
 //    como de formulario. Quien no lo manda es curl o un script — que no es el
 //    escenario de CSRF, porque ahí no hay ninguna cookie ajena que aprovechar.
+//    Se comparan los ANFITRIONES, no las cadenas de origen enteras.
+//
+//    La primera versión comparaba `${protocolo}://${host}` y se rompía en
+//    cuanto había un proxy inverso delante: el navegador manda
+//    `Origin: https://…`, pero el proxy habla HTTP con nosotros, así que
+//    `req.protocol` decía `http` y la comparación fallaba. Resultado: un 403
+//    en cada acción, incluido el login, con el mensaje de abajo. Sólo se
+//    arreglaba acordándose de poner CONFIAR_EN_PROXY=1, y una defensa que hay
+//    que recordar activar para que la aplicación no se rompa entera no es una
+//    defensa, es una trampa.
+//
+//    Comparar anfitriones no afloja nada: el CSRF es una pregunta sobre QUIÉN
+//    origina la petición, y eso es el anfitrión. Para que `http://nuestro-host`
+//    fuese un ataque habría que controlar nuestro propio dominio, que es una
+//    partida ya perdida por otro sitio. Y de que se hable por HTTPS ya se
+//    encarga la redirección y la cookie `Secure`, no esta comprobación.
 app.use((req, res, next) => {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
 
   const origen = req.headers.origin;
   if (!origen) return next();
 
-  const protocolo = TRAS_PROXY ? req.headers['x-forwarded-proto'] || req.protocol : req.protocol;
-  const propio = process.env.ORIGEN_PERMITIDO || `${protocolo}://${req.headers.host}`;
+  // Una lista explícita, si la hay, manda sobre todo lo demás: es la salida
+  // para cuando el `Host` que llega no es el dominio público (algunos proxys).
+  if (process.env.ORIGEN_PERMITIDO) {
+    const permitidos = process.env.ORIGEN_PERMITIDO.split(',').map((o) => o.trim());
+    if (permitidos.includes(origen)) return next();
+    return res.status(403).json({ error: 'Petición rechazada: origen no permitido.' });
+  }
 
-  if (origen !== propio) {
+  let anfitrionDelOrigen;
+  try {
+    anfitrionDelOrigen = new URL(origen).host;
+  } catch {
+    // `Origin: null` (un sandbox, un archivo local) no es el nuestro.
+    return res.status(403).json({ error: 'Petición rechazada: origen no permitido.' });
+  }
+
+  const propio = TRAS_PROXY
+    ? req.headers['x-forwarded-host'] || req.headers.host
+    : req.headers.host;
+
+  if (anfitrionDelOrigen !== propio) {
     return res.status(403).json({ error: 'Petición rechazada: origen no permitido.' });
   }
   next();
