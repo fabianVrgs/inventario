@@ -92,4 +92,17 @@ async function sembrar() {
   await consultar('ALTER TABLE productos ALTER COLUMN id_producto RESTART WITH 5');
 }
 
-module.exports = { crearEsquema, borrarEsquema, sembrar, exigirEsquemaDePruebas, ESQUEMA };
+// `consultar` se reexporta (viene del `../../db.js` de la raíz) para que
+// helpers/sesion.js — y cualquier otro helper de test— lo tomen de AQUÍ y no
+// del db.js de la raíz directamente. Es la misma razón por la que sesion.js
+// requiere este archivo en vez de aquél: una sola puerta de entrada que
+// obliga a pasar primero por donde se fija `ESQUEMA_BD`, así ningún helper
+// puede saltarse ese orden y truncar cuentas contra `public`, la base real.
+module.exports = {
+  crearEsquema,
+  borrarEsquema,
+  sembrar,
+  exigirEsquemaDePruebas,
+  consultar,
+  ESQUEMA,
+};

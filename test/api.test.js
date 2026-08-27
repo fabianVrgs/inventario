@@ -1,25 +1,23 @@
 const { test, before, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const { once } = require('node:events');
-const { crearBaseTemporal, sembrar } = require('./helpers/db');
+
+// El require de ./helpers/db YA fijó process.env.ESQUEMA_BD en su nivel
+// superior, y por eso va arriba del todo: server.js carga db.js, y db.js
+// consulta la variable en cada conexión. La regla de antes —fijar DB_PATH
+// antes del require— sigue viva, sólo que ahora la cumple el helper.
+const { crearEsquema, borrarEsquema, sembrar } = require('./helpers/db');
 const { sembrarCuentas, iniciarSesion } = require('./helpers/sesion');
 
 let servidor;
 let base;
-let dirTemporal;
-let db;
+let app;
 let cookie;
 
 before(async () => {
-  const { dir, archivo } = await crearBaseTemporal();
-  dirTemporal = dir;
+  await crearEsquema();
 
-  // Debe fijarse antes de importar server.js: la conexión se abre al cargar.
-  process.env.DB_PATH = archivo;
-
-  const app = require('../server.js');
-  db = app.locals.db;
+  app = require('../server.js');
 
   servidor = app.listen(0); // puerto efímero: no choca con el 3000 en uso
   await once(servidor, 'listening');
@@ -39,8 +37,8 @@ after(async () => {
     servidor.close();
     await once(servidor, 'close');
   }
-  if (db) await new Promise((r) => db.close(r));
-  if (dirTemporal) fs.rmSync(dirTemporal, { recursive: true, force: true });
+  await borrarEsquema();
+  await app.locals.pool.end();
 });
 
 // Desde que el guardia deniega por defecto, TODA petición a /api/* necesita
@@ -277,10 +275,7 @@ test('POST /api/ordenes rechaza cantidad cero o negativa', async () => {
 
 // ------------------------------------------------- registro de las órdenes
 
-const consultar = (sql, params = []) =>
-  new Promise((resolve, reject) =>
-    db.all(sql, params, (err, filas) => (err ? reject(err) : resolve(filas)))
-  );
+const consultar = async (sql, params = []) => (await app.locals.pool.query(sql, params)).rows;
 
 test('POST /api/ordenes deja registrada la orden con sus líneas', async () => {
   const res = await enviar('POST', '/api/ordenes', {
@@ -296,13 +291,13 @@ test('POST /api/ordenes deja registrada la orden con sus líneas', async () => {
   const { id_orden } = await res.json();
   assert.ok(Number.isInteger(id_orden), 'la respuesta debe traer el id de la orden');
 
-  const [orden] = await consultar('SELECT * FROM ordenes WHERE id_orden = ?', [id_orden]);
+  const [orden] = await consultar('SELECT * FROM ordenes WHERE id_orden = $1', [id_orden]);
   assert.equal(orden.evento, 'Feria de agosto');
   assert.equal(orden.responsable, 'Bodega');
   assert.ok(!Number.isNaN(Date.parse(orden.creada_en)), 'creada_en debe ser una fecha ISO');
 
   const lineas = await consultar(
-    'SELECT * FROM orden_lineas WHERE id_orden = ? ORDER BY id_producto',
+    'SELECT * FROM orden_lineas WHERE id_orden = $1 ORDER BY id_producto',
     [id_orden]
   );
   assert.equal(lineas.length, 2);
@@ -322,7 +317,7 @@ test('POST /api/ordenes guarda el nombre que tenía el producto al salir', async
   // El catálogo cambia después: el registro histórico no debe moverse con él.
   await enviar('PUT', '/api/productos/3', { nombre: 'Otro nombre', cantidad: 38, id_area: 2 });
 
-  const [linea] = await consultar('SELECT * FROM orden_lineas WHERE id_orden = ?', [id_orden]);
+  const [linea] = await consultar('SELECT * FROM orden_lineas WHERE id_orden = $1', [id_orden]);
   assert.equal(linea.nombre, 'Cable XLR', 'el nombre del registro es el del momento de la salida');
 });
 
@@ -336,7 +331,7 @@ test('POST /api/ordenes registra las líneas repetidas ya sumadas', async () => 
   assert.equal(res.status, 200);
   const { id_orden } = await res.json();
 
-  const lineas = await consultar('SELECT * FROM orden_lineas WHERE id_orden = ?', [id_orden]);
+  const lineas = await consultar('SELECT * FROM orden_lineas WHERE id_orden = $1', [id_orden]);
   assert.equal(lineas.length, 1, 'una fila por producto, no una por línea enviada');
   assert.equal(lineas[0].cantidad, 3);
 });
@@ -350,7 +345,7 @@ test('POST /api/ordenes acepta evento y responsable en blanco', async () => {
   assert.equal(res.status, 200);
   const { id_orden } = await res.json();
 
-  const [orden] = await consultar('SELECT * FROM ordenes WHERE id_orden = ?', [id_orden]);
+  const [orden] = await consultar('SELECT * FROM ordenes WHERE id_orden = $1', [id_orden]);
   assert.equal(orden.evento, null, 'en blanco se guarda como NULL, no como cadena vacía');
   assert.equal(orden.responsable, null);
 });
@@ -488,7 +483,7 @@ test('POST /api/ordenes/:id/devolucion deja constancia de cuándo llegó y quié
   const idOrden = await emitir([{ id_producto: 1, cantidad: 1 }]);
   assert.equal((await devolver(idOrden, { recibida_por: 'Erick' })).status, 200);
 
-  const filas = await consultar('SELECT * FROM devoluciones WHERE id_orden = ?', [idOrden]);
+  const filas = await consultar('SELECT * FROM devoluciones WHERE id_orden = $1', [idOrden]);
   assert.equal(filas.length, 1);
   assert.equal(filas[0].recibida_por, 'Erick');
   assert.ok(!Number.isNaN(Date.parse(filas[0].recibida_en)), 'recibida_en debe ser una fecha ISO');
@@ -498,7 +493,7 @@ test('POST /api/ordenes/:id/devolucion acepta quién recibe en blanco', async ()
   const idOrden = await emitir([{ id_producto: 1, cantidad: 1 }]);
   assert.equal((await devolver(idOrden, { recibida_por: '   ' })).status, 200);
 
-  const [fila] = await consultar('SELECT * FROM devoluciones WHERE id_orden = ?', [idOrden]);
+  const [fila] = await consultar('SELECT * FROM devoluciones WHERE id_orden = $1', [idOrden]);
   assert.equal(fila.recibida_por, null, 'en blanco se guarda como NULL, no como cadena vacía');
 });
 
@@ -526,7 +521,7 @@ test('POST /api/ordenes/:id/devolucion responde 409 si la orden ya se devolvió'
   // material que no existe.
   assert.equal(await cantidadDe(1), 4, 'la segunda devolución no vuelve a sumar');
   assert.equal(
-    (await consultar('SELECT * FROM devoluciones WHERE id_orden = ?', [idOrden])).length,
+    (await consultar('SELECT * FROM devoluciones WHERE id_orden = $1', [idOrden])).length,
     1,
     'y no deja una segunda constancia'
   );
@@ -572,7 +567,7 @@ test('POST /api/ordenes/:id/devolucion omite la línea sin producto y repone las
 
   assert.equal(await cantidadDe(1), 4, 'lo que sí existe vuelve al stock');
   assert.equal(
-    (await consultar('SELECT * FROM devoluciones WHERE id_orden = ?', [idOrden])).length,
+    (await consultar('SELECT * FROM devoluciones WHERE id_orden = $1', [idOrden])).length,
     1,
     'la orden queda devuelta: si no, se quedaría pendiente para siempre'
   );
@@ -592,7 +587,7 @@ test('POST /api/ordenes/:id/devolucion cierra la orden aunque no quede ningún p
   assert.deepEqual(cuerpo.devueltas, []);
   assert.equal(cuerpo.omitidas.length, 1);
   assert.equal(
-    (await consultar('SELECT * FROM devoluciones WHERE id_orden = ?', [idOrden])).length,
+    (await consultar('SELECT * FROM devoluciones WHERE id_orden = $1', [idOrden])).length,
     1
   );
 });
@@ -615,7 +610,7 @@ test('POST /api/ordenes/:id/devolucion recorta los espacios de quién recibe', a
   const idOrden = await emitir([{ id_producto: 1, cantidad: 1 }]);
   assert.equal((await devolver(idOrden, { recibida_por: '  Ana  ' })).status, 200);
 
-  const [fila] = await consultar('SELECT * FROM devoluciones WHERE id_orden = ?', [idOrden]);
+  const [fila] = await consultar('SELECT * FROM devoluciones WHERE id_orden = $1', [idOrden]);
   assert.equal(fila.recibida_por, 'Ana');
 });
 
@@ -650,14 +645,14 @@ test('POST /api/ordenes/:id/devolucion acumula cuando dos órdenes comparten pro
 
 test('POST /api/ordenes/:id/devolucion no altera el registro histórico de la salida', async () => {
   const idOrden = await emitir([{ id_producto: 1, cantidad: 3 }], { evento: 'Feria' });
-  const antes = await consultar('SELECT * FROM orden_lineas WHERE id_orden = ?', [idOrden]);
+  const antes = await consultar('SELECT * FROM orden_lineas WHERE id_orden = $1', [idOrden]);
 
   assert.equal((await devolver(idOrden)).status, 200);
 
-  const [orden] = await consultar('SELECT * FROM ordenes WHERE id_orden = ?', [idOrden]);
+  const [orden] = await consultar('SELECT * FROM ordenes WHERE id_orden = $1', [idOrden]);
   assert.equal(orden.evento, 'Feria', 'la orden sigue diciendo qué salió y para qué');
   assert.deepEqual(
-    await consultar('SELECT * FROM orden_lineas WHERE id_orden = ?', [idOrden]),
+    await consultar('SELECT * FROM orden_lineas WHERE id_orden = $1', [idOrden]),
     antes,
     'devolver no reescribe las líneas: son un registro, no un saldo'
   );

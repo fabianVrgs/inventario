@@ -8,10 +8,13 @@
 
 const { test, before, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const { once } = require('node:events');
 
-const { crearBaseTemporal, sembrar } = require('./helpers/db');
+// El require de ./helpers/db YA fijó process.env.ESQUEMA_BD en su nivel
+// superior, y por eso va arriba del todo: server.js carga db.js, y db.js
+// consulta la variable en cada conexión. La regla de antes —fijar DB_PATH
+// antes del require— sigue viva, sólo que ahora la cumple el helper.
+const { crearEsquema, borrarEsquema, sembrar } = require('./helpers/db');
 const {
   CLAVES,
   USUARIOS,
@@ -24,17 +27,12 @@ const auth = require('../auth.js');
 
 let servidor;
 let base;
-let dirTemporal;
-let db;
 let app;
 
 before(async () => {
-  const { dir, archivo } = await crearBaseTemporal();
-  dirTemporal = dir;
-  process.env.DB_PATH = archivo;
+  await crearEsquema();
 
   app = require('../server.js');
-  db = app.locals.db;
 
   servidor = app.listen(0);
   await once(servidor, 'listening');
@@ -55,8 +53,8 @@ after(async () => {
     servidor.close();
     await once(servidor, 'close');
   }
-  if (db) await new Promise((r) => db.close(r));
-  if (dirTemporal) fs.rmSync(dirTemporal, { recursive: true, force: true });
+  await borrarEsquema();
+  await app.locals.pool.end();
 });
 
 const entrar = (usuario, clave, extra = {}) =>
@@ -72,13 +70,12 @@ const conCookie = (cookie, ruta, opciones = {}) =>
     headers: { 'Content-Type': 'application/json', Cookie: cookie, ...(opciones.headers || {}) },
   });
 
-const filaDeSesion = () =>
-  new Promise((res, rej) =>
-    db.get('SELECT * FROM sesiones LIMIT 1', [], (e, r) => (e ? rej(e) : res(r)))
-  );
+const filaDeSesion = async () =>
+  (await app.locals.pool.query('SELECT * FROM sesiones LIMIT 1')).rows[0];
 
-const ejecutar = (sql, parametros = []) =>
-  new Promise((res, rej) => db.run(sql, parametros, (e) => (e ? rej(e) : res())));
+const ejecutar = async (sql, parametros = []) => {
+  await app.locals.pool.query(sql, parametros);
+};
 
 // ---------------------------------------------------------------------------
 // Entrar y salir
@@ -210,7 +207,7 @@ test('el hash de la tabla no sirve como cookie', async () => {
 
 test('una sesión pasada de su vencimiento absoluto no vale, y se borra', async () => {
   const cookie = await iniciarSesion(base, 'admin');
-  await ejecutar('UPDATE sesiones SET expira_en = ?', [new Date(Date.now() - 1000).toISOString()]);
+  await ejecutar('UPDATE sesiones SET expira_en = $1', [new Date(Date.now() - 1000).toISOString()]);
 
   assert.equal((await conCookie(cookie, '/api/productos')).status, 401);
   assert.equal(await filaDeSesion(), undefined, 'una sesión muerta no se queda en la tabla');
@@ -221,20 +218,20 @@ test('una sesión dormida más de lo permitido no vale', async () => {
   // el corte por inactividad la cierra igual.
   const cookie = await iniciarSesion(base, 'admin');
   const hace3Horas = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
-  await ejecutar('UPDATE sesiones SET vista_en = ?', [hace3Horas]);
+  await ejecutar('UPDATE sesiones SET vista_en = $1', [hace3Horas]);
 
   assert.equal((await conCookie(cookie, '/api/productos')).status, 401);
 });
 
 test('dar de baja una cuenta invalida su sesión ya abierta', async () => {
   const cookie = await iniciarSesion(base, 'admin');
-  await ejecutar('UPDATE cuentas SET activa = 0 WHERE usuario = ?', [USUARIOS.admin]);
+  await ejecutar('UPDATE cuentas SET activa = 0 WHERE usuario = $1', [USUARIOS.admin]);
 
   assert.equal((await conCookie(cookie, '/api/productos')).status, 401);
 });
 
 test('una cuenta de baja tampoco puede volver a entrar', async () => {
-  await ejecutar('UPDATE cuentas SET activa = 0 WHERE usuario = ?', [USUARIOS.admin]);
+  await ejecutar('UPDATE cuentas SET activa = 0 WHERE usuario = $1', [USUARIOS.admin]);
   assert.equal((await entrar(USUARIOS.admin, CLAVES.admin)).status, 401);
 });
 
