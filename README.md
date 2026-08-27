@@ -29,7 +29,7 @@ Requiere Node 18 o superior y un proyecto de Supabase (o cualquier Postgres) con
    | `CONFIAR_EN_PROXY` | `1` detrás de un proxy inverso o en Vercel; en blanco en tu máquina. |
    | `ORIGEN_PERMITIDO` | Opcional, no viene en `.env.example`. Sólo hace falta si el `Host` que llega no coincide con tu dominio público. |
 
-   `db/certs/supabase-ca.crt` (el certificado del pooler) sí va en el repo: es público, no un
+   `certs/supabase-ca.crt` (el certificado del pooler) sí va en el repo: es público, no un
    secreto, y sin él `pg` no puede verificar la conexión TLS.
 
 3. **Instalar y crear la primera cuenta.** No hay ninguna cuenta por defecto —una aplicación
@@ -101,7 +101,7 @@ consultar. Apúntalos en papel — son la única forma de entrar si pierdes el m
       js/                  un archivo por pantalla, más sesion.js (compartido)
     db/
       esquema.sql           el DDL completo, aplicado una sola vez
-      certs/supabase-ca.crt CA pública del pooler, versionada a propósito
+    certs/supabase-ca.crt  CA pública del pooler, versionada a propósito (NO bajo db/)
     test/
       api.test.js           reglas de negocio
       auth.test.js           guardia, roles, sesiones, CSRF, fuerza bruta, TOTP

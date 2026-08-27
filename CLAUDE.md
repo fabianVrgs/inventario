@@ -197,4 +197,4 @@ comentarios del propio `server.js`.
   y con cantidad 0. No se fusionaron a propósito — se limpian desde el CRUD.
 - Sí hay `.gitignore`: excluye `node_modules/`, `docs/`, `.claude/`, `.playwright-mcp/`,
   `*.bak` y `.env`. **Ya no hay ninguna base de datos versionada** —`db/inventario.db3` se
-  borró junto con SQLite—; sólo `db/esquema.sql` y `db/certs/` (la CA del pooler) viajan.
+  borró junto con SQLite—; sólo `db/esquema.sql` y `certs/` (la CA del pooler) viajan.
