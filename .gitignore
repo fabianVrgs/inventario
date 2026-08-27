@@ -23,3 +23,6 @@ desktop.ini
 # Logs
 npm-debug.log*
 *.log
+
+# Variables de entorno. certs/ SÍ se versiona: el CA del pooler es público.
+.env
