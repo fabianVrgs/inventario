@@ -13,7 +13,6 @@
   "description": "Inventario de almacén para Ok-producciones: catálogo, selección y orden del día imprimible con descuento real de stock.",
   "dependencies": {
     "express": "^5.1.0",
-    "pg": "^8.23.0",
-    "sqlite3": "^5.1.7"
+    "pg": "^8.23.0"
   }
 }

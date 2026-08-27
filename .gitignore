@@ -11,9 +11,7 @@ docs/
 .playwright-mcp/
 
 # Respaldos de la base de datos.
-# db/inventario.db3 SÍ se versiona: trae los datos de arranque del almacén.
 *.bak
-db/*.db3-journal
 
 # Sistema operativo
 Thumbs.db
