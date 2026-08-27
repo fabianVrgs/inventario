@@ -29,15 +29,60 @@ const { pool, consultar } = require('../../db.js');
 // aquí no, los tests correrían contra un modelo que ya no existe.
 const DDL = fs.readFileSync(path.join(__dirname, '..', '..', 'db', 'esquema.sql'), 'utf8');
 
+// Los archivos de test corren en procesos paralelos y cada uno crea y borra su
+// propio esquema. Aunque los nombres no colisionan, dos `DROP SCHEMA ... CASCADE`
+// simultáneos sí se pelean por las filas del catálogo de Postgres y pueden
+// acabar en `deadlock detected` (40P01) — observado 1 de cada 4 corridas.
+// El candado de aviso serializa sólo el DDL, que es rápido, y deja el resto de
+// la suite corriendo en paralelo. Lo que NO se hizo, a propósito: bajar a
+// `--test-concurrency=1` (perdería el paralelismo entre archivos que se
+// eligió aposta y alargaría toda la suite) ni reintentar el 40P01 (eso
+// esconde la carrera en vez de eliminarla).
+const CANDADO_DDL = 918273645; // constante arbitraria, compartida por todos los procesos
+
+// `pg_advisory_xact_lock` y no `pg_advisory_lock`/`pg_advisory_unlock`: el de
+// transacción se suelta SOLO al terminar la transacción —COMMIT, ROLLBACK, o
+// la sesión que se cae— sin que nadie tenga que acordarse de soltarlo aparte.
+// Un candado de SESIÓN exige tomarlo y soltarlo en la MISMA conexión, y aquí
+// esa conexión sale de un pool: un olvido, o un `throw` entre las dos
+// llamadas, lo dejaría tomado durante toda la vida de esa conexión reciclada
+// —colgando a cualquier corrida futura que reutilizara ese cliente del
+// pool—. El de transacción no tiene esa forma de fallar.
+async function conCandadoDeDDL(fn) {
+  const cliente = await pool.connect();
+  try {
+    await cliente.query('BEGIN');
+    await cliente.query('SELECT pg_advisory_xact_lock($1)', [CANDADO_DDL]);
+    const resultado = await fn(cliente);
+    await cliente.query('COMMIT');
+    cliente.release();
+    return resultado;
+  } catch (err) {
+    // Mismo criterio que `enTransaccion` en db.js: si el propio ROLLBACK
+    // falla, el cliente se destruye (`release(true)`) en vez de devolverse al
+    // pool con la transacción —y con ella el candado— todavía abierta.
+    const rollbackFallo = await cliente.query('ROLLBACK').then(
+      () => false,
+      () => true
+    );
+    cliente.release(rollbackFallo);
+    throw err;
+  }
+}
+
 async function crearEsquema() {
-  await pool.query(`DROP SCHEMA IF EXISTS ${ESQUEMA} CASCADE`);
-  await pool.query(`CREATE SCHEMA ${ESQUEMA}`);
+  await conCandadoDeDDL(async (cliente) => {
+    await cliente.query(`DROP SCHEMA IF EXISTS ${ESQUEMA} CASCADE`);
+    await cliente.query(`CREATE SCHEMA ${ESQUEMA}`);
+  });
   await consultar(DDL);
   return ESQUEMA;
 }
 
 async function borrarEsquema() {
-  await pool.query(`DROP SCHEMA IF EXISTS ${ESQUEMA} CASCADE`);
+  await conCandadoDeDDL(async (cliente) => {
+    await cliente.query(`DROP SCHEMA IF EXISTS ${ESQUEMA} CASCADE`);
+  });
 }
 
 // Cinturón y tirantes para TODO lo que trunca. Se llama antes de cualquier
