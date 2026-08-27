@@ -71,11 +71,11 @@ sale de `DATABASE_URL`/`DATABASE_URL_TEST`, leídas dentro de `db.js`.)
   El de transacción no garantiza que un `SET search_path` sobreviva entre transacciones, y el
   aislamiento por esquema de los tests depende de eso.
 - **Un esquema Postgres por archivo de test.** `ESQUEMA_BD` se fija **antes** del
-  `require('../server.js')` —lo hace cumplir `test/helpers/db.js`, que revienta si `db.js` ya
-  estaba en `require.cache`—. Toda función que trunque llama primero a
-  `exigirEsquemaDePruebas()`, y el DDL de esquema pasa por el candado de
-  `test/helpers/candado.js` (`pg_advisory_xact_lock`) para que dos corridas no se
-  interbloqueen. En juego: que la suite haga `TRUNCATE` sobre `public`, la base real.
+  `require('../server.js')` —lo exige `test/helpers/db.js`, que revienta si `db.js` ya estaba en
+  `require.cache`—; toda función que trunque llama primero a `exigirEsquemaDePruebas()`, y el
+  DDL de esquema pasa por el candado de `test/helpers/candado.js` (`pg_advisory_xact_lock`)
+  para que dos corridas no se interbloqueen. En juego: que la suite haga `TRUNCATE` sobre
+  `public`, la base real.
 - **`CONFIAR_EN_PROXY=1` es obligatoria en Vercel**, o `req.ip` es la IP del proxy para todos
   y el limitador por IP se vuelve un bloqueo global.
 - **El aviso de "no hay cuentas activas" corre fuera de `require.main === module`**, porque en
@@ -142,17 +142,16 @@ reto o un contador guardado en una no existía para las demás—:
 `retos_totp(reto PK, id_cuenta FK, expira_en)` (2º factor pendiente, 5 min) e
 `intentos_login(clave PK "ip:x"/"usuario:y", fallos, ultimo_en)` (el limitador).
 
-- **La cantidad vive en el producto**, no en una tabla puente; `activo` decide si aparece en
-  la Principal.
+- **La cantidad vive en el producto** (no en tabla puente); `activo` decide si sale en la Principal.
 - **`ordenes`/`orden_lineas` son el registro histórico**, escrito en el MISMO `COMMIT` que el
-  descuento. `orden_lineas.nombre` duplica el del producto a propósito: si éste se renombra o
-  se borra, la orden vieja sigue diciendo qué salió de verdad.
+  descuento; `orden_lineas.nombre` duplica el del producto a propósito para que la orden vieja
+  siga diciendo qué salió aunque éste se renombre o se borre.
 - **`devoluciones` cierra el ciclo**: una fila = "esta orden volvió completa". El `UNIQUE` en
   `id_orden` hace de "se devuelve una sola vez" una garantía de la base y no un `if`.
-- **`accesos.usuario` guarda lo que se TECLEÓ**, exista o no la cuenta —de ahí que no sea
-  FK—: los intentos contra nombres inventados son justo los que delatan un ataque.
-- `usuarios` e `historial_login` (la contraseña en texto plano `admin`/`1234`) no llegaron a
-  este esquema: ya se habían borrado en SQLite antes de migrar a Postgres.
+- **`accesos.usuario` guarda lo que se TECLEÓ**, exista o no la cuenta —de ahí que no sea FK—:
+  los intentos contra nombres inventados son justo los que delatan un ataque. `usuarios` e
+  `historial_login` (la contraseña en plano `admin`/`1234`) ya no llegaron a este esquema: se
+  habían borrado en SQLite antes de migrar a Postgres.
 
 **Frontend — `public/`.** Estático, detrás del guardia salvo `/login`, `/js/login.js`,
 `/css/*` y `/img/*`. Principal (`index.html`+`logica.js`, elige de lo disponible), Inventario
@@ -161,34 +160,37 @@ reto o un contador guardado en una no existía para las demás—:
 las tres. Nada de esto lo tocó la migración; el porqué de cada pantalla está en `DESIGN.md` y
 `PRODUCT.md`.
 
-Tres contratos que siguen mordiendo:
+Contratos que siguen mordiendo:
 
 - **`sessionStorage` mueve la orden en tres claves que van SIEMPRE juntas**: `ordenSeleccion`
   (las líneas), `ordenAplicada` (`"true"` tras el descuento), `ordenId` (el número impreso).
-  Quien reescriba `ordenSeleccion` borra las otras dos —selección distinta, otra orden— o
-  alguien devuelve la orden equivocada, que no se deshace.
-- **CSP `script-src 'self'; style-src 'self'`, cero manejadores en atributo.** Nada de
-  `onclick=`, `style=` ni `<style>` en el markup: `'unsafe-inline'` anularía media defensa
-  contra XSS.
-- **Todo lo que teclea el usuario se escapa antes de `innerHTML`** (`escapar()` en `edit.js`,
-  `escaparHtml()` en `orden.js`).
+  Quien reescriba `ordenSeleccion` borra las otras dos —selección distinta, otra orden— o acaba
+  devolviendo la orden equivocada, que no se deshace.
+- **CSP y escapado, dos capas contra XSS.** `script-src 'self'` prohíbe `onclick=`,
+  `style=` y `<style>` en el markup (detalle en `server.js`); lo que teclea el usuario se
+  escapa antes de `innerHTML` (`escapar()` en `edit.js`, `escaparHtml()` en `orden.js`).
+- **Para verificar el `@media print` no sirve `getComputedStyle`**: en un hijo de un elemento
+  oculto devuelve su propio `display`, no `none`, y da por bueno lo que en papel no se ve. Usa
+  `elemento.checkVisibility()` —mira los ancestros— con `page.emulateMedia({ media: 'print' })`.
+- **Se probó preguntar «¿salió bien el papel?» tras imprimir, y se retiró**: el aviso previo
+  ya lo dijo, y dudar de un descuento ya aplicado no ayuda —la razón vive en un comentario de
+  `orden.js`; que se probó y se quitó, no.
 
 ## Autenticación
 
 Dos roles: `admin` (todo lo operativo) y `superadmin` (además cuentas, bitácora y **borrar**
-productos —el criterio es «irreversible», no «peligroso»). Sigue igual que en SQLite: el
-guardia **deniega por defecto**; en `sesiones` va el SHA-256 del token, nunca el token; nada
-de `localStorage` (cookie `HttpOnly`); `cors()` no vuelve; el guardia de `Origin` acepta que
-falte (`curl`, no un navegador); el límite de intentos retrasa y no bloquea cuentas; el TOTP
-rechaza cualquier paso **menor o igual** al último consumido. **`cuentas` nunca tiene filas en
-el repo** —ya no hay ni `.db3` versionado que pudiera llevarlas— y se crean con
-`scripts/cuenta.js` en cada despliegue.
+productos —el criterio es «irreversible», no «peligroso»). Sigue igual que en SQLite —y
+comentado en detalle en `server.js`—: guardia que **deniega por defecto**, SHA-256 del token
+en `sesiones` (nunca el token), nada de `localStorage` (cookie `HttpOnly`), sin `cors()`,
+`Origin` que acepta que falte (`curl`, no un navegador), límite de intentos que retrasa y no
+bloquea cuentas, TOTP que rechaza cualquier paso **menor o igual** al último consumido.
+**`cuentas` nunca tiene filas en el repo** —ya no hay ni `.db3` versionado que pudiera
+llevarlas— y se crean con `scripts/cuenta.js` en cada despliegue.
 
-**Dos caminos escriben stock, y sólo dos**: `POST /api/ordenes` descuenta (agrupa líneas
-repetidas antes de comparar contra el stock, `FOR UPDATE`) y
-`POST /api/ordenes/:id/devolucion` repone (`cantidad = cantidad + ?`, mapea el `23505` del
-`UNIQUE` a 409). El porqué de cada detalle está en los doce puntos de arriba y en los
-comentarios del propio `server.js`.
+**Dos caminos escriben stock, y sólo dos**: `POST /api/ordenes` descuenta (`FOR UPDATE`,
+agrupa antes de comparar contra el stock) y `POST /api/ordenes/:id/devolucion` repone
+(`cantidad = cantidad + ?`, mapea `23505` a 409) — el porqué de cada detalle, en los doce
+puntos de arriba y en los comentarios del propio `server.js`.
 
 ## Estado conocido (no son bugs que introdujiste)
 

@@ -10,8 +10,9 @@ el navegador.
 
 ## Arrancar
 
-Requiere Node 18 o superior y un proyecto de Supabase (o cualquier Postgres) con
-`db/esquema.sql` ya aplicado.
+Requiere Node 20.6 o superior —el mínimo real de `--env-file`, que usan `npm start`,
+`npm test` y cada llamada a `scripts/cuenta.js` de este README; con Node 18 nada de eso
+arranca— y un proyecto de Supabase (o cualquier Postgres) con `db/esquema.sql` ya aplicado.
 
 1. **Base de datos.** Aplica el esquema una sola vez contra tu proyecto (SQL Editor de
    Supabase, o `psql "$DATABASE_URL" -f db/esquema.sql`). No es una migración: es DDL de una
