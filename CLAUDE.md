@@ -17,11 +17,11 @@ escribir código o mensajes de commit aquí.
 ```bash
 npm install                    # sólo JS: pg no compila nada nativo (a diferencia de sqlite3)
 npm start                      # --env-file=.env, arranca en :3000 (PORT lo cambia)
-npm test                       # 114 tests con el runner nativo de node
+npm test                       # 108 tests con el runner nativo de node
 
 # Sin cuentas no se puede entrar a ninguna pantalla: no hay ninguna por defecto.
 node --env-file=.env scripts/cuenta.js crear almacen --rol admin
-node --env-file=.env scripts/cuenta.js crear erick --rol superadmin --sin-totp
+node --env-file=.env scripts/cuenta.js crear erick --rol superadmin
 node --env-file=.env scripts/cuenta.js listar
 ```
 
@@ -39,7 +39,8 @@ ningún `node -e` con `sqlite3`.
 
 **Backend — `server.js`, `auth.js` y `db.js`.** `server.js` sigue siendo el monolito:
 middlewares, guardia, rutas, `app.listen()`. `auth.js` es lo único que se sacó por no depender
-de HTTP —scrypt, tokens, TOTP, códigos de respaldo— y se prueba sin servidor
+de HTTP —scrypt, tokens, y el TOTP y los códigos de respaldo que quedaron dormidos
+(ver «Estado conocido»)— y se prueba sin servidor
 (`test/cripto.test.js`). `db.js` es la ÚNICA puerta a Postgres: nadie más construye un `Pool`.
 Expone `consultar()` (una consulta suelta) y `enTransaccion(fn)` (cliente dedicado con
 `BEGIN`/`COMMIT`/`ROLLBACK`). Dos ganchos existen sólo para testear: `app.listen()` va
@@ -57,8 +58,8 @@ sale de `DATABASE_URL`/`DATABASE_URL_TEST`, leídas dentro de `db.js`.)
   producto en un `23503`.
 - **`(p.id_producto IS NOT NULL)::int AS existe`, en `SQL_LINEAS_DE_ORDEN`.** Sin el `::int`
   Postgres devuelve booleano, el `=== 1` de abajo falla siempre y la devolución responde 200
-  sin reponer nada — éxito aparente, material perdido. Mismo patrón en `con_totp`
-  (`GET /api/cuentas`) y en `count(*)::int` del aviso de arranque.
+  sin reponer nada — éxito aparente, material perdido. Mismo patrón en el `count(*)::int`
+  del aviso de arranque y en el del guardia del último superadmin de `scripts/cuenta.js`.
 - **`FOR UPDATE ... ORDER BY id_producto`, en `POST /api/ordenes`.** Sustituye a la
   serialización de la conexión única de SQLite: sin el candado de fila, dos órdenes
   simultáneas descuentan las dos y dejan el stock en negativo. El `ORDER BY` evita el
@@ -94,12 +95,11 @@ sale de `DATABASE_URL`/`DATABASE_URL_TEST`, leídas dentro de `db.js`.)
 propio proceso y vive en su propio esquema, sembrado por `test/helpers/db.js`; la app se
 levanta en puerto efímero (`listen(0)`) y se consulta con `fetch`. `npm test` corre antes
 `scripts/limpiar-esquemas-de-prueba.js` como `pretest`: barre esquemas huérfanos de una
-corrida cortada (`process.kill(pid, 0)` contra el PID del nombre). Nunca se escribe sobre
-`public`. Sigue viva una trampa de antes: **toda petición a `/api/*` necesita sesión** —
-`test/helpers/sesion.js` siembra las cuentas y devuelve la cookie. Si el test provoca logins
-fallidos, hay que llamar a `app.locals.reiniciarLimites()` en el `beforeEach`: el contador
-vive en la tabla `intentos_login`, no en memoria, pero sigue compartido por todos los tests
-del archivo (misma IP).
+corrida cortada (`process.kill(pid, 0)` contra el PID del nombre). Sigue viva una trampa de
+antes: **toda petición a `/api/*` necesita sesión** — `test/helpers/sesion.js` siembra las
+cuentas y devuelve la cookie. Si el test provoca logins fallidos, hay que llamar a
+`app.locals.reiniciarLimites()` en el `beforeEach`: el contador vive en la tabla
+`intentos_login`, no en memoria, pero sigue compartido por todos los tests del archivo (misma IP).
 
 **Modelo de datos.** Once tablas en `db/esquema.sql`, aplicado una sola vez contra Supabase —
 ya no hay migraciones ni runner: eso vivía en SQLite y se fue con ella.
@@ -133,13 +133,13 @@ ordenes                               │  orden_lineas
 ```
 
 Autenticación, cuatro tablas más y ninguna FK hacia el inventario:
-`cuentas(id_cuenta PK, usuario UNIQUE lower, hash, rol, totp_secreto, totp_ultimo_paso)`,
+`cuentas(id_cuenta PK, usuario UNIQUE lower, hash, rol, totp_secreto (dormida), totp_ultimo_paso (dormida))`,
 `sesiones(id_sesion PK, id_cuenta FK, hash_token UNIQUE, vista_en, expira_en)`,
-`codigos_respaldo(id_codigo PK, id_cuenta FK, hash, usado_en)`,
+`codigos_respaldo(id_codigo PK, id_cuenta FK, hash, usado_en)` (dormida),
 `accesos(id_acceso PK, ocurrido_en, usuario texto suelto, resultado, ip)`. Y dos tablas nuevas
 de esta migración, que reemplazan sendos `Map` de proceso —en Vercel hay N instancias, y un
 reto o un contador guardado en una no existía para las demás—:
-`retos_totp(reto PK, id_cuenta FK, expira_en)` (2º factor pendiente, 5 min) e
+`retos_totp(reto PK, id_cuenta FK, expira_en)` (dormida, 2º factor pendiente, 5 min) e
 `intentos_login(clave PK "ip:x"/"usuario:y", fallos, ultimo_en)` (el limitador).
 
 - **La cantidad vive en el producto** (no en tabla puente); `activo` decide si sale en la Principal.
@@ -183,7 +183,8 @@ productos —el criterio es «irreversible», no «peligroso»). Sigue igual que
 comentado en detalle en `server.js`—: guardia que **deniega por defecto**, SHA-256 del token
 en `sesiones` (nunca el token), nada de `localStorage` (cookie `HttpOnly`), sin `cors()`,
 `Origin` que acepta que falte (`curl`, no un navegador), límite de intentos que retrasa y no
-bloquea cuentas, TOTP que rechaza cualquier paso **menor o igual** al último consumido.
+bloquea cuentas. **Un solo factor**: usuario y contraseña, sin segundo paso (el TOTP se
+retiró; ver «Estado conocido»).
 **`cuentas` nunca tiene filas en el repo** —ya no hay ni `.db3` versionado que pudiera
 llevarlas— y se crean con `scripts/cuenta.js` en cada despliegue.
 
@@ -209,3 +210,13 @@ NO es «cada 5 días» (son los días 1, 6, 11… y del 26 al 1 pasan 6), por es
 - Sí hay `.gitignore`: excluye `node_modules/`, `docs/`, `.claude/`, `.playwright-mcp/`,
   `*.bak` y `.env`. **Ya no hay ninguna base de datos versionada** —`db/inventario.db3` se
   borró junto con SQLite—; sólo `db/esquema.sql` y `certs/` (la CA del pooler) viajan.
+- **El segundo factor está DORMIDO, no borrado, y es deliberado.** Se retiró el 2026-08-28
+  (`docs/superpowers/specs/2026-08-28-quitar-segundo-factor-design.md`): el login es de un
+  solo paso. Pero siguen ahí, sin un solo lector, las 9 exportaciones TOTP de `auth.js` con
+  sus tests de `cripto.test.js`, las columnas `cuentas.totp_secreto` / `totp_ultimo_paso` y
+  las tablas `codigos_respaldo` / `retos_totp`. **No las borres por parecer restos**: la
+  decisión fue que volver al 2º factor cueste recablear y no rehacer una migración contra
+  la base real. Dos trampas concretas: `test/helpers/sesion.js` DEBE seguir truncando
+  `codigos_respaldo` y `retos_totp` junto a `cuentas` —tienen FK, y Postgres rechaza el
+  TRUNCATE con `0A000` si no van en la misma sentencia, aunque estén vacías—, y hay un test
+  guardián en `auth.test.js` que siembra `totp_secreto` y exige que el login la ignore.

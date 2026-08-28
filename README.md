@@ -42,7 +42,7 @@ arranca— y un proyecto de Supabase (o cualquier Postgres) con `db/esquema.sql`
    ```bash
    npm install
    node --env-file=.env scripts/cuenta.js crear almacen --rol admin
-   node --env-file=.env scripts/cuenta.js crear erick --rol superadmin --sin-totp
+   node --env-file=.env scripts/cuenta.js crear erick --rol superadmin
    npm start                                          # http://localhost:3000
    ```
 
@@ -71,28 +71,22 @@ deja huérfanas sus `orden_lineas`, y con ellas la devolución de esa orden.
 ```bash
 node --env-file=.env scripts/cuenta.js clave erick        # contraseña de verdad, mínimo 12 caracteres
 node --env-file=.env scripts/cuenta.js clave almacen
-node --env-file=.env scripts/cuenta.js totp erick         # segundo factor + 8 códigos de respaldo
 node --env-file=.env scripts/cuenta.js cerrar-sesiones    # cierra lo que quedara abierto
 ```
-
-`totp` imprime una URI `otpauth://` para el QR y ocho códigos de respaldo **una sola vez**: en
-la base sólo quedan el secreto y el hash de cada código, así que no se pueden volver a
-consultar. Apúntalos en papel — son la única forma de entrar si pierdes el móvil.
 
 Órdenes completas del script:
 
     node --env-file=.env scripts/cuenta.js listar
-    node --env-file=.env scripts/cuenta.js crear <usuario> --rol admin|superadmin [--sin-totp]
+    node --env-file=.env scripts/cuenta.js crear <usuario> --rol admin|superadmin
     node --env-file=.env scripts/cuenta.js clave <usuario>       # cambia la clave Y cierra sus sesiones
     node --env-file=.env scripts/cuenta.js rol <usuario> <rol>
     node --env-file=.env scripts/cuenta.js baja <usuario> | alta <usuario>
-    node --env-file=.env scripts/cuenta.js totp <usuario>
     node --env-file=.env scripts/cuenta.js cerrar-sesiones [usuario]
 
 ## Cómo está organizado
 
     server.js              backend: guardia y todas las rutas (monolito a propósito)
-    auth.js                criptografía: scrypt, tokens de sesión, TOTP
+    auth.js                criptografía: scrypt, tokens de sesión, y TOTP dormido (ver «Estado conocido»)
     db.js                  única puerta a Postgres: el pool, consultar() y enTransaccion()
     scripts/cuenta.js      alta y gestión de cuentas (la única forma de crear una)
     scripts/limpiar-esquemas-de-prueba.js   barre esquemas de test huérfanos (pretest)
@@ -105,7 +99,7 @@ consultar. Apúntalos en papel — son la única forma de entrar si pierdes el m
     certs/supabase-ca.crt  CA pública del pooler, versionada a propósito (NO bajo db/)
     test/
       api.test.js           reglas de negocio
-      auth.test.js           guardia, roles, sesiones, CSRF, fuerza bruta, TOTP
+      auth.test.js           guardia, roles, sesiones, CSRF, fuerza bruta
       cripto.test.js         auth.js, sin levantar servidor
       db.test.js             db.js contra Postgres real: consultar, enTransaccion, aislamiento
       helpers/db.js          crea/borra el esquema de cada archivo de test y lo siembra
@@ -151,7 +145,7 @@ dos — el detalle completo, y por qué, está en `CLAUDE.md`.
 
 ## Probar
 
-    npm test                                                 # los 114 tests
+    npm test                                                 # los 108 tests
     node --env-file=.env --test test/auth.test.js            # un solo archivo
     node --env-file=.env --test --test-name-pattern "elimina el producto"   # un solo test
 
@@ -163,18 +157,17 @@ Desde que el guardia deniega por defecto, toda la suite necesita sesión:
 `test/helpers/sesion.js` siembra las cuentas y devuelve la cookie. Los tests que más valen son
 los de `auth.test.js` que comprueban que algo **no** pasa: que el hash guardado en `sesiones`
 no sirve como cookie, que el rol no escala desde el cliente, que el admin recibe 403 al
-borrar **y el producto sigue existiendo después**, y que un código TOTP no vale dos veces.
+borrar **y el producto sigue existiendo después**.
 
 ## La API
 
-Todo vive en `server.js`. Todas las rutas exigen sesión salvo `/api/auth/login`,
-`/api/auth/totp` y `/api/salud`; las peticiones a `/api/*` sin sesión reciben `401`, la
-navegación a una pantalla HTML un `302` al login.
+Todo vive en `server.js`. Todas las rutas exigen sesión salvo `/api/auth/login` y `/api/salud`;
+las peticiones a `/api/*` sin sesión reciben `401`, la navegación a una pantalla HTML un `302`
+al login.
 
 | Método | Ruta | Para qué |
 |---|---|---|
-| POST | `/api/auth/login` | Entrar. Devuelve la cookie, o `{ requiere_totp, reto }` |
-| POST | `/api/auth/totp` | Canjear el reto con el código de 6 dígitos o uno de respaldo |
+| POST | `/api/auth/login` | Entrar. Devuelve la cookie de sesión |
 | POST | `/api/auth/salir` | Cerrar sesión |
 | GET | `/api/auth/yo` | `{ usuario, rol }`, para pintar la barra |
 | GET | `/api/cuentas` | Listar cuentas — sólo superadmin |
@@ -210,7 +203,7 @@ el CRUD, que la fija a mano.
 | Fuerza bruta | Retraso creciente por IP y por usuario (2 s, 4 s, 8 s… hasta 15 min). Sin bloqueo de cuenta. |
 | Enumerar usuarios | Mismo mensaje y mismo tiempo para usuario inexistente y contraseña mala. |
 | Robo de la base | scrypt N=2^16 con sal por cuenta; de las sesiones sólo el SHA-256 del token. RLS activo en las once tablas, sin políticas: `anon`/`authenticated` no leen nada. |
-| Contraseña filtrada | Segundo factor TOTP, con anti-replay. |
+| Contraseña filtrada | **Nada.** El segundo factor se retiró a propósito (ver «Estado conocido»): es el riesgo aceptado a cambio de un login de un solo paso. |
 | Escalada de admin a superadmin | El rol se relee de la base en cada petición. |
 | Escucha de red | HTTPS obligatorio en producción (cookie `Secure` + HSTS), terminado por el proxy. |
 
