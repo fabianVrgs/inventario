@@ -261,6 +261,35 @@ test('POST /api/ordenes acepta líneas repetidas si juntas caben', async () => {
   assert.equal(await cantidadDe(1), 1);
 });
 
+test('una orden con los tres productos activos descuenta los tres', async () => {
+  // El bucle de 2N+3 viajes pasa a dos sentencias con unnest. Este test es lo
+  // que garantiza que el resultado no cambia: varios productos en una orden,
+  // cada uno con su línea y su descuento.
+  const r = await enviar('POST', '/api/ordenes', {
+    evento: 'Prueba de unnest',
+    lineas: [
+      { id_producto: 1, cantidad: 2 },   // vim2, siembra 4
+      { id_producto: 2, cantidad: 10 },  // BT3, siembra 30
+      { id_producto: 3, cantidad: 5 },   // Cable XLR, siembra 40
+    ],
+  });
+  assert.equal(r.status, 200);
+  const { id_orden } = await r.json();
+
+  assert.equal(await cantidadDe(1), 2);
+  assert.equal(await cantidadDe(2), 20);
+  assert.equal(await cantidadDe(3), 35);
+
+  // Y las tres líneas quedaron registradas, con el nombre que el servidor leyó
+  // de la base y no el que mandó el cliente.
+  const orden = await (await get(`/api/ordenes/${id_orden}`)).json();
+  assert.equal(orden.lineas.length, 3);
+  assert.deepEqual(
+    orden.lineas.map((l) => l.nombre).sort(),
+    ['BT3', 'Cable XLR', 'vim2'].sort()
+  );
+});
+
 test('POST /api/ordenes rechaza una orden vacía', async () => {
   const res = await enviar('POST', '/api/ordenes', { lineas: [] });
   assert.equal(res.status, 400);

@@ -1078,19 +1078,35 @@ app.post('/api/ordenes', async (req, res) => {
       );
       const idOrden = cabecera[0].id_orden;
 
-      // Dos escrituras por producto: la línea del registro y el descuento. Con
-      // `await` en el bucle van en secuencia y ya no hace falta el contador de
-      // pendientes que antes decidía cuándo podía salir el COMMIT.
-      for (const [id_producto, cantidad] of pedidoPorId) {
-        await cliente.query(
-          'INSERT INTO orden_lineas (id_orden, id_producto, nombre, cantidad) VALUES ($1, $2, $3, $4)',
-          [idOrden, id_producto, productoPorId.get(id_producto).nombre, cantidad]
-        );
-        await cliente.query(
-          'UPDATE productos SET cantidad = cantidad - $1 WHERE id_producto = $2',
-          [cantidad, id_producto]
-        );
-      }
+      // Dos sentencias fijas, no dos por producto. Antes esto era un bucle con
+      // `await` dentro —la línea del registro y el descuento, uno detrás de
+      // otro—, o sea `2N+3` viajes en serie: contra un pooler remoto, y con el
+      // techo de 10 s de `maxDuration` de Vercel, una orden larga se acercaba
+      // al borde por pura latencia acumulada, no por trabajo real.
+      //
+      // `unnest` deshace los tres arrays en columnas paralelas, así que una
+      // sola sentencia escribe las N líneas y otra aplica los N descuentos.
+      // Los tres arrays se construyen del MISMO recorrido de claves, que es
+      // lo que garantiza que la fila i de cada uno habla del mismo producto.
+      const idsPedidos = [...pedidoPorId.keys()];
+      const cantidades = idsPedidos.map((id) => pedidoPorId.get(id));
+      const nombres = idsPedidos.map((id) => productoPorId.get(id).nombre);
+
+      await cliente.query(
+        `INSERT INTO orden_lineas (id_orden, id_producto, nombre, cantidad)
+         SELECT $1, p.id, p.nombre, p.cantidad
+         FROM unnest($2::int[], $3::text[], $4::int[]) AS p(id, nombre, cantidad)`,
+        [idOrden, idsPedidos, nombres, cantidades]
+      );
+
+      // `productos.cantidad` va cualificado a propósito: sin el prefijo,
+      // `cantidad` es ambigua entre la tabla y la columna que trae el unnest.
+      await cliente.query(
+        `UPDATE productos SET cantidad = productos.cantidad - d.baja
+         FROM unnest($1::int[], $2::int[]) AS d(id, baja)
+         WHERE productos.id_producto = d.id`,
+        [idsPedidos, cantidades]
+      );
 
       return idOrden;
     });
