@@ -17,7 +17,7 @@ escribir código o mensajes de commit aquí.
 ```bash
 npm install                    # sólo JS: pg no compila nada nativo (a diferencia de sqlite3)
 npm start                      # --env-file=.env, arranca en :3000 (PORT lo cambia)
-npm test                       # 112 tests con el runner nativo de node
+npm test                       # 114 tests con el runner nativo de node
 
 # Sin cuentas no se puede entrar a ninguna pantalla: no hay ninguna por defecto.
 node --env-file=.env scripts/cuenta.js crear almacen --rol admin
@@ -188,9 +188,18 @@ bloquea cuentas, TOTP que rechaza cualquier paso **menor o igual** al último co
 llevarlas— y se crean con `scripts/cuenta.js` en cada despliegue.
 
 **Dos caminos escriben stock, y sólo dos**: `POST /api/ordenes` descuenta (`FOR UPDATE`,
-agrupa antes de comparar contra el stock) y `POST /api/ordenes/:id/devolucion` repone
+agrupa antes de comparar contra el stock, y escribe líneas y descuentos con `unnest` en dos
+sentencias, no en un bucle) y `POST /api/ordenes/:id/devolucion` repone
 (`cantidad = cantidad + ?`, mapea `23505` a 409) — el porqué de cada detalle, en los doce
 puntos de arriba y en los comentarios del propio `server.js`.
+
+**`GET /api/salud` es la ÚNICA ruta de `/api/` sin sesión**, y está en `RUTAS_PUBLICAS` a
+propósito: el guardia deniega por defecto, así que abrirla es una decisión. Hace `SELECT 1`
+porque tiene que TOCAR LA BASE — Supabase free pausa el proyecto tras ~7 días sin actividad
+y un almacén pasa semanas sin emitir órdenes, así que un ping que sólo despertara a Vercel
+dejaría dormir justo al que se pausa. Lo llama a diario
+`.github/workflows/mantener-supabase-despierto.yml`. Ojo con el cron: `*/5` en día-del-mes
+NO es «cada 5 días» (son los días 1, 6, 11… y del 26 al 1 pasan 6), por eso va diario.
 
 ## Estado conocido (no son bugs que introdujiste)
 

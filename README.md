@@ -151,7 +151,7 @@ dos — el detalle completo, y por qué, está en `CLAUDE.md`.
 
 ## Probar
 
-    npm test                                                 # los 112 tests
+    npm test                                                 # los 114 tests
     node --env-file=.env --test test/auth.test.js            # un solo archivo
     node --env-file=.env --test --test-name-pattern "elimina el producto"   # un solo test
 
@@ -167,9 +167,9 @@ borrar **y el producto sigue existiendo después**, y que un código TOTP no val
 
 ## La API
 
-Todo vive en `server.js`. Todas las rutas exigen sesión salvo `/api/auth/login` y
-`/api/auth/totp`; las peticiones a `/api/*` sin sesión reciben `401`, la navegación a una
-pantalla HTML un `302` al login.
+Todo vive en `server.js`. Todas las rutas exigen sesión salvo `/api/auth/login`,
+`/api/auth/totp` y `/api/salud`; las peticiones a `/api/*` sin sesión reciben `401`, la
+navegación a una pantalla HTML un `302` al login.
 
 | Método | Ruta | Para qué |
 |---|---|---|
@@ -187,6 +187,14 @@ pantalla HTML un `302` al login.
 | POST | `/api/ordenes` | Confirmar la orden, descontar y registrarla |
 | GET | `/api/ordenes/:id` | Leer una orden emitida y si ya se devolvió |
 | POST | `/api/ordenes/:id/devolucion` | Recibir la orden y reponer su stock |
+| GET | `/api/salud` | `{ ok: true }` tras un `SELECT 1`. **Sin sesión** — ver abajo |
+
+**`/api/salud` existe para que Supabase no pause el proyecto.** El plan gratuito lo duerme
+tras ~7 días sin actividad, y un almacén puede pasar semanas sin emitir una orden. Por eso
+la ruta toca la base de verdad: un ping que sólo despertara a Vercel dejaría dormir al que
+se pausa. La llama a diario `.github/workflows/mantener-supabase-despierto.yml`, y se puede
+lanzar a mano desde la pestaña Actions. No lee ni revela ningún dato, que es lo que permite
+servirla sin sesión.
 
 **Hay exactamente dos caminos que escriben stock**: `POST /api/ordenes` descuenta y
 `POST /api/ordenes/:id/devolucion` repone. Ninguna otra ruta toca `productos.cantidad` salvo
