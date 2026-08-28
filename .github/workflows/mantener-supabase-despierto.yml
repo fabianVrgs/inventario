@@ -1,0 +1,38 @@
+# Supabase pausa los proyectos del plan gratuito tras ~7 días sin actividad, y
+# un almacén puede pasar una semana entera sin emitir una orden. Esto toca la
+# base todos los días.
+#
+# Apunta a /api/salud y no a / porque la que se pausa es la BASE: un ping que
+# sólo despierte a Vercel dejaría dormir a Supabase.
+#
+# Por qué DIARIO y no cada 5 días, que era el plan original: `*/5` en el campo
+# de día-del-mes no significa "cada 5 días", significa los días 1, 6, 11, 16,
+# 21 y 26 — y del 26 al 1 del mes siguiente pasan 6 días en un mes de 31. Eso
+# deja 1 día de margen sobre los 7, no 5. Y el cron de GitHub es best-effort:
+# puede retrasarse horas bajo carga, o saltarse una ejecución. Con margen de
+# un día, un solo retraso pausa el proyecto. Una petición diaria cuesta unos
+# segundos de runner en un repo público (gratis) y quita el problema entero.
+#
+# Límite que queda: GitHub deshabilita los workflows programados en repos sin
+# commits durante 60 días. Para eso está el workflow_dispatch, y el aviso por
+# correo que GitHub manda antes de desactivarlo.
+name: Mantener Supabase despierto
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tocar la base a través de /api/salud
+        run: |
+          codigo=$(curl -s -o /dev/null -w '%{http_code}' \
+            --max-time 90 --retry 2 \
+            https://inventario-xi-opal.vercel.app/api/salud)
+          echo "HTTP $codigo"
+          test "$codigo" = "200"

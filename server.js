@@ -388,6 +388,7 @@ const RUTAS_PUBLICAS = [
   '/favicon.ico',
   '/api/auth/login',
   '/api/auth/totp',
+  '/api/salud',
 ];
 
 function esPublica(ruta) {
@@ -404,6 +405,24 @@ app.use((req, res, next) => {
     return res.status(401).json({ error: 'Necesitas iniciar sesión.' });
   }
   res.redirect(302, '/login');
+});
+
+// Única ruta de /api/ que se sirve sin sesión, y va escrita aquí a propósito:
+// el guardia DENIEGA POR DEFECTO, así que añadirla a RUTAS_PUBLICAS es una
+// decisión, no un descuido. No lee ni revela ningún dato; su único efecto es
+// abrir una conexión a Postgres, que es justo lo que hace falta para que
+// Supabase no dé el proyecto por inactivo y lo pause.
+//
+// Tiene que TOCAR LA BASE. Un ping que sólo despierte a Vercel dejaría dormir
+// a Supabase, que es el que se pausa.
+app.get('/api/salud', async (req, res) => {
+  try {
+    await consultar('SELECT 1');
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[salud]', err.message);
+    res.status(503).json({ ok: false });
+  }
 });
 
 // 7. Estáticos. Ya detrás del guardia: a partir de aquí, todo lo que sirva este

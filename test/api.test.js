@@ -57,6 +57,14 @@ const enviar = (metodo, ruta, cuerpo) =>
 
 const cantidadDe = async (id) => (await (await get(`/api/productos/${id}`)).json()).cantidad;
 
+// ------------------------------------------------------------------- salud
+
+test('GET /api/salud responde sin sesión', async () => {
+  const r = await fetch(`${base}/api/salud`);   // sin cookie a propósito
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { ok: true });
+});
+
 // ---------------------------------------------------------------- catálogo
 
 test('GET /api/productos devuelve todo el catálogo con el nombre del área', async () => {
