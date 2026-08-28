@@ -86,7 +86,7 @@ node --env-file=.env scripts/cuenta.js cerrar-sesiones    # cierra lo que quedar
 ## Cómo está organizado
 
     server.js              backend: guardia y todas las rutas (monolito a propósito)
-    auth.js                criptografía: scrypt, tokens de sesión, y TOTP dormido (ver «Estado conocido»)
+    auth.js                criptografía: scrypt, tokens de sesión, y TOTP dormido (ver «Estado conocido» en CLAUDE.md)
     db.js                  única puerta a Postgres: el pool, consultar() y enTransaccion()
     scripts/cuenta.js      alta y gestión de cuentas (la única forma de crear una)
     scripts/limpiar-esquemas-de-prueba.js   barre esquemas de test huérfanos (pretest)
@@ -203,7 +203,7 @@ el CRUD, que la fija a mano.
 | Fuerza bruta | Retraso creciente por IP y por usuario (2 s, 4 s, 8 s… hasta 15 min). Sin bloqueo de cuenta. |
 | Enumerar usuarios | Mismo mensaje y mismo tiempo para usuario inexistente y contraseña mala. |
 | Robo de la base | scrypt N=2^16 con sal por cuenta; de las sesiones sólo el SHA-256 del token. RLS activo en las once tablas, sin políticas: `anon`/`authenticated` no leen nada. |
-| Contraseña filtrada | **Nada.** El segundo factor se retiró a propósito (ver «Estado conocido»): es el riesgo aceptado a cambio de un login de un solo paso. |
+| Contraseña filtrada | **Nada.** El segundo factor se retiró a propósito (ver «Estado conocido» en `CLAUDE.md`): es el riesgo aceptado a cambio de un login de un solo paso. |
 | Escalada de admin a superadmin | El rol se relee de la base en cada petición. |
 | Escucha de red | HTTPS obligatorio en producción (cookie `Secure` + HSTS), terminado por el proxy. |
 

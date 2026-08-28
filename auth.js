@@ -144,6 +144,9 @@ function hashToken(token) {
 // ---------------------------------------------------------------------------
 // Segundo factor (TOTP, RFC 6238)
 // ---------------------------------------------------------------------------
+// DORMIDO desde el 2026-08-28: nada llama a este bloque ni a los códigos de
+// respaldo de más abajo. Se conserva a propósito para que volver al segundo
+// factor sea recablear y no reescribir. No lo borres por parecer un resto.
 
 const ALFABETO_BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const PASO_SEGUNDOS = 30;
@@ -264,9 +267,9 @@ function verificarTotp(secreto, codigo, ultimoPaso = null, ahoraMs = Date.now())
 // Códigos de respaldo
 // ---------------------------------------------------------------------------
 
-// La salida de emergencia del segundo factor. Sin ellos, perder el móvil
-// equivale a perder la cuenta de superadmin —y con ella la única capaz de
-// gestionar cuentas—, o sea que el candado se cerraría por dentro.
+// La salida de emergencia que tendría el segundo factor si estuviera activo:
+// hoy el login es de un solo paso y perder el móvil no cuesta nada. Este
+// bloque está DORMIDO igual que el TOTP de arriba —ver la nota que lo precede.
 //
 // Alfabeto sin 0/O ni 1/I/L: se leen en papel y se teclean a mano, y confundir
 // dos caracteres gasta un código de un solo uso.

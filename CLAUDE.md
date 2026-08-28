@@ -133,7 +133,8 @@ ordenes                               │  orden_lineas
 ```
 
 Autenticación, cuatro tablas más y ninguna FK hacia el inventario:
-`cuentas(id_cuenta PK, usuario UNIQUE lower, hash, rol, totp_secreto (dormida), totp_ultimo_paso (dormida))`,
+`cuentas(id_cuenta PK, usuario UNIQUE lower, hash, rol, totp_secreto, totp_ultimo_paso)`
+(las dos `totp_*`, dormidas),
 `sesiones(id_sesion PK, id_cuenta FK, hash_token UNIQUE, vista_en, expira_en)`,
 `codigos_respaldo(id_codigo PK, id_cuenta FK, hash, usado_en)` (dormida),
 `accesos(id_acceso PK, ocurrido_en, usuario texto suelto, resultado, ip)`. Y dos tablas nuevas
@@ -211,8 +212,8 @@ NO es «cada 5 días» (son los días 1, 6, 11… y del 26 al 1 pasan 6), por es
   `*.bak` y `.env`. **Ya no hay ninguna base de datos versionada** —`db/inventario.db3` se
   borró junto con SQLite—; sólo `db/esquema.sql` y `certs/` (la CA del pooler) viajan.
 - **El segundo factor está DORMIDO, no borrado, y es deliberado.** Se retiró el 2026-08-28
-  (`docs/superpowers/specs/2026-08-28-quitar-segundo-factor-design.md`): el login es de un
-  solo paso. Pero siguen ahí, sin un solo lector, las 9 exportaciones TOTP de `auth.js` con
+  (la spec vive en `docs/`, que no se versiona): el login es de un solo paso. Pero siguen
+  ahí, sin un solo lector, las 9 exportaciones TOTP de `auth.js` con
   sus tests de `cripto.test.js`, las columnas `cuentas.totp_secreto` / `totp_ultimo_paso` y
   las tablas `codigos_respaldo` / `retos_totp`. **No las borres por parecer restos**: la
   decisión fue que volver al 2º factor cueste recablear y no rehacer una migración contra
