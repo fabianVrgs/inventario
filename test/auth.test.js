@@ -1,5 +1,5 @@
 // Tests de la autenticación de punta a punta: guardia, roles, sesiones, CSRF,
-// límite de intentos y segundo factor.
+// límite de intentos.
 //
 // Van aparte de api.test.js porque aquel comprueba reglas de negocio dando la
 // sesión por hecha, y aquí la sesión ES el asunto. Comparten proceso y base
@@ -15,12 +15,11 @@ const { once } = require('node:events');
 // esa variable UNA sola vez, al cargarse el módulo (no en cada conexión). La
 // regla de antes —fijar DB_PATH antes del require— sigue viva, sólo que ahora
 // la cumple el helper.
-const { crearEsquema, borrarEsquema, sembrar } = require('./helpers/db');
+const { crearEsquema, borrarEsquema, sembrar, consultar } = require('./helpers/db');
 const {
   CLAVES,
   USUARIOS,
   sembrarCuentas,
-  sembrarCodigoRespaldo,
   iniciarSesion,
   cookieDe,
 } = require('./helpers/sesion');
@@ -96,6 +95,30 @@ test('el login correcto devuelve una cookie HttpOnly y SameSite', async () => {
   const cuerpo = await respuesta.json();
   assert.equal(cuerpo.usuario, USUARIOS.admin);
   assert.equal(cuerpo.rol, 'admin');
+});
+
+test('una cuenta con totp_secreto en la base entra sólo con la contraseña', async () => {
+  // El esquema del segundo factor se dejó DORMIDO a propósito, no borrado. Este
+  // test es lo que hace que "dormido" signifique dormido: pone el secreto en la
+  // columna —como lo tiene la cuenta real de producción— y comprueba que el
+  // login la deja entrar de un solo paso, sin mirar esa columna.
+  //
+  // Sin él, nada impide que alguien vuelva a cablear totp_secreto sin darse
+  // cuenta, y el primero en enterarse sería quien no pudiera entrar al almacén.
+  await consultar("UPDATE cuentas SET totp_secreto = 'JBSWY3DPEHPK3PXP' WHERE usuario = $1", [
+    USUARIOS.superadmin,
+  ]);
+
+  const res = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ usuario: USUARIOS.superadmin, clave: CLAVES.superadmin }),
+  });
+
+  assert.equal(res.status, 200);
+  const cuerpo = await res.json();
+  assert.ok(!('requiere_totp' in cuerpo), 'el login no debe pedir un segundo paso');
+  assert.ok(cookieDe(res), 'el login debe devolver la cookie de sesión');
 });
 
 test('la contraseña mala y el usuario inexistente dicen exactamente lo mismo', async () => {
@@ -448,130 +471,3 @@ test('los intentos fallidos quedan registrados en la bitácora', async () => {
   assert.ok(accesos.some((a) => a.resultado === 'ok'));
 });
 
-// ---------------------------------------------------------------------------
-// Segundo factor
-// ---------------------------------------------------------------------------
-
-test('con TOTP activo, la contraseña sola no abre sesión', async () => {
-  const { secreto } = await sembrarCuentas({ totp: true });
-
-  const respuesta = await entrar(USUARIOS.superadmin, CLAVES.superadmin);
-  assert.equal(respuesta.status, 200);
-
-  const cuerpo = await respuesta.json();
-  assert.equal(cuerpo.requiere_totp, true);
-  assert.ok(cuerpo.reto);
-  assert.equal(respuesta.headers.get('set-cookie'), null, 'todavía no hay sesión que dar');
-  assert.ok(secreto);
-});
-
-test('el reto de segundo factor vive en la base, no en memoria del proceso', async () => {
-  // Esto es el bug entero que la migración arregla: en Vercel hay N instancias,
-  // y con un Map de proceso el paso 2 del login cae con frecuencia en una
-  // instancia que nunca vio el reto, así que la verificación "caduca" sin haber
-  // caducado.
-  await sembrarCuentas({ totp: true });
-
-  const paso1 = await entrar(USUARIOS.superadmin, CLAVES.superadmin);
-  const { requiere_totp, reto } = await paso1.json();
-  assert.equal(requiere_totp, true);
-
-  // La comprobación real: el reto está en la tabla, y apunta a la cuenta que
-  // acaba de autenticarse con contraseña.
-  const guardado = await app.locals.pool.query(
-    `SELECT r.id_cuenta, c.usuario
-     FROM retos_totp r JOIN cuentas c ON c.id_cuenta = r.id_cuenta
-     WHERE r.reto = $1`,
-    [reto]
-  );
-  assert.equal(guardado.rowCount, 1, 'el reto debe vivir en la base, no en un Map');
-  assert.equal(guardado.rows[0].usuario, USUARIOS.superadmin);
-});
-
-test('el código correcto canjea el reto por una sesión', async () => {
-  const { secreto } = await sembrarCuentas({ totp: true });
-  const cookie = await iniciarSesion(base, 'superadmin', { secreto });
-
-  const respuesta = await conCookie(cookie, '/api/auth/yo');
-  assert.equal(respuesta.status, 200);
-  assert.equal((await respuesta.json()).rol, 'superadmin');
-});
-
-test('el mismo código no sirve dos veces', async () => {
-  // Anti-replay. Un código vale 30 segundos: sin esto, quien lo vea por encima
-  // del hombro entra con él mientras siga en ventana.
-  const { secreto } = await sembrarCuentas({ totp: true });
-  const codigo = auth.codigoPara(secreto, auth.pasoActual());
-
-  const primero = await entrar(USUARIOS.superadmin, CLAVES.superadmin);
-  const canje1 = await fetch(`${base}/api/auth/totp`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reto: (await primero.json()).reto, codigo }),
-  });
-  assert.equal(canje1.status, 200);
-
-  const segundo = await entrar(USUARIOS.superadmin, CLAVES.superadmin);
-  const canje2 = await fetch(`${base}/api/auth/totp`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reto: (await segundo.json()).reto, codigo }),
-  });
-  assert.equal(canje2.status, 401, 'el código ya se consumió');
-});
-
-test('un reto ya canjeado no se puede reutilizar', async () => {
-  const { secreto } = await sembrarCuentas({ totp: true });
-
-  const login = await entrar(USUARIOS.superadmin, CLAVES.superadmin);
-  const { reto } = await login.json();
-
-  const paso = auth.pasoActual();
-  const primero = await fetch(`${base}/api/auth/totp`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reto, codigo: auth.codigoPara(secreto, paso) }),
-  });
-  assert.equal(primero.status, 200);
-
-  const segundo = await fetch(`${base}/api/auth/totp`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reto, codigo: auth.codigoPara(secreto, paso + 1) }),
-  });
-  assert.equal(segundo.status, 401, 'un pagaré se cobra una sola vez');
-});
-
-test('un reto inventado no abre nada', async () => {
-  await sembrarCuentas({ totp: true });
-
-  const respuesta = await fetch(`${base}/api/auth/totp`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reto: auth.nuevoToken(), codigo: '123456' }),
-  });
-
-  assert.equal(respuesta.status, 401);
-});
-
-test('un código de respaldo entra, y sólo una vez', async () => {
-  await sembrarCuentas({ totp: true });
-  const codigo = await sembrarCodigoRespaldo(USUARIOS.superadmin);
-
-  const canjear = async () => {
-    const login = await entrar(USUARIOS.superadmin, CLAVES.superadmin);
-    const { reto } = await login.json();
-    return fetch(`${base}/api/auth/totp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reto, codigo }),
-    });
-  };
-
-  const primero = await canjear();
-  assert.equal(primero.status, 200);
-  assert.equal((await primero.json()).codigo_respaldo_usado, true);
-
-  // Si valiera dos veces sería una contraseña permanente escrita en un papel.
-  assert.equal((await canjear()).status, 401);
-});

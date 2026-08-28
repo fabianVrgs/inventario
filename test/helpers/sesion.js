@@ -41,14 +41,17 @@ async function hashDe(clave) {
   return cacheHashes.get(clave);
 }
 
-// Siembra las dos cuentas. `opciones.totp` activa el segundo factor en el
-// superadmin y devuelve su secreto, para los tests que lo necesiten.
-async function sembrarCuentas(opciones = {}) {
-  const secreto = opciones.totp ? auth.secretoTotp() : null;
-
+// Siembra las dos cuentas de prueba.
+async function sembrarCuentas() {
   await exigirEsquemaDePruebas();
 
   // sqlite_sequence no existe en Postgres: RESTART IDENTITY hace ese trabajo.
+  //
+  // codigos_respaldo y retos_totp siguen aquí aunque el segundo factor ya no se
+  // use, y NO son un resto que limpiar: las dos tienen una FK a `cuentas`, y
+  // Postgres rechaza `TRUNCATE cuentas` con 0A000 ("cannot truncate a table
+  // referenced in a foreign key constraint") si las tablas que la referencian no
+  // se truncan en la MISMA sentencia. La restricción existe aunque estén vacías.
   await consultar(`
     TRUNCATE cuentas, sesiones, codigos_respaldo, retos_totp
     RESTART IDENTITY CASCADE
@@ -60,33 +63,13 @@ async function sembrarCuentas(opciones = {}) {
   );
 
   await consultar(
-    `INSERT INTO cuentas (usuario, hash, rol, totp_secreto, creada_en, activa)
-     VALUES ($1, $2, $3, $4, $5, 1)`,
-    [USUARIOS.superadmin, await hashDe(CLAVES.superadmin), 'superadmin', secreto, new Date().toISOString()]
+    'INSERT INTO cuentas (usuario, hash, rol, creada_en, activa) VALUES ($1, $2, $3, $4, 1)',
+    [USUARIOS.superadmin, await hashDe(CLAVES.superadmin), 'superadmin', new Date().toISOString()]
   );
-
-  return { secreto };
 }
 
-// Añade un código de respaldo canjeable a la cuenta indicada y lo devuelve en
-// claro, que es la única vez que existe fuera de su hash.
-async function sembrarCodigoRespaldo(usuario) {
-  const [codigo] = auth.generarCodigosRespaldo(1);
-
-  await exigirEsquemaDePruebas();
-
-  await consultar(
-    `INSERT INTO codigos_respaldo (id_cuenta, hash)
-     SELECT id_cuenta, $1 FROM cuentas WHERE usuario = $2`,
-    [await auth.hashear(auth.normalizarCodigoRespaldo(codigo)), usuario]
-  );
-
-  return codigo;
-}
-
-// Devuelve la cookie lista para reenviar. Si la cuenta tiene segundo factor,
-// hace también el segundo paso: quien llama sólo quiere una sesión abierta.
-async function iniciarSesion(base, rol = 'superadmin', opciones = {}) {
+// Devuelve la cookie lista para reenviar.
+async function iniciarSesion(base, rol = 'superadmin') {
   const respuesta = await fetch(`${base}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -97,25 +80,7 @@ async function iniciarSesion(base, rol = 'superadmin', opciones = {}) {
     throw new Error(`No se pudo iniciar sesión como ${rol}: ${respuesta.status}`);
   }
 
-  const cuerpo = await respuesta.json();
-
-  if (!cuerpo.requiere_totp) return cookieDe(respuesta);
-
-  if (!opciones.secreto) {
-    throw new Error(`La cuenta ${rol} pide segundo factor y no se pasó el secreto.`);
-  }
-
-  const segundo = await fetch(`${base}/api/auth/totp`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      reto: cuerpo.reto,
-      codigo: auth.codigoPara(opciones.secreto, auth.pasoActual()),
-    }),
-  });
-
-  if (!segundo.ok) throw new Error(`Falló el segundo factor de ${rol}: ${segundo.status}`);
-  return cookieDe(segundo);
+  return cookieDe(respuesta);
 }
 
 // `Set-Cookie` trae también los atributos (HttpOnly, SameSite…); para reenviarla
@@ -130,7 +95,6 @@ module.exports = {
   CLAVES,
   USUARIOS,
   sembrarCuentas,
-  sembrarCodigoRespaldo,
   iniciarSesion,
   cookieDe,
 };

@@ -45,7 +45,6 @@ const port = process.env.PORT || 3000;
 const HORAS_SESION = 12;
 const HORAS_INACTIVIDAD = 2;
 const NOMBRE_COOKIE = 'sesion';
-const MINUTOS_RETO_TOTP = 5;
 
 const EN_PRODUCCION = process.env.NODE_ENV === 'production';
 
@@ -68,10 +67,6 @@ function ahora() {
 
 function enHoras(horas) {
   return new Date(Date.now() + horas * 3600 * 1000).toISOString();
-}
-
-function enMinutos(minutos) {
-  return new Date(Date.now() + minutos * 60 * 1000).toISOString();
 }
 
 // Express trae `res.cookie` para escribir, pero no nada para leer sin
@@ -474,40 +469,7 @@ app.get('/', (req, res) => {
 // Rutas de sesión
 // ---------------------------------------------------------------------------
 
-// Retos de segundo factor pendientes: contraseña ya verificada, código todavía
-// no. NO son una sesión y por eso no son una cookie — son un pagaré de cinco
-// minutos que sólo sirve para canjearlo en /api/auth/totp.
-//
-// Vivían en un Map de proceso. En Vercel eso significa que el paso 2 del login
-// cae con frecuencia en una instancia que nunca vio el reto, y la
-// verificación "caduca" sin haber caducado.
-async function purgarRetos() {
-  await consultar('DELETE FROM retos_totp WHERE expira_en <= $1', [ahora()]);
-}
-
-async function guardarReto(reto, idCuenta) {
-  await consultar(
-    'INSERT INTO retos_totp (reto, id_cuenta, expira_en) VALUES ($1, $2, $3)',
-    [reto, idCuenta, enMinutos(MINUTOS_RETO_TOTP)]
-  );
-}
-
-async function tomarReto(reto) {
-  if (!reto) return null;
-  const { rows } = await consultar(
-    'SELECT id_cuenta, expira_en FROM retos_totp WHERE reto = $1',
-    [String(reto)]
-  );
-  const fila = rows[0];
-  if (!fila || Date.parse(fila.expira_en) <= Date.now()) return null;
-  return fila;
-}
-
-async function consumirReto(reto) {
-  await consultar('DELETE FROM retos_totp WHERE reto = $1', [String(reto)]);
-}
-
-async function abrirSesion(cuenta, req, res, respuesta) {
+async function abrirSesion(cuenta, req, res) {
   const token = auth.nuevoToken();
 
   try {
@@ -531,7 +493,7 @@ async function abrirSesion(cuenta, req, res, respuesta) {
 
   registrarAcceso(cuenta.usuario, 'ok', req);
   res.cookie(NOMBRE_COOKIE, token, opcionesCookie());
-  res.json({ usuario: cuenta.usuario, rol: cuenta.rol, ...respuesta });
+  res.json({ usuario: cuenta.usuario, rol: cuenta.rol });
 }
 
 // Mensaje ÚNICO para "no existe" y para "contraseña incorrecta". Distinguirlos
@@ -564,7 +526,7 @@ app.post('/api/auth/login', async (req, res) => {
     // `lower(usuario)`, así que ésta es la consulta que lo aprovecha — y sin
     // ella "Erick" y "erick" dejarían de ser la misma persona.
     const { rows } = await consultar(
-      `SELECT id_cuenta, usuario, hash, rol, totp_secreto, totp_ultimo_paso
+      `SELECT id_cuenta, usuario, hash, rol
        FROM cuentas WHERE lower(usuario) = lower($1) AND activa = 1`,
       [usuario]
     );
@@ -584,107 +546,12 @@ app.post('/api/auth/login', async (req, res) => {
 
     await limpiarFallos(claves);
 
-    if (cuenta.totp_secreto) {
-      await purgarRetos();
-      const reto = auth.nuevoToken();
-      await guardarReto(reto, cuenta.id_cuenta);
-      return res.json({ requiere_totp: true, reto });
-    }
-
-    await abrirSesion(cuenta, req, res, {});
+    await abrirSesion(cuenta, req, res);
   } catch (err) {
     console.error('[login]', err.message);
     res.status(500).json({ error: 'Error interno.' });
   }
 });
-
-// Segundo paso: canjea el reto por una sesión de verdad. Acepta tanto el código
-// de seis dígitos de la app como uno de los códigos de respaldo en papel, en el
-// mismo campo — quien ha perdido el móvil no está para elegir pestaña.
-app.post('/api/auth/totp', async (req, res) => {
-  await purgarRetos();
-
-  const pendiente = await tomarReto(req.body?.reto);
-  if (!pendiente) {
-    return res.status(401).json({ error: 'La verificación caducó. Vuelve a iniciar sesión.' });
-  }
-
-  const codigo = String(req.body?.codigo ?? '').trim();
-  const claves = clavesDeIntento(req, `reto:${pendiente.id_cuenta}`);
-  const restante = await bloqueoRestante(claves);
-  if (restante > 0) {
-    res.setHeader('Retry-After', String(Math.ceil(restante / 1000)));
-    return res.status(429).json({
-      error: `Demasiados intentos fallidos. Espera ${Math.ceil(restante / 1000)} segundos.`,
-      espera_segundos: Math.ceil(restante / 1000),
-    });
-  }
-
-  try {
-    const { rows } = await consultar(
-      `SELECT id_cuenta, usuario, rol, totp_secreto, totp_ultimo_paso
-       FROM cuentas WHERE id_cuenta = $1 AND activa = 1`,
-      [pendiente.id_cuenta]
-    );
-    const cuenta = rows[0];
-    if (!cuenta) return res.status(401).json({ error: CREDENCIALES_MALAS });
-
-    const veredicto = auth.verificarTotp(cuenta.totp_secreto, codigo, cuenta.totp_ultimo_paso);
-
-    if (veredicto.ok) {
-      // El reto se consume pase lo que pase después: un pagaré se cobra una vez.
-      await consumirReto(req.body.reto);
-      await limpiarFallos(claves);
-      // Guardar el paso es lo que impide reutilizar el mismo código dentro de
-      // sus 30 segundos de vida. Se espera al UPDATE: si la sesión se abriera
-      // antes de que el paso quede escrito, el mismo código valdría dos veces.
-      await consultar('UPDATE cuentas SET totp_ultimo_paso = $1 WHERE id_cuenta = $2', [
-        veredicto.paso,
-        cuenta.id_cuenta,
-      ]);
-      return await abrirSesion(cuenta, req, res, {});
-    }
-
-    await canjearCodigoDeRespaldo(cuenta, codigo, req, res, async () => {
-      await anotarFallo(claves);
-      registrarAcceso(cuenta.usuario, 'totp', req);
-      res.status(401).json({ error: 'Código incorrecto o ya utilizado.' });
-    });
-  } catch (err) {
-    console.error('[totp]', err.message);
-    res.status(500).json({ error: 'Error interno.' });
-  }
-});
-
-// Los códigos de respaldo son de un solo uso: se marcan gastados en el mismo
-// momento en que sirven. Si no, el papel se convierte en una contraseña
-// permanente y sin segundo factor.
-async function canjearCodigoDeRespaldo(cuenta, codigo, req, res, alFallar) {
-  const normalizado = auth.normalizarCodigoRespaldo(codigo);
-  if (!normalizado) return await alFallar();
-
-  const { rows: filas } = await consultar(
-    'SELECT id_codigo, hash FROM codigos_respaldo WHERE id_cuenta = $1 AND usado_en IS NULL',
-    [cuenta.id_cuenta]
-  );
-  if (filas.length === 0) return await alFallar();
-
-  for (const fila of filas) {
-    if (await auth.verificar(normalizado, fila.hash)) {
-      // Se espera al UPDATE antes de abrir la sesión: marcar el código gastado
-      // es lo que lo convierte en de un solo uso, y hacerlo después dejaría una
-      // ventana en la que el mismo papel entra dos veces.
-      await consultar('UPDATE codigos_respaldo SET usado_en = $1 WHERE id_codigo = $2', [
-        ahora(),
-        fila.id_codigo,
-      ]);
-      await consumirReto(req.body.reto);
-      return await abrirSesion(cuenta, req, res, { codigo_respaldo_usado: true });
-    }
-  }
-
-  await alFallar();
-}
 
 app.post('/api/auth/salir', async (req, res) => {
   // El borrado se intenta y no se comprueba: la versión SQLite ignoraba el
@@ -717,14 +584,10 @@ app.get('/api/cuentas', exigirSuperadmin, async (req, res) => {
   // sirve a quien consiga mirar la pantalla.
   try {
     const { rows } = await consultar(
-      `SELECT id_cuenta, usuario, rol, creada_en, activa,
-              -- El ::int, igual que en SQL_LINEAS_DE_ORDEN: en SQLite esta
-              -- expresión daba 1/0 y abajo se compara con === 1; en Postgres
-              -- daría true/false y con_totp saldría false para todo el mundo.
-              (totp_secreto IS NOT NULL)::int AS con_totp
+      `SELECT id_cuenta, usuario, rol, creada_en, activa
        FROM cuentas ORDER BY id_cuenta`
     );
-    res.json(rows.map((f) => ({ ...f, con_totp: f.con_totp === 1, activa: f.activa === 1 })));
+    res.json(rows.map((f) => ({ ...f, activa: f.activa === 1 })));
   } catch (err) {
     console.error('[cuentas]', err.message);
     res.status(500).json({ error: 'Error interno.' });
