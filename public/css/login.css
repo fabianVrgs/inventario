@@ -79,13 +79,6 @@
   color: var(--tinta-fuerte);
 }
 
-.acceso__ayuda {
-  margin: calc(var(--esp-5) * -1 + var(--esp-2)) 0 var(--esp-5);
-  font-size: var(--texto-sm);
-  line-height: var(--interlineado);
-  color: var(--tinta-suave);
-}
-
 .acceso__campo {
   margin-bottom: var(--esp-4);
 }
@@ -108,11 +101,6 @@
   width: 100%;
   margin-top: var(--esp-2);
   min-height: var(--objetivo-tactil);
-}
-
-.acceso__volver {
-  width: 100%;
-  margin-top: var(--esp-2);
 }
 
 /* El aviso NO usa el rojo de --peligro a secas: aquí el mensaje más frecuente

@@ -22,7 +22,7 @@
       <p class="acceso__nombre">Ok-producciones<br><span>Almacén</span></p>
     </div>
 
-    <!-- PASO 1: usuario y contraseña. -->
+    <!-- Usuario y contraseña. -->
     <form class="acceso__form" id="formAcceso" novalidate>
       <h1 class="acceso__titulo">Entrar</h1>
 
@@ -38,26 +38,6 @@
       </div>
 
       <button type="submit" class="btn btn--primario acceso__enviar" id="btnEntrar">Entrar</button>
-    </form>
-
-    <!-- PASO 2: segundo factor. Oculto hasta que el servidor lo pida; se
-         muestra conmutando [hidden], que base.css marca !important. -->
-    <form class="acceso__form" id="formCodigo" hidden novalidate>
-      <h1 class="acceso__titulo">Código de verificación</h1>
-      <p class="acceso__ayuda">
-        Escribe el código de seis dígitos de tu aplicación de autenticación.
-        También sirve uno de tus códigos de respaldo.
-      </p>
-
-      <div class="acceso__campo">
-        <label for="codigo">Código</label>
-        <input type="text" id="codigo" class="campo cifra" inputmode="numeric"
-               autocomplete="one-time-code" autocapitalize="characters"
-               spellcheck="false" maxlength="11" required>
-      </div>
-
-      <button type="submit" class="btn btn--primario acceso__enviar" id="btnVerificar">Verificar</button>
-      <button type="button" class="btn btn--fantasma acceso__volver" id="btnVolver">Volver</button>
     </form>
 
     <!-- role="alert" para que un lector de pantalla anuncie el fallo sin que

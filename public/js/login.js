@@ -8,19 +8,10 @@
   'use strict';
 
   const formAcceso = document.getElementById('formAcceso');
-  const formCodigo = document.getElementById('formCodigo');
   const campoUsuario = document.getElementById('usuario');
   const campoClave = document.getElementById('clave');
-  const campoCodigo = document.getElementById('codigo');
   const btnEntrar = document.getElementById('btnEntrar');
-  const btnVerificar = document.getElementById('btnVerificar');
-  const btnVolver = document.getElementById('btnVolver');
   const aviso = document.getElementById('avisoAcceso');
-
-  // El pagaré del segundo factor: contraseña ya aceptada, código pendiente.
-  // Vive en una variable y NO en sessionStorage a propósito — dura cinco
-  // minutos y no tiene por qué sobrevivir a nada, ni siquiera a un F5.
-  let reto = null;
 
   function mostrarAviso(texto) {
     aviso.textContent = texto;
@@ -80,65 +71,11 @@
         return mostrarAviso(datos?.error || 'No se pudo entrar. Inténtalo de nuevo.');
       }
 
-      if (datos.requiere_totp) {
-        reto = datos.reto;
-        // La contraseña no se queda escrita en el DOM mientras se pide el
-        // código: ya cumplió su función.
-        campoClave.value = '';
-        formAcceso.hidden = true;
-        formCodigo.hidden = false;
-        campoCodigo.focus();
-        return;
-      }
-
       entrar();
     } catch {
       mostrarAviso('No se pudo conectar con el servidor.');
     } finally {
       ocupado(btnEntrar, false, 'Entrar');
     }
-  });
-
-  formCodigo.addEventListener('submit', async (evento) => {
-    evento.preventDefault();
-    limpiarAviso();
-
-    const codigo = campoCodigo.value.trim();
-    if (!codigo) return mostrarAviso('Escribe el código.');
-
-    ocupado(btnVerificar, true, 'Verificar');
-
-    try {
-      const respuesta = await fetch('/api/auth/totp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reto, codigo }),
-      });
-
-      const datos = await leerRespuesta(respuesta);
-
-      if (!respuesta.ok) {
-        campoCodigo.value = '';
-        campoCodigo.focus();
-        return mostrarAviso(datos?.error || 'Código incorrecto.');
-      }
-
-      entrar();
-    } catch {
-      mostrarAviso('No se pudo conectar con el servidor.');
-    } finally {
-      ocupado(btnVerificar, false, 'Verificar');
-    }
-  });
-
-  btnVolver.addEventListener('click', () => {
-    // El reto se tira al volver. Reaparecer con uno viejo dejaría abierta la
-    // puerta de un intento anterior durante sus cinco minutos.
-    reto = null;
-    limpiarAviso();
-    campoCodigo.value = '';
-    formCodigo.hidden = true;
-    formAcceso.hidden = false;
-    campoUsuario.focus();
   });
 })();
