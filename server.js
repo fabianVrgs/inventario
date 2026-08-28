@@ -372,17 +372,16 @@ app.use(async (req, res, next) => {
 
 // 6. El guardia. Todo lo que no esté aquí exige sesión.
 //
-//    La lista es corta a propósito y son exactamente las piezas que hacen falta
-//    para PODER entrar: la pantalla de login, su JavaScript, los estilos, el
-//    logo y las dos rutas del propio login. Nada más — ni siquiera el resto de
-//    `/js/`, que es la interfaz del almacén y no tiene por qué leerla un
-//    desconocido.
+//    La lista es corta a propósito: la pantalla de login, su JavaScript, los
+//    estilos, el logo, la ruta del propio login y `/api/salud` —ésta última no
+//    es del login, es pública a propósito para que Supabase no se duerma—.
+//    Nada más — ni siquiera el resto de `/js/`, que es la interfaz del
+//    almacén y no tiene por qué leerla un desconocido.
 const RUTAS_PUBLICAS = [
   '/login',
   '/js/login.js',
   '/favicon.ico',
   '/api/auth/login',
-  '/api/auth/totp',
   '/api/salud',
 ];
 
