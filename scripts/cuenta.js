@@ -4,12 +4,11 @@
 //
 // Uso:
 //   node scripts/cuenta.js listar
-//   node scripts/cuenta.js crear <usuario> --rol admin|superadmin [--sin-totp]
+//   node scripts/cuenta.js crear <usuario> --rol admin|superadmin
 //   node scripts/cuenta.js clave <usuario>
 //   node scripts/cuenta.js rol <usuario> <admin|superadmin>
 //   node scripts/cuenta.js baja <usuario>
 //   node scripts/cuenta.js alta <usuario>
-//   node scripts/cuenta.js totp <usuario>
 //   node scripts/cuenta.js cerrar-sesiones [usuario]
 //
 // La base sale de DATABASE_URL (o DATABASE_URL_TEST, que db.js prioriza) y del
@@ -273,50 +272,13 @@ async function buscarCuenta(usuario) {
 }
 
 // ---------------------------------------------------------------------------
-// Segundo factor
-// ---------------------------------------------------------------------------
-
-// El secreto y los códigos se imprimen UNA sola vez, aquí y ahora. No se puede
-// volver a consultarlos: en la base sólo queda el secreto (que la app necesita
-// para verificar) y el HASH de cada código. Quien no los guarde tendrá que
-// regenerarlos, que es exactamente como debe ser.
-async function activarTotp(idCuenta, usuario) {
-  const secreto = auth.secretoTotp();
-  const codigos = auth.generarCodigosRespaldo();
-
-  await ejecutar('UPDATE cuentas SET totp_secreto = $1, totp_ultimo_paso = NULL WHERE id_cuenta = $2', [
-    secreto,
-    idCuenta,
-  ]);
-
-  await ejecutar('DELETE FROM codigos_respaldo WHERE id_cuenta = $1', [idCuenta]);
-  for (const codigo of codigos) {
-    await ejecutar('INSERT INTO codigos_respaldo (id_cuenta, hash) VALUES ($1, $2)', [
-      idCuenta,
-      await auth.hashear(auth.normalizarCodigoRespaldo(codigo)),
-    ]);
-  }
-
-  console.log('\n── Segundo factor ──────────────────────────────────────────');
-  console.log('Añade esta cuenta a tu aplicación de autenticación con esta URI');
-  console.log('(o pega el secreto a mano):\n');
-  console.log(`  ${auth.uriTotp(usuario, secreto)}\n`);
-  console.log(`  Secreto: ${secreto}\n`);
-  console.log('CÓDIGOS DE RESPALDO — apúntalos en papel y guárdalos fuera del');
-  console.log('ordenador. Cada uno sirve UNA vez, y son la única forma de entrar');
-  console.log('si pierdes el móvil. No se pueden volver a consultar.\n');
-  for (const codigo of codigos) console.log(`  ${codigo}`);
-  console.log('────────────────────────────────────────────────────────────\n');
-}
-
-// ---------------------------------------------------------------------------
 // Órdenes
 // ---------------------------------------------------------------------------
 
 const ordenes = {
   async listar() {
     const filas = await todas(
-      `SELECT usuario, rol, activa, creada_en, totp_secreto IS NOT NULL AS con_totp
+      `SELECT usuario, rol, activa, creada_en
        FROM cuentas ORDER BY id_cuenta`
     );
 
@@ -326,12 +288,11 @@ const ordenes = {
       return;
     }
 
-    console.log('USUARIO              ROL          ESTADO    2FA  CREADA');
+    console.log('USUARIO              ROL          ESTADO    CREADA');
     for (const f of filas) {
       console.log(
         `${f.usuario.padEnd(20)} ${f.rol.padEnd(12)} ` +
-          `${(f.activa ? 'activa' : 'de baja').padEnd(9)} ` +
-          `${(f.con_totp ? 'sí' : 'no').padEnd(4)} ${f.creada_en.slice(0, 10)}`
+          `${(f.activa ? 'activa' : 'de baja').padEnd(9)} ${f.creada_en.slice(0, 10)}`
       );
     }
   },
@@ -367,16 +328,6 @@ const ordenes = {
     );
 
     console.log(`\n✅ Cuenta "${usuario}" creada con rol ${rol}.`);
-
-    // El segundo factor es de serie en el superadmin: es la cuenta que puede
-    // gestionar cuentas y borrar productos, y una contraseña reutilizada que
-    // aparezca en una filtración es el escenario más probable de todos.
-    if (rol === 'superadmin' && !argumentos['sin-totp']) {
-      await activarTotp(fila.id_cuenta, usuario);
-    } else if (rol === 'superadmin') {
-      console.log('⚠️  Creada SIN segundo factor (--sin-totp). Actívalo antes de publicar:');
-      console.log(`   node scripts/cuenta.js totp ${usuario}`);
-    }
   },
 
   // Comprueba una contraseña contra la guardada, sin abrir sesión ni tocar
@@ -460,12 +411,6 @@ const ordenes = {
     console.log(`✅ "${cuenta.usuario}" reactivada.`);
   },
 
-  async totp(argumentos) {
-    const cuenta = await buscarCuenta(argumentos._[0]);
-    await activarTotp(cuenta.id_cuenta, cuenta.usuario);
-    console.log('✅ Segundo factor activado. Los códigos de respaldo anteriores ya no valen.');
-  },
-
   async 'cerrar-sesiones'(argumentos) {
     if (argumentos._[0]) {
       const cuenta = await buscarCuenta(argumentos._[0]);
@@ -483,9 +428,9 @@ const ordenes = {
 // Arranque
 // ---------------------------------------------------------------------------
 
-// Analizador mínimo: `--rol admin` y banderas sueltas como `--sin-totp`. No
-// hace falta más, y una dependencia para esto sería justo lo contrario de lo
-// que persigue el resto del proyecto.
+// Analizador mínimo: `--rol admin` es la única bandera que queda. No hace
+// falta más, y una dependencia para esto sería justo lo contrario de lo que
+// persigue el resto del proyecto.
 function analizar(argv) {
   const resultado = { _: [] };
 
@@ -515,12 +460,11 @@ async function principal() {
     console.error('Uso: node scripts/cuenta.js <orden> [argumentos]\n');
     console.error('Órdenes:');
     console.error('  listar');
-    console.error('  crear <usuario> --rol admin|superadmin [--sin-totp]');
+    console.error('  crear <usuario> --rol admin|superadmin');
     console.error('  clave <usuario>');
     console.error('  probar <usuario>   comprueba una contraseña sin abrir sesión');
     console.error('  rol <usuario> <admin|superadmin>');
     console.error('  baja <usuario>   |  alta <usuario>');
-    console.error('  totp <usuario>');
     console.error('  cerrar-sesiones [usuario]');
     process.exit(1);
   }
