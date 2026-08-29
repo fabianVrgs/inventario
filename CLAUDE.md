@@ -17,12 +17,13 @@ escribir código o mensajes de commit aquí.
 ```bash
 npm install                    # sólo JS: pg no compila nada nativo (a diferencia de sqlite3)
 npm start                      # --env-file=.env, arranca en :3000 (PORT lo cambia)
-npm test                       # 108 tests con el runner nativo de node
+npm test                       # 134 tests con el runner nativo de node
 
 # Sin cuentas no se puede entrar a ninguna pantalla: no hay ninguna por defecto.
-node --env-file=.env scripts/cuenta.js crear almacen --rol admin
+# Ésta es la vía de arranque; las demás cuentas se crean ya desde /html/cuentas.html.
 node --env-file=.env scripts/cuenta.js crear erick --rol superadmin
 node --env-file=.env scripts/cuenta.js listar
+node --env-file=.env scripts/cuenta.js roles
 ```
 
 Un solo archivo: `node --env-file=.env --test test/auth.test.js`. Un solo test: añade
@@ -81,7 +82,7 @@ sale de `DATABASE_URL`/`DATABASE_URL_TEST`, leídas dentro de `db.js`.)
   y el limitador por IP se vuelve un bloqueo global.
 - **El aviso de "no hay cuentas activas" corre fuera de `require.main === module`**, porque en
   Vercel el módulo se importa y nunca se ejecuta con `node server.js`.
-- **Supabase activa RLS solo en cada tabla nueva** (`rls_auto_enable()`). Las once tablas
+- **Supabase activa RLS solo en cada tabla nueva** (`rls_auto_enable()`). Las doce tablas
   tienen RLS y CERO políticas, y ÉSE es el estado correcto: `anon`/`authenticated` no leen
   nada, la app entra como dueño por `pg`. **No crear políticas RLS**: no gobernarían ningún
   acceso real.
@@ -101,8 +102,10 @@ cuentas y devuelve la cookie. Si el test provoca logins fallidos, hay que llamar
 `app.locals.reiniciarLimites()` en el `beforeEach`: el contador vive en la tabla
 `intentos_login`, no en memoria, pero sigue compartido por todos los tests del archivo (misma IP).
 
-**Modelo de datos.** Once tablas en `db/esquema.sql`, aplicado una sola vez contra Supabase —
-ya no hay migraciones ni runner: eso vivía en SQLite y se fue con ella.
+**Modelo de datos.** Doce tablas en `db/esquema.sql`, aplicado una sola vez contra Supabase —
+ya no hay migraciones ni runner: eso vivía en SQLite y se fue con ella. `db/cambio-2026-08-roles.sql`
+NO es una migración ni resucita el runner: es el ALTER de un solo uso que le puso la tabla
+`roles` a la base que ya estaba desplegada. El estado final sigue viviendo en `esquema.sql`.
 
 ```
 areas                          productos
@@ -132,8 +135,9 @@ ordenes                               │  orden_lineas
                                     └───────────────┴────────────────────┘
 ```
 
-Autenticación, cuatro tablas más y ninguna FK hacia el inventario:
-`cuentas(id_cuenta PK, usuario UNIQUE lower, hash, rol, totp_secreto, totp_ultimo_paso)`
+Autenticación, cinco tablas más y ninguna FK hacia el inventario:
+`roles(nombre PK, descripcion, permisos text[], semilla)`,
+`cuentas(id_cuenta PK, usuario UNIQUE lower, hash, rol FK → roles, totp_secreto, totp_ultimo_paso)`
 (las dos `totp_*`, dormidas),
 `sesiones(id_sesion PK, id_cuenta FK, hash_token UNIQUE, vista_en, expira_en)`,
 `codigos_respaldo(id_codigo PK, id_cuenta FK, hash, usado_en)` (dormida),
@@ -143,6 +147,12 @@ reto o un contador guardado en una no existía para las demás—:
 `retos_totp(reto PK, id_cuenta FK, expira_en)` (dormida, 2º factor pendiente, 5 min) e
 `intentos_login(clave PK "ip:x"/"usuario:y", fallos, ultimo_en)` (el limitador).
 
+- **`roles.permisos` es un `text[]` SIN `CHECK`, y es correcto.** El catálogo de permisos vive
+  en `PERMISOS`, en `server.js`, que es quien los aplica; un CHECK sería la misma lista escrita
+  dos veces y la copia de la base envejecería sola. La API rechaza con 400 lo que no esté en el
+  catálogo, y es la única puerta por la que se escribe esa columna.
+- **`superadmin` NO lleva comodín**: tiene los tres permisos escritos. Un `*` haría que cada
+  permiso nuevo cayera solo en el rol más poderoso; así, añadir uno obliga a decidir a quién.
 - **La cantidad vive en el producto** (no en tabla puente); `activo` decide si sale en la Principal.
 - **`ordenes`/`orden_lineas` son el registro histórico**, escrito en el MISMO `COMMIT` que el
   descuento; `orden_lineas.nombre` duplica el del producto a propósito para que la orden vieja
@@ -157,12 +167,22 @@ reto o un contador guardado en una no existía para las demás—:
 **Frontend — `public/`.** Estático, detrás del guardia salvo `/login`, `/js/login.js`,
 `/css/*` y `/img/*`. Principal (`index.html`+`logica.js`, elige de lo disponible), Inventario
 (`inventario.html`+`edit.js`, CRUD y `devolucion.js`), Orden del día
-(`orden_del_dia.html`+`orden.js`, imprime y descuenta de verdad); `sesion.js` compartido por
-las tres. Nada de esto lo tocó la migración; el porqué de cada pantalla está en `DESIGN.md` y
-`PRODUCT.md`.
+(`orden_del_dia.html`+`orden.js`, imprime y descuenta de verdad) y Cuentas
+(`cuentas.html`+`cuentas.js`, cuentas, roles y bitácora); `sesion.js` compartido por las
+cuatro. El porqué de cada pantalla está en `DESIGN.md` y `PRODUCT.md`.
+
+`cuentas.html` y `js/cuentas.js` son los ÚNICOS estáticos con guardia propia, en un `app.use`
+colocado ANTES de `express.static` — el orden de los middlewares es lo único que lo hace
+cierto. Eso no es la frontera de seguridad (lo es `exigirPermiso` en cada ruta): es no
+servirle a nadie una pantalla que sólo le va a dar 403.
 
 Contratos que siguen mordiendo:
 
+- **La clase que `sesion.js` pone en `<html>` es POR PERMISO, no por rol**
+  (`permiso-productos-eliminar`), y el CSS pregunta en negativo
+  (`:root:not(.permiso-productos-eliminar) .btn-delete`). Con `rol-admin` —como estaba— un rol
+  creado desde la pantalla no casaría con ninguna regla y el botón de borrar reaparecería
+  justo para quien no debe verlo.
 - **`sessionStorage` mueve la orden en tres claves que van SIEMPRE juntas**: `ordenSeleccion`
   (las líneas), `ordenAplicada` (`"true"` tras el descuento), `ordenId` (el número impreso).
   Quien reescriba `ordenSeleccion` borra las otras dos —selección distinta, otra orden— o acaba
@@ -179,15 +199,37 @@ Contratos que siguen mordiendo:
 
 ## Autenticación
 
-Dos roles: `admin` (todo lo operativo) y `superadmin` (además cuentas, bitácora y **borrar**
-productos —el criterio es «irreversible», no «peligroso»). Sigue igual que en SQLite —y
-comentado en detalle en `server.js`—: guardia que **deniega por defecto**, SHA-256 del token
-en `sesiones` (nunca el token), nada de `localStorage` (cookie `HttpOnly`), sin `cors()`,
-`Origin` que acepta que falte (`curl`, no un navegador), límite de intentos que retrasa y no
-bloquea cuentas. **Un solo factor**: usuario y contraseña, sin segundo paso (el TOTP se
-retiró; ver «Estado conocido»).
+**Roles con permisos, no dos nombres fijos.** `exigirSuperadmin` (que comparaba contra la
+cadena `'superadmin'`) ya no existe: en su sitio está `exigirPermiso('cuentas.gestionar')` y
+compañía. Los permisos se resuelven en la MISMA consulta que resuelve la sesión —un JOIN con
+`roles`—, así que el rol y lo que permite se releen en cada petición y recortarlo surte
+efecto en la siguiente, no dentro de doce horas. Por eso cambiar un rol o editar sus permisos
+NO cierra sesiones; restablecer una contraseña sí, y por otro motivo: ahí se sospecha que
+alguien tiene la anterior.
+
+El catálogo son tres: `productos.eliminar`, `cuentas.gestionar` y `accesos.ver` — sólo lo que
+antes separaba a admin de superadmin. Ver el inventario, editarlo, emitir órdenes y recibir
+devoluciones siguen abiertos a cualquier sesión.
+
+**Dos invariantes que el servidor impone y ningún cliente puede saltarse**: el rol
+`superadmin` (`semilla = 1`) no se edita ni se borra —es la vía de vuelta si otro queda mal
+configurado; `admin` sí, es el operativo—, y nunca puede quedar cero cuentas activas con
+`cuentas.gestionar`. Lo segundo generaliza el viejo guardia del "último superadmin", vive en
+`hayOtroGestor()` de `server.js` y está repetido en `scripts/cuenta.js` porque el script
+escribe la base sin pasar por la API.
+
+Lo demás sigue igual que en SQLite —y comentado en detalle en `server.js`—: guardia que
+**deniega por defecto**, SHA-256 del token en `sesiones` (nunca el token), nada de
+`localStorage` (cookie `HttpOnly`), sin `cors()`, `Origin` que acepta que falte (`curl`, no un
+navegador), límite de intentos que retrasa y no bloquea cuentas. **Un solo factor**: usuario y
+contraseña, sin segundo paso (el TOTP se retiró; ver «Estado conocido»).
 **`cuentas` nunca tiene filas en el repo** —ya no hay ni `.db3` versionado que pudiera
-llevarlas— y se crean con `scripts/cuenta.js` en cada despliegue.
+llevarlas—: la primera se crea con `scripts/cuenta.js` en cada despliegue y las demás ya desde
+`/html/cuentas.html`.
+
+**Las reglas de usuario y contraseña viven en `auth.js`** (`revisarUsuario`, `revisarClave`) y
+NO en quien las usa. Hay dos puertas por las que nace una cuenta —la pantalla y el script— y
+con las reglas escritas dos veces, la segunda copia es la que se afloja el día que estorbe.
 
 **Dos caminos escriben stock, y sólo dos**: `POST /api/ordenes` descuenta (`FOR UPDATE`,
 agrupa antes de comparar contra el stock, y escribe líneas y descuentos con `unnest` en dos
