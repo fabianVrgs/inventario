@@ -45,6 +45,16 @@
     <button id="btnNuevaOrden" class="btn btn--secundario" type="button">Empezar una nueva orden</button>
   </div>
 
+  <!-- ESTADO DE LA ORDEN. Mientras es borrador nadie lo decía: la hoja se veía
+       igual antes y después de descontar, y el recuadro verde de arriba sólo
+       aparece cuando ya es tarde para preguntarse si salió el material.
+       Se oculta al aplicarse: entonces habla el recuadro verde. -->
+  <div id="estadoOrden" class="estado-orden no-imprimir" hidden>
+    <span class="estado-orden__rotulo">Borrador</span>
+    <span class="estado-orden__texto">Todavía no se ha descontado nada del inventario.</span>
+    <span class="estado-orden__cifras" id="cifrasOrden"></span>
+  </div>
+
   <!-- MENSAJE DE ERROR / FALTANTES (409) -->
   <div id="avisoFaltantes" class="aviso-faltantes no-imprimir" hidden></div>
 
@@ -85,6 +95,13 @@
     <hr class="separador">
 
     <div id="contenidoAreas" class="contenido-areas"></div>
+
+    <!-- ESTO SÍ SE IMPRIME: quien recibe el material cuenta bultos contra el
+         papel y hasta ahora sumaba las líneas a mano. -->
+    <div class="total-hoja">
+      <span class="etiqueta">Total de unidades:</span>
+      <span class="total-hoja__valor cifra" id="totalUnidades">0</span>
+    </div>
 
     <hr class="separador">
 

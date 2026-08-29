@@ -47,10 +47,166 @@ body {
   gap: var(--esp-6);
 }
 
+/* ---------- El ciclo, en una línea ----------
+   Las tres pantallas son un mismo recorrido —elegir, imprimir (descuenta),
+   recibir (repone)— y hasta ahora nada lo decía: cada una se presentaba como
+   una herramienta suelta y el usuario tenía que deducir que la de al lado era
+   el paso siguiente.
+
+   Va en tipografía de etiqueta y sin iconos ni colores de estado: informa de
+   dónde estás, no pretende ser un asistente por pasos que se pueda "completar".
+   El paso actual es el único en tinta plena. */
+
+.flujo {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-3);
+  margin-bottom: var(--esp-5);
+}
+
+.flujo__paso {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-etiqueta);
+  text-transform: uppercase;
+  color: var(--tinta-tenue);
+}
+
+.flujo__paso--actual {
+  color: var(--tinta-fuerte);
+}
+
+.flujo__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: var(--radio-sm);
+  font-size: 11px;
+  background-color: var(--papel-hundido);
+  color: var(--tinta-suave);
+  box-shadow: inset 0 0 0 1px var(--filete);
+}
+
+/* El único morado de esta línea, y sólo en el paso en el que estás. */
+.flujo__paso--actual .flujo__num {
+  background-color: var(--marca-lavado);
+  color: var(--marca-fuerte);
+  box-shadow: inset 0 0 0 1px var(--marca-filete);
+}
+
+.flujo__sep {
+  flex: 1 1 12px;
+  max-width: 24px;
+  height: 1px;
+  background-color: var(--filete-fuerte);
+}
+
+/* Los rótulos largos sólo caben en pantallas grandes. Por debajo se usan los
+   cortos, que van en el mismo <li> dentro de un <span> aparte. */
+.flujo__largo { display: none; }
+
 /* ---------- Búsqueda ---------- */
 
+/* Envuelve a propósito: en un teléfono de 390px el recuento al lado dejaba el
+   campo de búsqueda en la mitad de la pantalla. Con `flex-wrap`, cuando no
+   caben los dos el recuento baja a su propia línea y el campo recupera el
+   ancho entero. */
 .buscador {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--esp-2) var(--esp-3);
+  margin-bottom: var(--esp-3);
+}
+
+.buscador__campo {
+  position: relative;
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+/* El hueco de la lupa se resta del padding del campo, no se añade fuera: así
+   el borde del control sigue siendo el borde del control. */
+.buscador__campo .campo {
+  padding-left: 2.375rem;
+}
+
+.buscador__lupa {
+  position: absolute;
+  left: var(--esp-3);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: var(--tinta-tenue);
+  pointer-events: none;
+}
+
+/* Cuántos productos hay debajo. Con el catálogo filtrado por texto o por área,
+   sin este número no hay forma de saber si el filtro se aplicó o si de verdad
+   no hay nada. */
+.buscador__conteo {
+  flex: 0 0 auto;
+  font-size: var(--texto-sm);
+  color: var(--tinta-tenue);
+}
+
+/* ---------- Filtro por área ----------
+   El catálogo ya venía agrupado por área, pero para llegar a la última había
+   que recorrer todas las de arriba. Los rótulos los emite logica.js a partir
+   de las áreas que existen: no hay lista escrita a mano en ningún sitio. */
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-2);
   margin-bottom: var(--esp-5);
+}
+
+.filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-2);
+  min-height: 36px;
+  padding: 0 var(--esp-3);
+  border-radius: var(--radio-full);
+  background-color: var(--superficie);
+  box-shadow: inset 0 0 0 1px var(--filete-fuerte);
+  font-family: inherit;
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  color: var(--tinta-suave);
+  transition: background-color var(--dur-rapida) var(--curva),
+              box-shadow var(--dur-rapida) var(--curva);
+}
+
+.filtro:hover {
+  background-color: var(--papel-hundido);
+  color: var(--tinta-fuerte);
+}
+
+/* Seleccionado: el mismo lavado de morado que la fila elegida. Es el segundo
+   de los cuatro trabajos del morado, no un color nuevo. */
+.filtro[aria-pressed='true'] {
+  background-color: var(--marca-lavado);
+  color: var(--marca-fuerte);
+  font-weight: var(--peso-fuerte);
+  box-shadow: inset 0 0 0 1px var(--marca-filete);
+}
+
+.filtro__n {
+  font-size: var(--texto-etiqueta);
+  color: var(--tinta-tenue);
+}
+
+.filtro[aria-pressed='true'] .filtro__n {
+  color: var(--marca-fuerte);
 }
 
 /* ---------- Resultados ----------
@@ -74,6 +230,10 @@ body {
    aporta a la pantalla, y el único sitio de la Principal donde aparece el
    morado de marca. */
 .titulo-area {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--esp-3);
   font-size: var(--texto-etiqueta);
   font-weight: var(--peso-fuerte);
   letter-spacing: var(--tracking-etiqueta);
@@ -81,6 +241,17 @@ body {
   color: var(--marca-fuerte);
   padding-bottom: var(--esp-2);
   border-bottom: 2px solid var(--marca);
+}
+
+/* Qué hay en el área, al lado de su nombre. En minúscula y sin tracking: es un
+   dato de servicio colgado del rótulo, no una segunda etiqueta compitiendo. */
+.titulo-area__n {
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--tinta-tenue);
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .rejilla-productos {
@@ -91,12 +262,16 @@ body {
 
 /* ---------- Fila de producto con contador ---------- */
 
+/* Rejilla y no flex: la fila tiene tres partes con papeles distintos
+   —identidad, existencia y contador— y en el teléfono la existencia baja bajo
+   la identidad en vez de competir por el ancho con el contador de 140px.
+   Con flex-wrap eso mismo dejaba filas de dos alturas distintas según el
+   nombre del producto. */
 .producto {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--esp-3);
+  gap: var(--esp-1) var(--esp-3);
   padding: var(--esp-3);
   background-color: var(--superficie);
   border-radius: var(--radio-md);
@@ -113,15 +288,13 @@ body {
   box-shadow: inset 0 0 0 1px var(--marca-filete);
 }
 
-/* Base de 9rem y no 12: a 390px el ancho útil de la fila es ~334px y el
-   contador ocupa 140. Con 12rem la base no cabía y el contador caía a una
-   segunda línea, dejando cada fila en ~100px de alto. */
 .producto__info {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
   min-width: 0;
-  flex: 1 1 9rem;
 }
 
 .producto__nombre {
@@ -130,18 +303,41 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* Marca Y descripción, no sólo marca. En el catálogo hay dos productos que se
+   llaman "BT3" y dos que se llaman "Array": con el nombre y nada más, elegir
+   uno u otro era adivinar. La descripción es lo que los separa. */
 .producto__meta {
   font-size: var(--texto-sm);
   color: var(--tinta-tenue);
+  overflow-wrap: anywhere;
 }
 
 .producto__marca {
   color: var(--tinta-suave);
 }
 
+/* La existencia sale del texto corrido de la meta y pasa a tener sitio propio:
+   es el dato que decide si se puede pedir, y leído dentro de una frase junto a
+   la marca se perdía. */
+.producto__disponible {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: var(--texto-sm);
+  color: var(--tinta-suave);
+}
+
+/* Queda poco. Va en ámbar y CON PALABRAS —"Queda 1", no un punto de color—,
+   que es la regla del sistema para todo lo semántico. */
+.producto__disponible--bajo {
+  color: var(--aviso-texto);
+  font-weight: var(--peso-medio);
+}
+
 /* ---------- Contador ---------- */
 
 .contador {
+  grid-column: 2;
+  grid-row: 1 / span 2;
   display: inline-flex;
   align-items: stretch;
   flex-shrink: 0;
@@ -258,6 +454,17 @@ body {
   margin-top: var(--esp-4);
 }
 
+/* Qué pasa al pulsar. El botón dice "Ver orden del día", que suena a mirar;
+   lo que hay detrás descuenta el inventario y no se deshace. Decirlo aquí
+   cuesta una línea y evita llegar al diálogo de confirmación por sorpresa. */
+.panel-seleccion__pista {
+  margin-top: var(--esp-2);
+  font-size: var(--texto-etiqueta);
+  line-height: 1.45;
+  color: var(--tinta-tenue);
+  text-align: center;
+}
+
 .lista__vacia {
   color: var(--tinta-tenue);
   font-size: var(--texto-sm);
@@ -273,9 +480,23 @@ body {
 
 .lista__items li:last-child { border-bottom: 0; }
 
-.lista__nombre {
+/* La misma razón que en la fila del catálogo: en la lista de lo elegido puede
+   haber dos "BT3", y sin la marca debajo no hay forma de saber cuál se quita. */
+.lista__info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lista__nombre {
+  overflow-wrap: anywhere;
+}
+
+.lista__marca {
+  font-size: var(--texto-etiqueta);
+  letter-spacing: normal;
+  color: var(--tinta-tenue);
   overflow-wrap: anywhere;
 }
 
@@ -337,6 +558,15 @@ body {
   color: var(--tinta-suave);
 }
 
+/* El equivalente móvil de .panel-seleccion__pista: en el teléfono el panel
+   lateral no existe y el botón que descuenta es éste. */
+.barra-seleccion__nota {
+  display: block;
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-normal);
+  color: var(--tinta-tenue);
+}
+
 .barra-seleccion .btn {
   flex: 1 1 auto;
   max-width: 100%;
@@ -349,9 +579,39 @@ body {
     padding-top: var(--esp-6);
   }
 
+  /* 28rem y no 20: la fila ya no lleva sólo el nombre, lleva marca,
+     descripción y existencias. A 20rem entraban dos columnas de 414px y la
+     identidad se quedaba en 136 — el ancho justo para partir "Bases de
+     Micrófonos" en tres líneas. Con la caja actual esto da una sola columna
+     ancha, y dos si algún día se ensancha --ancho-pagina. */
   .rejilla-productos {
-    grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(28rem, 1fr));
   }
+
+  /* Con sitio de sobra, la existencia recupera su columna a la derecha,
+     alineada con las de las demás filas. */
+  .producto {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: var(--esp-3);
+  }
+
+  .producto__info {
+    grid-row: 1;
+  }
+
+  .producto__disponible {
+    grid-column: 2;
+    grid-row: 1;
+    text-align: right;
+  }
+
+  .contador {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .flujo__largo { display: inline; }
+  .flujo__corto { display: none; }
 
   .barra-seleccion .btn {
     flex: 0 0 auto;

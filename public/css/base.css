@@ -326,6 +326,37 @@ a {
   font-variant-numeric: tabular-nums lining-nums;
 }
 
+/* Una línea de texto con el recuento de lo que hay debajo: cuántos productos,
+   cuántas unidades, cuántas cuentas. La usan Inventario y Cuentas.
+
+   Es UNA FRASE, no un tablero: nada de rejilla de tarjetas con cifrones y
+   etiqueta chica, que es la primera anti-referencia del sistema. Los separa un
+   filete de 1px, igual que todo lo demás. */
+.resumen-linea {
+  display: flex;
+  flex-wrap: wrap;
+  /* Separa el espacio y nada más. Se probó un filete de 1px entre elementos
+     (`span + span { border-left }`) y al envolver dejaba una raya colgando al
+     principio de la segunda línea, sin nada que separar. El contraste entre la
+     cifra en tinta fuerte y la palabra en tenue ya agrupa cada par. */
+  gap: var(--esp-2) var(--esp-5);
+  margin: 0 0 var(--esp-5);
+  font-size: var(--texto-sm);
+  color: var(--tinta-tenue);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Cada par "cifra + palabra" viaja junto: partir "89 unidades" entre dos
+   líneas rompe justo lo que hace legible la frase. */
+.resumen-linea span {
+  white-space: nowrap;
+}
+
+.resumen-linea strong {
+  color: var(--tinta-fuerte);
+  font-weight: var(--peso-medio);
+}
+
 /* ---- Botones -------------------------------------------------------------- */
 
 .btn {
@@ -637,6 +668,44 @@ a {
 .barra-app__salir:hover {
   color: var(--tinta-fuerte);
   background-color: var(--papel-hundido);
+}
+
+/* ---- La barra en el teléfono ----------------------------------------------
+   Excepción a la convención mobile-first, igual que las columnas que oculta
+   style-inventario.css: esto RESTA (aprieta y reordena lo que ya cabía en
+   escritorio), y eso se expresa con max-width.
+
+   El comentario de más arriba decía "son dos" enlaces y por eso se envolvían
+   en vez de esconderse tras una hamburguesa. Ya son cuatro —"Cuentas" lo
+   inyecta sesion.js—, y envolviendo caían en tres filas: 155px de barra
+   pegados arriba en un teléfono de 390px, antes de ver un solo producto.
+
+   La razón de no esconderlos sigue en pie, así que no se esconde ninguno: el
+   nav baja a una fila propia, a lo ancho, con el reparto que le da
+   `space-between`. Dos filas, ~112px, y los cuatro destinos a la vista.
+
+   Los 44px de objetivo táctil NO se tocan: lo que se recorta es el padding
+   lateral, y los cuatro rótulos caben en 358px con holgura. */
+@media (max-width: 640px) {
+  .barra-app__nav {
+    order: 3;
+    width: 100%;
+    justify-content: space-between;
+    gap: 0;
+    padding-top: var(--esp-1);
+    border-top: 1px solid var(--filete);
+  }
+
+  .barra-app__enlace {
+    padding: 0 var(--esp-2);
+  }
+
+  /* En una sola fila el filete separaba la sesión de la navegación. Ahora la
+     navegación está en otra fila y el filete no separa nada. */
+  .barra-app__sesion {
+    padding-left: 0;
+    border-left: 0;
+  }
 }
 
 /* ---- Cabecera de pantalla -------------------------------------------------- */

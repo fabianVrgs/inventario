@@ -10,6 +10,12 @@ let areas = [];
 let modoEdicion = false;
 let itemEditando = null;
 
+// Orden de la tabla. Arranca por nombre ascendente y no por lo que devuelva
+// Postgres, que es el orden físico de las filas: con productos que se llaman
+// igual —hay dos "BT3" y dos "Array"— salían separados por media tabla.
+let ordenColumna = 'nombre';
+let ordenAscendente = true;
+
 // 🧩 Referencias a elementos del DOM
 const buscarInput = document.getElementById('buscar');
 const tablaInventario = document.getElementById('tablaInventario');
@@ -19,6 +25,8 @@ const btnNuevoItem = document.getElementById('btnNuevoItem');
 const btnCancelar = document.getElementById('btnCancelar');
 const btnDescargarCSV = document.getElementById('btnDescargarCSV');
 const selectArea = document.getElementById('itemArea');
+const resumenCatalogo = document.getElementById('resumenCatalogo');
+const cabeceraTabla = document.querySelector('.table thead');
 
 // 🔧 Helper: convierte texto en algo que se puede meter dentro de innerHTML sin
 // que el navegador lo interprete como marcado.
@@ -32,10 +40,26 @@ const selectArea = document.getElementById('itemArea');
 //
 // El mismo helper existe en orden.js con este nombre. La Content-Security-Policy
 // es la red por si algún día se escapa uno; esto es el suelo.
+//
+// LAS COMILLAS TAMBIÉN, y no es celo: `div.innerHTML` escapa `&`, `<` y `>`,
+// pero NO `"` ni `'`. Con eso basta dentro de un texto, y no basta dentro de un
+// atributo — y aquí el nombre del producto va en los `aria-label` de los cuatro
+// botones de cada fila. Un producto llamado `x" onmouseover="algo` cerraría el
+// atributo y abriría otro. La CSP no ejecutaría ese manejador, pero la CSP es la
+// segunda capa; ésta es la primera. En un nodo de texto `&quot;` se dibuja como
+// una comilla normal, así que escaparlas siempre no cuesta nada.
 function escapar(texto) {
     const div = document.createElement('div');
     div.textContent = texto ?? '';
-    return div.innerHTML;
+    return div.innerHTML.replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+}
+
+// 🔧 Helper: una celda que no tiene dato. Una celda en blanco se lee igual que
+// "esto todavía no ha cargado"; un guion dice que el producto no lo tiene.
+// Devuelve marcado ya escapado, para meterlo dentro de innerHTML.
+function sinDato(valor, texto = '—') {
+    const limpio = valor == null ? '' : String(valor).trim();
+    return limpio ? escapar(limpio) : `<span class="sin-dato">${texto}</span>`;
 }
 
 // 🔧 Helper: procesa una respuesta fetch. Si no fue ok, extrae el
@@ -84,9 +108,11 @@ async function cargarProductos() {
         const res = await fetch('/api/productos');
         productos = await manejarRespuesta(res);
         productosFiltrados = [...productos];
+        pintarResumen();
         renderizarTabla();
     } catch (error) {
         alert('No se pudieron cargar los productos: ' + error.message);
+        resumenCatalogo.hidden = true;
         tablaInventario.innerHTML = `
             <tr>
                 <td colspan="8" class="no-results no-results--error">Error al cargar el inventario</td>
@@ -94,6 +120,92 @@ async function cargarProductos() {
         `;
     }
 }
+
+// 📊 Qué hay en el catálogo, en una frase.
+//
+// Es una línea de texto y NO una rejilla de tarjetas con cifrones: el sistema
+// visual rechaza ese tablero por su nombre. Aquí el número va dentro de la
+// frase, con la unidad al lado, y los separa el mismo filete de 1px que separa
+// todo lo demás.
+//
+// Se arma con nodos y no con innerHTML por costumbre de este archivo, aunque
+// aquí todo sean números calculados: la excepción es justo lo que un día se
+// copia y pega con un nombre de producto dentro.
+function pintarResumen() {
+    const activos = productos.filter(p => Number(p.activo) === 1).length;
+    const bajas = productos.length - activos;
+    const unidades = productos.reduce((total, p) => total + Number(p.cantidad), 0);
+    const areas = new Set(productos.map(p => p.area).filter(Boolean)).size;
+
+    const partes = [
+        [productos.length, productos.length === 1 ? 'producto' : 'productos'],
+        [activos, activos === 1 ? 'activo' : 'activos'],
+        [unidades, unidades === 1 ? 'unidad en total' : 'unidades en total'],
+        [areas, areas === 1 ? 'área' : 'áreas'],
+    ];
+
+    // "1 desactivado" sólo aparece si hay alguno: un cero permanente en la
+    // línea invita a leerlo como un contador que hay que vaciar.
+    if (bajas > 0) partes.splice(2, 0, [bajas, bajas === 1 ? 'desactivado' : 'desactivados']);
+
+    resumenCatalogo.replaceChildren(...partes.map(([n, palabra]) => {
+        const span = document.createElement('span');
+        const cifra = document.createElement('strong');
+        cifra.textContent = String(n);
+        span.append(cifra, document.createTextNode(` ${palabra}`));
+        return span;
+    }));
+
+    resumenCatalogo.hidden = productos.length === 0;
+}
+
+// ↕️ Ordena una copia, nunca `productos`: ése es el catálogo tal como vino de
+// la API y lo leen el CSV, el detalle y el formulario de edición.
+function ordenar(datos) {
+    const signo = ordenAscendente ? 1 : -1;
+
+    return [...datos].sort((a, b) => {
+        if (ordenColumna === 'cantidad') {
+            const diferencia = Number(a.cantidad) - Number(b.cantidad);
+            // Empate a cantidad —hay muchos ceros— se rompe por nombre, para
+            // que la tabla no baile entre repintados.
+            if (diferencia !== 0) return diferencia * signo;
+            return a.nombre.localeCompare(b.nombre, 'es');
+        }
+        // localeCompare con 'es': sin él la Ñ y los acentos caen detrás de la Z.
+        return a.nombre.localeCompare(b.nombre, 'es') * signo;
+    });
+}
+
+// Marca en la cabecera por qué columna se ordena. `aria-sort` va en el <th>,
+// que es donde lo espera ARIA, y sólo puede haber uno en la tabla.
+function pintarCabeceraOrden() {
+    for (const boton of cabeceraTabla.querySelectorAll('.orden')) {
+        const th = boton.closest('th');
+        if (boton.dataset.ordenar === ordenColumna) {
+            th.setAttribute('aria-sort', ordenAscendente ? 'ascending' : 'descending');
+        } else {
+            th.removeAttribute('aria-sort');
+        }
+    }
+}
+
+cabeceraTabla.addEventListener('click', (evento) => {
+    const boton = evento.target.closest('[data-ordenar]');
+    if (!boton) return;
+
+    const columna = boton.dataset.ordenar;
+    // Pulsar la columna que ya ordena invierte el sentido; cambiar de columna
+    // empieza por ascendente, que es lo que espera cualquiera.
+    if (columna === ordenColumna) {
+        ordenAscendente = !ordenAscendente;
+    } else {
+        ordenColumna = columna;
+        ordenAscendente = true;
+    }
+
+    renderizarTabla();
+});
 
 // 🎨 Iconos SVG en línea, estilo Lucide: trazo 2px, heredan currentColor.
 // Antes eran emoji (👁️ ✏️ 🔌 ⚡ 🗑️). Como eran el único contenido del botón,
@@ -114,6 +226,8 @@ const ICONOS = {
 // 📋 Renderiza la tabla con los datos del inventario
 function renderizarTabla(datos = productosFiltrados) {
     tablaInventario.innerHTML = ''; // Limpia la tabla
+    pintarCabeceraOrden();
+    datos = ordenar(datos);
 
     if (datos.length === 0) {
         tablaInventario.innerHTML = `
@@ -130,26 +244,29 @@ function renderizarTabla(datos = productosFiltrados) {
         const activo = Number(item.activo) === 1;
         if (!activo) row.classList.add('fila-inactiva');
 
+        const cantidad = Number(item.cantidad);
+
         row.innerHTML = `
             <td>${item.id_producto}</td>
             <td><strong>${escapar(item.nombre)}</strong></td>
-            <td>${escapar(item.marca)}</td>
-            <td>${escapar(item.descripcion)}</td>
-            <td>${escapar(item.area)}</td>
-            <td>${Number(item.cantidad)}</td>
+            <td>${sinDato(item.marca)}</td>
+            <td>${sinDato(item.descripcion)}</td>
+            <td>${sinDato(item.area, 'Sin área')}</td>
+            <td class="${cantidad === 0 ? 'agotado' : ''}">${cantidad}</td>
             <td><span class="badge ${
                   activo ? 'badge-activo' : 'badge-inactivo'
             }">${activo ? 'Activo' : 'Inactivo'}</span></td>
             <td>
                 <div class="actions">
-                    <button class="btn-action btn-detail" title="Ver detalle" aria-label="Ver detalle" data-accion="ver" data-id="${item.id_producto}">${ICONOS.ver}</button>
-                    <button class="btn-action btn-edit" title="Editar" aria-label="Editar" data-accion="editar" data-id="${item.id_producto}">${ICONOS.editar}</button>
+                    <button class="btn-action btn-detail" title="Ver detalle" aria-label="Ver detalle de ${escapar(item.nombre)}" data-accion="ver" data-id="${item.id_producto}">${ICONOS.ver}</button>
+                    <button class="btn-action btn-edit" title="Editar" aria-label="Editar ${escapar(item.nombre)}" data-accion="editar" data-id="${item.id_producto}">${ICONOS.editar}</button>
                     <button class="btn-action btn-toggle" title="${
                           activo ? 'Desactivar' : 'Reactivar'
                     }" aria-label="${
                           activo ? 'Desactivar' : 'Reactivar'
-                    }" data-accion="alternar" data-id="${item.id_producto}">${activo ? ICONOS.desactivar : ICONOS.reactivar}</button>
-                    <button class="btn-action btn-delete" title="Eliminar" aria-label="Eliminar" data-accion="eliminar" data-id="${item.id_producto}">${ICONOS.eliminar}</button>
+                    } ${escapar(item.nombre)}" data-accion="alternar" data-id="${item.id_producto}">${activo ? ICONOS.desactivar : ICONOS.reactivar}</button>
+                    <span class="actions__separador" aria-hidden="true"></span>
+                    <button class="btn-action btn-delete" title="Eliminar" aria-label="Eliminar ${escapar(item.nombre)}" data-accion="eliminar" data-id="${item.id_producto}">${ICONOS.eliminar}</button>
                 </div>
             </td>
         `;
@@ -230,16 +347,28 @@ function editarItem(id) {
 
 // 🔍 Modal de Detalles
 const modalDetalle = document.getElementById('modalDetalle');
+const btnDetalleAlternar = document.getElementById('btnDetalleAlternar');
+
+// Qué producto se está mirando. En el teléfono esta ventana es el único sitio
+// desde el que se puede editar, desactivar o borrar, así que las tres acciones
+// necesitan saber sobre cuál operan.
+let itemDelDetalle = null;
 
 function verDetalle(id) {
   const item = productos.find(i => i.id_producto === id);
   if (item) {
+    itemDelDetalle = item;
+    const activo = Number(item.activo) === 1;
+
     document.getElementById('detalleNombre').textContent = item.nombre;
-    document.getElementById('detalleMarca').textContent = item.marca ?? '';
-    document.getElementById('detalleDescripcion').textContent = item.descripcion ?? '';
-    document.getElementById('detalleArea').textContent = item.area ?? '';
+    document.getElementById('detalleMarca').textContent = item.marca || '—';
+    document.getElementById('detalleDescripcion').textContent = item.descripcion || '—';
+    document.getElementById('detalleArea').textContent = item.area || 'Sin área';
     document.getElementById('detalleCantidad').textContent = item.cantidad;
-    document.getElementById('detalleEstado').textContent = Number(item.activo) === 1 ? 'Activo' : 'Inactivo';
+    document.getElementById('detalleEstado').textContent = activo ? 'Activo' : 'Inactivo';
+
+    // El mismo botón sirve para las dos direcciones, igual que el de la fila.
+    btnDetalleAlternar.textContent = activo ? 'Desactivar' : 'Reactivar';
 
     modalDetalle.style.display = 'flex';
   }
@@ -247,6 +376,20 @@ function verDetalle(id) {
 
 function cerrarModalDetalle() {
   modalDetalle.style.display = 'none';
+  itemDelDetalle = null;
+}
+
+// Las tres acciones cierran el detalle ANTES de actuar: las dos primeras abren
+// otra ventana encima —el formulario y la confirmación de borrado—, y dos
+// modales superpuestos dejan al de abajo atrapando los clics que caen fuera
+// del de arriba. La tercera pregunta con `confirm()`, que tampoco tiene
+// sentido tras una ventana que ya no hace falta leer.
+function conElDetalle(hacer) {
+  return () => {
+    const item = itemDelDetalle;
+    cerrarModalDetalle();
+    if (item) hacer(item.id_producto);
+  };
 }
 
 // 🔌 Alterna activo/inactivo. No borra nada: `activo` sólo decide si el
@@ -355,6 +498,9 @@ btnDescargarCSV.addEventListener('click', descargarCSV);
 // aquí. Es también la razón por la que estas funciones ya no necesitan ser
 // globales para funcionar.
 document.getElementById('btnCerrarDetalle').addEventListener('click', cerrarModalDetalle);
+document.getElementById('btnDetalleEditar').addEventListener('click', conElDetalle(editarItem));
+btnDetalleAlternar.addEventListener('click', conElDetalle(alternarActivo));
+document.getElementById('btnDetalleEliminar').addEventListener('click', conElDetalle(eliminarItem));
 document.getElementById('btnCancelarEliminar').addEventListener('click', cerrarModalEliminar);
 document.getElementById('btnConfirmarEliminar').addEventListener('click', confirmarEliminar);
 

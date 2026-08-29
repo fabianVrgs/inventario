@@ -40,10 +40,25 @@
      .devolucion__nombre, .devolucion__nota, .devolucion__cantidad,
      .devolucion__acciones */
 
+/* En una sola fila: rótulo y ayuda a la izquierda, campo y botón a la derecha.
+   Apilados —título, ayuda, formulario, panel— se llevaban el tercio superior de
+   la ventana antes de que se viera un solo producto del catálogo, que es el
+   trabajo principal de esta pantalla. El panel de resultado y los avisos siguen
+   debajo, a lo ancho: sólo aparecen cuando se busca una orden. */
 .devolucion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esp-3) var(--esp-4);
   margin-bottom: var(--esp-5);
   padding-bottom: var(--esp-5);
   border-bottom: 1px solid var(--filete);
+}
+
+.devolucion__texto {
+  flex: 1 1 26rem;
+  min-width: 0;
 }
 
 .devolucion__titulo {
@@ -53,7 +68,7 @@
 }
 
 .devolucion__ayuda {
-  margin: var(--esp-1) 0 var(--esp-3);
+  margin: var(--esp-1) 0 0;
   font-size: var(--texto-sm);
   color: var(--tinta-suave);
   max-width: 62ch;
@@ -63,6 +78,15 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--esp-2);
+  flex: 0 0 auto;
+}
+
+/* El aviso y el panel de resultado son hijos de .devolucion, que ahora es
+   flex: sin esto quedarían como una tercera columna estrecha en vez de debajo,
+   a lo ancho. */
+.devolucion__aviso,
+.devolucion__panel {
+  flex: 1 0 100%;
 }
 
 /* Ancho de un número de orden, no de un buscador de texto: el campo dice por su
@@ -244,6 +268,54 @@
   border-bottom: 1px solid var(--filete-fuerte);
 }
 
+/* ---------- Orden de la tabla ----------
+   La cabecera dice por qué columna está ordenada y en qué sentido. Antes las
+   filas salían en el orden en que las devolvía Postgres —que es el orden
+   físico, no uno que nadie eligiera— y no había forma de agrupar el catálogo
+   ni de ver de un vistazo qué se está acabando.
+
+   Es un <button> dentro del <th>, no un manejador en la celda: se llega con
+   el tabulador y se activa con Enter, gratis. */
+.orden {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-1);
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  background: none;
+  transition: color var(--dur-rapida) var(--curva);
+}
+
+.orden:hover { color: var(--tinta-fuerte); }
+
+/* `aria-sort` va en el <th>, que es donde lo espera ARIA, no en el botón. El
+   CSS se cuelga del mismo atributo para que no puedan desincronizarse. */
+
+/* La columna por la que se ordena, en morado: es "estado seleccionado", el
+   tercero de los cuatro trabajos que el sistema le reserva al color. */
+.table thead th[aria-sort] .orden {
+  color: var(--marca-fuerte);
+}
+
+.orden__flecha {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+/* Sin ordenar: la flecha se queda como afordancia apagada, para que se vea que
+   la cabecera hace algo antes de pulsarla. */
+.table thead th:not([aria-sort]) .orden__flecha {
+  color: var(--filete-fuerte);
+}
+
+.table thead th[aria-sort='descending'] .orden__flecha {
+  transform: rotate(180deg);
+}
+
 /* Filas separadas por filete. SIN rayado alterno: el zebra es de Bootstrap y
    junto a los filetes solo añade ruido. */
 .table tbody tr + tr td {
@@ -286,6 +358,23 @@
 .table tbody td:nth-child(4) {
   color: var(--tinta-suave);
   max-width: 22rem;
+}
+
+/* Existencia en cero. Va en ámbar y no en rojo: no es un fallo ni algo
+   irreversible, es material que no se puede pedir hoy. Y la cifra sigue
+   diciendo "0" — el color no lleva información que no esté ya escrita.
+
+   Se escribe con el selector largo a propósito: `.agotado` a secas pierde
+   contra el `td:nth-child(6)` de arriba, que ya fija un color. */
+.table tbody td.agotado {
+  color: var(--aviso-texto);
+}
+
+/* Un dato que la fila no tiene: marca vacía, producto sin área. Antes salía
+   una celda en blanco, que se lee igual que "no he cargado esto todavía". */
+.sin-dato {
+  color: var(--tinta-tenue);
+  font-style: normal;
 }
 
 /* ---------- Fila desactivada ---------- */
@@ -343,6 +432,23 @@
 .btn-action:hover {
   background-color: var(--filete);
   color: var(--tinta-fuerte);
+}
+
+/* Un filete entre las tres acciones reversibles y la que no lo es. Cuesta
+   1px y separa "editar" de "eliminar" en una fila donde los cuatro botones
+   miden lo mismo, se pintan igual y están pegados: el error de pulsar uno de
+   más aquí borra un producto del catálogo. */
+.actions__separador {
+  width: 1px;
+  height: 20px;
+  margin: 0 var(--esp-1);
+  background-color: var(--filete);
+  flex-shrink: 0;
+}
+
+/* Sin permiso no hay botón de eliminar, y entonces el filete no separa nada. */
+:root:not(.permiso-productos-eliminar) .actions__separador {
+  display: none;
 }
 
 /* Solo el destructivo cambia de color, y solo al apuntarlo. En reposo los
@@ -483,6 +589,30 @@
   overflow-wrap: anywhere;
 }
 
+/* Las acciones del producto, dentro de su detalle. Existen para el teléfono:
+   allí la fila sólo conserva el botón que abre esta ventana (ver más abajo,
+   en RESPONSIVE), y sin esto no habría forma de editar ni desactivar nada
+   desde un móvil. En escritorio se ven igual, y no sobran: aquí se opera
+   sobre el producto que se está leyendo, con su nombre delante. */
+.detalle__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-2);
+  margin-top: var(--esp-5);
+  padding-top: var(--esp-4);
+  border-top: 1px solid var(--filete);
+}
+
+.detalle__acciones .btn {
+  flex: 1 1 auto;
+}
+
+/* El botón de borrar no se separa aquí con un filete como en la fila: en esta
+   ventana es el único destructivo y ya va en rojo. */
+:root:not(.permiso-productos-eliminar) .detalle__acciones .btn--peligro {
+  display: none;
+}
+
 .modal-buttons {
   display: flex;
   gap: var(--esp-2);
@@ -556,5 +686,21 @@
   .barra-herramientas__acciones .btn,
   .modal-buttons .btn {
     flex: 1;
+  }
+
+  /* En la fila queda UN botón: el que abre el detalle.
+     A 390px el ancho útil es ~374px y los cuatro botones de 44px se llevaban
+     176 de golpe. Con lo que sobraba, el nombre —lo único por lo que se
+     reconoce una fila— se partía en dos o tres líneas.
+
+     No se pierde ninguna acción: las otras tres viven en el detalle, que ya
+     era la ventana que traía los datos que aquí se ocultan (ID, marca,
+     descripción, área). Un toque de más para editar, a cambio de poder leer
+     lo que se va a editar. */
+  .actions .btn-edit,
+  .actions .btn-toggle,
+  .actions .btn-delete,
+  .actions__separador {
+    display: none;
   }
 }

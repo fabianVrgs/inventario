@@ -71,12 +71,20 @@
 }
 
 .acceso__titulo {
-  margin: 0 0 var(--esp-5);
+  margin: 0;
   font-size: var(--texto-headline);
   font-weight: var(--peso-fuerte);
   line-height: var(--interlineado-titulo);
   letter-spacing: var(--tracking-titulo);
   color: var(--tinta-fuerte);
+}
+
+/* Una línea que diga de qué va esto antes de pedir nada. Quien abre esta
+   pantalla por primera vez no sabe si es un sitio donde se registra uno. */
+.acceso__intro {
+  margin: var(--esp-2) 0 var(--esp-5);
+  font-size: var(--texto-sm);
+  color: var(--tinta-suave);
 }
 
 .acceso__campo {
@@ -101,6 +109,20 @@
   width: 100%;
   margin-top: var(--esp-2);
   min-height: var(--objetivo-tactil);
+}
+
+/* La salida cuando no se puede entrar. Esta pantalla no tiene registro ni
+   "olvidé mi contraseña" —las cuentas las crea otra persona desde
+   /html/cuentas.html— y no decirlo dejaba a quien no puede entrar mirando una
+   pantalla sin ninguna otra opción. Va bajo un filete, en el tamaño de
+   etiqueta: es la letra pequeña, no una tercera acción. */
+.acceso__pie {
+  margin: var(--esp-5) 0 0;
+  padding-top: var(--esp-4);
+  border-top: 1px solid var(--filete);
+  font-size: var(--texto-etiqueta);
+  line-height: 1.5;
+  color: var(--tinta-tenue);
 }
 
 /* El aviso NO usa el rojo de --peligro a secas: aquí el mensaje más frecuente

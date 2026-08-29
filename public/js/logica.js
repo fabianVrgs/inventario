@@ -15,12 +15,24 @@ const lista = document.getElementById("lista");
 const listaVacia = document.getElementById("listaVacia");
 const barraSeleccion = document.getElementById("barraSeleccion");
 const ctaOrden = document.getElementById("ctaOrden");
+const pistaOrden = document.getElementById("pistaOrden");
+const conteoResultados = document.getElementById("conteoResultados");
+const filtrosArea = document.getElementById("filtrosArea");
 // El mismo recuento se pinta en dos sitios: el panel lateral (escritorio) y la
 // barra inferior (móvil). Solo uno de los dos es visible en cada tamaño.
 const resumenes = document.querySelectorAll("[data-resumen]");
 
 let productos = [];  // catálogo activo tal como viene de la API (+ cantidadDisponible)
 let seleccion = [];  // [{ id_producto, nombre, marca, area, cantidad }] — números, no strings
+
+// Área elegida en los filtros, o null para "todas". Es sólo de la vista: no se
+// guarda ni viaja a la orden.
+let areaActiva = null;
+
+// Cuando quedan estas unidades o menos, la existencia se rotula en ámbar. No es
+// un umbral de negocio (nadie ha pedido un "stock mínimo"): es el punto donde
+// conviene que la cifra deje de leerse como una más de la columna.
+const UMBRAL_POCAS = 2;
 
 // ---------------------------------------------------------------------------
 // Consultas sobre el estado
@@ -42,11 +54,26 @@ function hayQueMostrar(item) {
 function agruparPorArea(data) {
   const agrupado = {};
   data.forEach(item => {
-    const area = item.area || "Sin área";
+    const area = nombreDeArea(item);
     if (!agrupado[area]) agrupado[area] = [];
     agrupado[area].push(item);
   });
   return agrupado;
+}
+
+// Un solo sitio decide cómo se llama el área de un producto sin área. Estaba
+// escrito en tres archivos con dos textos distintos ("Sin área" aquí, "Sin
+// área" en orden.js, la cadena vacía en la tabla del inventario).
+function nombreDeArea(item) {
+  return item.area && String(item.area).trim() ? item.area : "Sin área";
+}
+
+// Lo que distingue a un producto de otro que se llama igual. En el catálogo hay
+// dos "BT3" y dos "Array": sin esto, elegir uno u otro es adivinar.
+function senasDe(item) {
+  return [item.marca, item.descripcion]
+    .map(t => (t == null ? "" : String(t).trim()))
+    .filter(Boolean);
 }
 
 // ---------------------------------------------------------------------------
@@ -64,11 +91,21 @@ function mostrarResultados() {
   Object.keys(agrupado)
     .sort((a, b) => a.localeCompare(b, "es"))
     .forEach(area => {
-      const items = agrupado[area].filter(p => p.nombre.toLowerCase().includes(texto));
+      // El filtro de área no oculta el rótulo: oculta el grupo entero, para
+      // que no quede una regla morada presidiendo una lista vacía.
+      if (areaActiva !== null && area !== areaActiva) return;
+
+      // La búsqueda mira también marca y descripción: son las señas por las
+      // que se distinguen los productos que se llaman igual, así que teclear
+      // "monitor de salida" tiene que llevar a uno de los dos "BT3".
+      const items = agrupado[area].filter(p => coincide(p, texto));
       if (items.length === 0) return;
       encontrados += items.length;
       resultados.appendChild(construirGrupo(area, items));
     });
+
+  actualizarConteo(encontrados, consulta);
+  actualizarConteosDeArea();
 
   if (encontrados === 0) {
     const aviso = document.createElement("p");
@@ -76,9 +113,46 @@ function mostrarResultados() {
     // textContent y no innerHTML: la consulta la escribe el usuario.
     aviso.textContent = consulta
       ? `Ningún producto disponible coincide con "${consulta}".`
-      : "No hay productos disponibles en este momento.";
+      : areaActiva !== null
+        ? `No queda nada disponible en ${areaActiva}.`
+        : "No hay productos disponibles en este momento.";
     resultados.appendChild(aviso);
   }
+}
+
+// Recalcula la cabecera de cada área a partir de las filas que tiene dentro,
+// no de la última búsqueda: así el recuento sigue al stock sin repintar nada.
+function actualizarConteosDeArea() {
+  for (const grupo of resultados.querySelectorAll(".grupo-area")) {
+    const cuenta = grupo.querySelector(".titulo-area__n");
+    if (!cuenta) continue;
+
+    const ids = new Set(
+      [...grupo.querySelectorAll(".producto")].map(fila => Number(fila.dataset.id))
+    );
+    const items = productos.filter(p => ids.has(p.id_producto));
+    const unidades = items.reduce((total, p) => total + p.cantidadDisponible, 0);
+
+    cuenta.textContent =
+      `${items.length} ${items.length === 1 ? "producto" : "productos"} · ` +
+      `${unidades} ${unidades === 1 ? "unidad" : "unidades"}`;
+  }
+}
+
+function coincide(item, texto) {
+  if (!texto) return true;
+  return [item.nombre, ...senasDe(item)]
+    .some(campo => String(campo).toLowerCase().includes(texto));
+}
+
+// Cuántos productos hay debajo. Sin este número, con el catálogo filtrado no
+// hay forma de saber si el filtro se aplicó o si de verdad no queda nada.
+function actualizarConteo(encontrados, consulta) {
+  const productoS = encontrados === 1 ? "producto" : "productos";
+
+  conteoResultados.textContent = (consulta || areaActiva !== null)
+    ? `${encontrados} ${productoS}`
+    : `${encontrados} ${productoS} disponibles`;
 }
 
 function construirGrupo(area, items) {
@@ -88,6 +162,16 @@ function construirGrupo(area, items) {
   const titulo = document.createElement("h3");
   titulo.className = "titulo-area";
   titulo.textContent = area;
+
+  // Qué hay en el área, colgado de su propio rótulo. Ahorra recorrer la lista
+  // para saber si merece la pena bajar hasta ella. Lo rellena
+  // actualizarConteosDeArea(), que es también quien lo mantiene al día: tomar
+  // unidades cambia lo disponible sin repintar el grupo, y una cabecera que
+  // dijera "4 unidades" sobre una fila que dice "Queda 1" es peor que ninguna.
+  const cuenta = document.createElement("span");
+  cuenta.className = "titulo-area__n";
+  titulo.appendChild(cuenta);
+
   grupo.appendChild(titulo);
 
   const rejilla = document.createElement("ul");
@@ -110,19 +194,27 @@ function construirProducto(item) {
   nombre.className = "producto__nombre";
   nombre.textContent = item.nombre;
 
+  // Marca y descripción, no sólo marca: son las señas que separan los dos
+  // "BT3" del catálogo. Se montan con nodos y no con innerHTML porque las
+  // teclea una persona en el formulario del inventario.
   const meta = document.createElement("span");
   meta.className = "producto__meta";
-  if (item.marca) {
+  const senas = senasDe(item);
+  if (senas.length > 0) {
     const marca = document.createElement("span");
     marca.className = "producto__marca";
-    marca.textContent = item.marca;
-    meta.append(marca, document.createTextNode(" · "));
+    marca.textContent = senas[0];
+    meta.appendChild(marca);
+    if (senas[1]) meta.append(document.createTextNode(` · ${senas[1]}`));
   }
-  const disponible = document.createElement("span");
-  disponible.className = "producto__disponible cifra";
-  meta.appendChild(disponible);
 
   info.append(nombre, meta);
+
+  // La existencia ya no vive dentro de la meta: es hermana de la identidad y
+  // del contador, y el CSS le da columna propia. Leída dentro de la frase de
+  // la marca, el dato que decide si se puede pedir se perdía.
+  const disponible = document.createElement("span");
+  disponible.className = "producto__disponible cifra";
 
   const contador = document.createElement("div");
   contador.className = "contador";
@@ -140,7 +232,7 @@ function construirProducto(item) {
   campo.setAttribute("aria-label", `Cantidad de ${item.nombre}`);
 
   contador.append(menos, campo, mas);
-  fila.append(info, contador);
+  fila.append(info, disponible, contador);
 
   menos.addEventListener("click", () => fijarCantidad(item, cantidadSeleccionada(item.id_producto) - 1));
   mas.addEventListener("click", () => fijarCantidad(item, cantidadSeleccionada(item.id_producto) + 1));
@@ -177,11 +269,81 @@ function sincronizarProducto(item, nodo) {
   pasos[0].disabled = elegida === 0;
   pasos[1].disabled = item.cantidadDisponible === 0;
 
-  disponible.textContent = item.cantidadDisponible === 1
-    ? "1 disponible"
-    : `${item.cantidadDisponible} disponibles`;
+  // "Quedan 3" y no "3 disponibles" cuando queda poco: el verbo es lo que
+  // convierte una cifra más de la columna en un aviso. El color va SIEMPRE
+  // acompañado del texto, nunca solo.
+  const quedan = item.cantidadDisponible;
+  const pocas = quedan <= UMBRAL_POCAS;
+
+  disponible.textContent =
+    quedan === 0 ? "No queda ninguna"
+    : quedan === 1 ? "Queda 1"
+    : pocas ? `Quedan ${quedan}`
+    : `${quedan} disponibles`;
+
+  disponible.classList.toggle("producto__disponible--bajo", pocas);
 
   fila.classList.toggle("producto--elegido", elegida > 0);
+}
+
+// ---------------------------------------------------------------------------
+// Filtro por área
+// ---------------------------------------------------------------------------
+
+// Los botones se construyen UNA vez, al cargar el catálogo, y después sólo se
+// les parchea el recuento. Reconstruirlos en cada +/− mandaría el foco del
+// teclado a <body> si el foco estuviera en uno de ellos — el mismo motivo por
+// el que las filas se parchean en vez de repintarse.
+function pintarFiltros() {
+  filtrosArea.replaceChildren();
+
+  const areas = Object.keys(agruparPorArea(productos)).sort((a, b) => a.localeCompare(b, "es"));
+
+  // Con una sola área los botones no filtran nada: sobran.
+  if (areas.length < 2) return;
+
+  filtrosArea.appendChild(construirFiltro(null, "Todas las áreas"));
+  areas.forEach(area => filtrosArea.appendChild(construirFiltro(area, area)));
+
+  actualizarConteosDeFiltro();
+}
+
+function construirFiltro(area, etiqueta) {
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "filtro";
+  // aria-pressed y no una clase de autor: es un interruptor, y así lo anuncia
+  // un lector de pantalla sin que haya que escribir nada más. El CSS se cuelga
+  // del mismo atributo, así que no pueden desincronizarse.
+  boton.setAttribute("aria-pressed", String(areaActiva === area));
+  if (area !== null) boton.dataset.area = area;
+
+  boton.append(document.createTextNode(etiqueta));
+
+  const n = document.createElement("span");
+  n.className = "filtro__n cifra";
+  boton.appendChild(n);
+
+  boton.addEventListener("click", () => {
+    areaActiva = area;
+    for (const otro of filtrosArea.querySelectorAll(".filtro")) {
+      otro.setAttribute("aria-pressed", String((otro.dataset.area ?? null) === area));
+    }
+    mostrarResultados();
+  });
+
+  return boton;
+}
+
+function actualizarConteosDeFiltro() {
+  const agrupado = agruparPorArea(productos.filter(hayQueMostrar));
+  const total = Object.values(agrupado).reduce((suma, items) => suma + items.length, 0);
+
+  for (const boton of filtrosArea.querySelectorAll(".filtro")) {
+    const area = boton.dataset.area ?? null;
+    const cuantos = area === null ? total : (agrupado[area]?.length ?? 0);
+    boton.querySelector(".filtro__n").textContent = String(cuantos);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -224,6 +386,10 @@ function escribirEnSeleccion(producto, cantidad) {
       id_producto: idProducto,
       nombre: producto.nombre,
       marca: producto.marca,
+      // Viaja con la línea para que la orden del día pueda imprimir de qué
+      // "BT3" habla. Es un campo más en sessionStorage; orden.js filtra por
+      // forma (id y cantidad), así que añadirlo no rompe el contrato.
+      descripcion: producto.descripcion,
       area: producto.area,
       cantidad: Number(cantidad)
     });
@@ -264,9 +430,23 @@ function renderLista() {
   seleccion.forEach(item => {
     const li = document.createElement("li");
 
+    const info = document.createElement("span");
+    info.className = "lista__info";
+
     const nombre = document.createElement("span");
     nombre.className = "lista__nombre";
     nombre.textContent = item.nombre;
+    info.appendChild(nombre);
+
+    // Las mismas señas que en la fila del catálogo: en la lista de lo elegido
+    // puede haber dos "BT3", y sin esto no hay forma de saber cuál se quita.
+    const senas = senasDe(item);
+    if (senas.length > 0) {
+      const marca = document.createElement("span");
+      marca.className = "lista__marca";
+      marca.textContent = senas.join(" · ");
+      info.appendChild(marca);
+    }
 
     const cantidad = document.createElement("span");
     cantidad.className = "lista__cantidad cifra";
@@ -279,7 +459,7 @@ function renderLista() {
     quitar.setAttribute("aria-label", `Quitar ${item.nombre} de la selección`);
     quitar.addEventListener("click", () => quitarDeSeleccion(item.id_producto));
 
-    li.append(nombre, cantidad, quitar);
+    li.append(info, cantidad, quitar);
     lista.appendChild(li);
   });
 
@@ -299,6 +479,12 @@ function actualizarResumen() {
   const vacia = nProductos === 0;
   barraSeleccion.hidden = vacia;
   ctaOrden.hidden = vacia;
+  // La pista acompaña al botón: sin botón no explica nada.
+  pistaOrden.hidden = vacia;
+
+  // Tomar unidades cambia lo disponible, y con ello los dos recuentos.
+  actualizarConteosDeFiltro();
+  actualizarConteosDeArea();
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +590,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
       const { ajustada } = restaurarSeleccion();
 
+      pintarFiltros();
       mostrarResultados();
       renderLista();
       actualizarResumen();

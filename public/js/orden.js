@@ -37,6 +37,10 @@
   const elAvisoAplicada = document.getElementById("avisoOrdenAplicada");
   const elBtnNuevaOrden = document.getElementById("btnNuevaOrden");
 
+  const elEstadoOrden = document.getElementById("estadoOrden");
+  const elCifrasOrden = document.getElementById("cifrasOrden");
+  const elTotalUnidades = document.getElementById("totalUnidades");
+
   const elDialogo = document.getElementById("dialogoEmitir");
   const elResumenDescuento = document.getElementById("resumenDescuento");
   const elBtnConfirmarEmision = document.getElementById("btnConfirmarEmision");
@@ -202,7 +206,10 @@
 
         const nombre = document.createElement("span");
         nombre.className = "nombre-prod";
-        nombre.textContent = item.nombre;
+        // Con la marca detrás, no sólo el nombre: en el catálogo hay dos "BT3"
+        // y dos "Array", y un papel que dice "BT3 ....... 4" no le sirve a
+        // quien tiene que ir a buscarlo al almacén.
+        nombre.textContent = item.marca ? `${item.nombre} · ${item.marca}` : item.nombre;
 
         const puntos = document.createElement("span");
         puntos.className = "puntos";
@@ -226,6 +233,38 @@
     });
 
     seleccion.forEach(sincronizarLinea);
+    actualizarResumenDeOrden();
+  }
+
+  // El total del papel y las cifras del estado salen del MISMO recuento, y se
+  // recalculan en cada cambio de cantidad: un total impreso que se quedara con
+  // la suma anterior sería peor que no imprimir ninguno.
+  //
+  // El bloque de estado se esconde cuando la orden ya se aplicó: ahí habla el
+  // recuadro verde, que dice algo distinto y más importante.
+  function actualizarResumenDeOrden() {
+    const unidades = seleccion.reduce((total, i) => total + i.cantidad, 0);
+    const productos = seleccion.length;
+    const areas = agruparPorArea(seleccion).size;
+
+    elTotalUnidades.textContent = String(unidades);
+
+    elEstadoOrden.hidden = ordenAplicada || seleccion.length === 0;
+    if (elEstadoOrden.hidden) return;
+
+    elCifrasOrden.replaceChildren();
+    const partes = [
+      [areas, areas === 1 ? "área" : "áreas"],
+      [productos, productos === 1 ? "producto" : "productos"],
+      [unidades, unidades === 1 ? "unidad" : "unidades"],
+    ];
+
+    partes.forEach(([n, palabra], i) => {
+      if (i > 0) elCifrasOrden.append(document.createTextNode(" · "));
+      const cifra = document.createElement("strong");
+      cifra.textContent = String(n);
+      elCifrasOrden.append(cifra, document.createTextNode(` ${palabra}`));
+    });
   }
 
   function construirAcciones(item) {
@@ -286,6 +325,9 @@
     item.cantidad = nueva;
     guardarSeleccion();
     sincronizarLinea(item);
+    // El total impreso y el recuento del estado cambian con la línea. Sin esto
+    // el papel saldría con la suma de antes de la última corrección.
+    actualizarResumenDeOrden();
   }
 
   // Deja la línea coherente con el estado sin rehacer el formato, para no
@@ -317,6 +359,7 @@
     elEstadoVacio.hidden = false;
     elFormato.hidden = true;
     elAvisoAplicada.hidden = true;
+    elEstadoOrden.hidden = true;
     elBtnImprimir.hidden = true;
   }
 
@@ -396,6 +439,8 @@
   // que la borra.
   function cerrarOrdenEnPantalla() {
     elAvisoAplicada.hidden = false;
+    // Ya no es un borrador: lo que hay que decir lo dice el recuadro verde.
+    elEstadoOrden.hidden = true;
     elBtnImprimir.textContent = "Reimprimir";
     elContenidoAreas.querySelectorAll(".acciones-linea").forEach((nodo) => nodo.remove());
     pintarNumeroOrden();

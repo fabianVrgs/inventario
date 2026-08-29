@@ -32,6 +32,12 @@
     <p class="cabecera-pantalla__sub">Catálogo completo, incluido lo desactivado.</p>
   </div>
 
+  <!-- Qué hay en el catálogo, en una frase. Lo rellena edit.js tras cargar los
+       productos; hasta entonces no ocupa sitio. Es una línea de texto y no una
+       rejilla de tarjetas con cifrones: ese es exactamente el tablero que este
+       sistema visual rechaza. -->
+  <p class="resumen-linea" id="resumenCatalogo" hidden></p>
+
   <!-- RECIBIR DEVOLUCIÓN: la otra mitad del ciclo de la orden del día. El
        material sale descontando stock y vuelve reponiéndolo; aquí se teclea el
        N.º impreso en el papel y se repone de una vez todo lo que salió.
@@ -40,11 +46,13 @@
        que el botón de recibir es SECUNDARIO. Lo irreversible se avisa con el
        <dialog>, no con color: el rojo está reservado a eliminar. -->
   <section class="devolucion" aria-labelledby="tituloDevolucion">
-    <h2 id="tituloDevolucion" class="devolucion__titulo">Recibir devolución</h2>
-    <p class="devolucion__ayuda">
-      Teclea el N.º de orden que aparece en la orden del día impresa para
-      reponer al inventario todo lo que salió en ella.
-    </p>
+    <div class="devolucion__texto">
+      <h2 id="tituloDevolucion" class="devolucion__titulo">Recibir devolución</h2>
+      <p class="devolucion__ayuda">
+        Teclea el N.º de orden que aparece en la orden del día impresa para
+        reponer al inventario todo lo que salió en ella.
+      </p>
+    </div>
 
     <form class="devolucion__buscador" id="formBuscarOrden">
       <label class="visualmente-oculto" for="numeroOrden">N.º de orden</label>
@@ -76,11 +84,29 @@
       <thead>
         <tr>
           <th scope="col">ID</th>
-          <th scope="col">Nombre</th>
+          <!-- Dos columnas ordenables: por nombre para encontrar algo, por
+               cantidad para ver qué se está acabando. El <button> es lo que
+               hace que se llegue con el tabulador; `aria-sort` lo pone y lo
+               quita edit.js sobre el <th>, que es donde lo espera ARIA. -->
+          <th scope="col" aria-sort="ascending">
+            <button type="button" class="orden" data-ordenar="nombre">
+              Nombre
+              <svg class="orden__flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true" focusable="false"><path d="M6 15l6-6 6 6"></path></svg>
+            </button>
+          </th>
           <th scope="col">Marca</th>
           <th scope="col">Descripción</th>
           <th scope="col">Área</th>
-          <th scope="col" class="col-cifra">Cantidad</th>
+          <th scope="col" class="col-cifra">
+            <button type="button" class="orden" data-ordenar="cantidad">
+              Cantidad
+              <svg class="orden__flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true" focusable="false"><path d="M6 15l6-6 6 6"></path></svg>
+            </button>
+          </th>
           <th scope="col">Estado</th>
           <th scope="col"><span class="visualmente-oculto">Acciones</span></th>
         </tr>
@@ -145,6 +171,17 @@
       <dt>Cantidad</dt>    <dd id="detalleCantidad" class="cifra"></dd>
       <dt>Estado</dt>      <dd id="detalleEstado"></dd>
     </dl>
+
+    <!-- Las acciones del producto viven también aquí, y no sólo en la fila.
+         En el teléfono son las ÚNICAS: allí la fila deja un solo botón —el que
+         abre esta ventana— porque cuatro objetivos de 44px no caben junto al
+         nombre. El rótulo del de activar/desactivar lo pone edit.js según el
+         estado que tenga el producto. -->
+    <div class="detalle__acciones">
+      <button type="button" class="btn btn--secundario" id="btnDetalleEditar">Editar</button>
+      <button type="button" class="btn btn--secundario" id="btnDetalleAlternar">Desactivar</button>
+      <button type="button" class="btn btn--peligro" id="btnDetalleEliminar">Eliminar</button>
+    </div>
 
     <div class="modal-buttons modal-buttons--centrado">
       <button type="button" class="btn btn--secundario" id="btnCerrarDetalle">Cerrar</button>
