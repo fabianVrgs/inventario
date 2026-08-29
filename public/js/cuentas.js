@@ -1,4 +1,4 @@
-// Centro de gestión de cuentas y roles. Sólo lo carga /html/cuentas.html, y
+// Centro de gestión de cuentas. Sólo lo carga /html/cuentas.html, y
 // sólo llega ahí quien tiene `cuentas.gestionar`: el servidor no sirve ni esta
 // pantalla ni este archivo a nadie más.
 //
@@ -18,31 +18,31 @@
   // ---------------------------------------------------------------------------
 
   // Todo lo que la pantalla sabe. Se vuelve a pedir entero después de cada
-  // cambio en vez de parchear la copia local: son cuatro listas cortas, y una
+  // cambio en vez de parchear la copia local: son dos listas cortas, y una
   // copia que se va desincronizando del servidor en una pantalla de permisos es
   // exactamente el sitio donde no conviene tenerla.
+  //
+  // `roles` son las dos filas semilla de la base. La pantalla las lee para
+  // llenar el <select> del alta, y no las escribe: no hay forma de crear ni
+  // editar un rol desde aquí.
   const estado = {
     yo: null,
     cuentas: [],
     roles: [],
-    permisos: [],
   };
 
-  // Los nombres legibles viven aquí y el catálogo en el servidor. Si algún día
-  // se añade un permiso y se olvida esta línea, la casilla sale igual con su
-  // clave técnica: se ve fea, pero se puede marcar. Al revés —que la pantalla
-  // tuviera su propia lista de permisos— el permiso nuevo sería invisible.
-  const NOMBRE_PERMISO = {
-    'productos.eliminar': 'Borrar productos del catálogo',
-    'cuentas.gestionar': 'Gestionar cuentas y roles',
-    'accesos.ver': 'Ver la bitácora de accesos',
-  };
-
-  const AYUDA_PERMISO = {
-    'productos.eliminar':
-      'Lo irreversible del inventario: borrar deja huérfanas las líneas de las órdenes viejas.',
-    'cuentas.gestionar': 'Entrar a esta pantalla: crear cuentas, cambiar roles y contraseñas.',
-    'accesos.ver': 'Leer quién intentó entrar, cuándo y desde dónde.',
+  // La bitácora guardaba cuatro claves técnicas —'ok', 'clave', 'bloqueado',
+  // 'salida'— y las pintaba tal cual. Quien lee esta tabla busca intentos raros
+  // a las tres de la mañana, y "clave" no dice si alguien se equivocó al
+  // teclear o si alguien estaba probando contraseñas.
+  //
+  // Si algún día se registra un resultado nuevo y se olvida esta línea, sale su
+  // clave técnica en neutro: se ve peor, pero se ve.
+  const RESULTADO_ACCESO = {
+    ok: { texto: 'Entró', clase: 'badge-activo' },
+    clave: { texto: 'Usuario o contraseña incorrectos', clase: 'badge-inactivo' },
+    bloqueado: { texto: 'Frenado por intentos', clase: 'badge-aviso' },
+    salida: { texto: 'Cerró sesión', clase: 'badge-inactivo' },
   };
 
   // ---------------------------------------------------------------------------
@@ -53,10 +53,15 @@
 
   // Mismo escapado que edit.js: lo que teclea una persona no entra en innerHTML
   // sin pasar por aquí. La CSP es la segunda capa, no la primera.
+  //
+  // Las comillas también: `div.innerHTML` no las escapa, y aquí hay texto de
+  // persona dentro de atributos (`aria-label="Rol de ..."`, `data-usuario="..."`).
+  // Hoy el validador del servidor no deja pasar una comilla en un usuario, pero
+  // eso es una defensa que vive en otro archivo.
   function escapar(texto) {
     const div = document.createElement('div');
     div.textContent = texto ?? '';
-    return div.innerHTML;
+    return div.innerHTML.replaceAll('"', '&quot;').replaceAll("'", '&#39;');
   }
 
   function fechaCorta(iso) {
@@ -137,7 +142,12 @@
       .map(
         (c) => `
         <tr class="${c.activa ? '' : 'fila-inactiva'}">
-          <td><strong>${escapar(c.usuario)}</strong></td>
+          <td><strong>${escapar(c.usuario)}</strong>${
+            // La cuenta con la que estás dentro, dicha en su fila: en una lista
+            // de nombres parecidos es fácil darse de baja a uno mismo, y el
+            // servidor sólo lo impide si eres el último que gestiona cuentas.
+            c.usuario === estado.yo?.usuario ? '<span class="marca-tu">Tu cuenta</span>' : ''
+          }</td>
           <td><select class="rol-select" data-id="${c.id_cuenta}"
                       aria-label="Rol de ${escapar(c.usuario)}"></select></td>
           <td><span class="badge ${c.activa ? 'badge-activo' : 'badge-inactivo'}">${
@@ -159,9 +169,10 @@
       )
       .join('');
 
-    // Las opciones se montan con el DOM y no dentro del innerHTML de arriba: el
-    // nombre de un rol también lo eligió una persona, y `textContent` no deja
-    // que se interprete nada.
+    // Las opciones se montan con el DOM y no dentro del innerHTML de arriba.
+    // Hoy los dos nombres de rol vienen del esquema y no de nadie que teclee,
+    // pero `textContent` no cuesta nada y no depende de que eso siga siendo
+    // cierto el día que alguien meta un rol a mano en la base.
     for (const select of tablaCuentas.querySelectorAll('.rol-select')) {
       const cuenta = estado.cuentas.find((c) => c.id_cuenta === Number(select.dataset.id));
 
@@ -232,80 +243,6 @@
   });
 
   // ---------------------------------------------------------------------------
-  // Roles
-  // ---------------------------------------------------------------------------
-
-  const listaRoles = $('listaRoles');
-
-  function pintarRoles() {
-    listaRoles.innerHTML = estado.roles
-      .map((rol) => {
-        const permisos =
-          rol.permisos.length > 0
-            ? `<ul class="tarjeta-rol__permisos">${rol.permisos
-                .map((p) => `<li class="chip">${escapar(NOMBRE_PERMISO[p] || p)}</li>`)
-                .join('')}</ul>`
-            : `<p class="tarjeta-rol__sin-permisos">
-                 Sin permisos especiales: entra y trabaja en el almacén como cualquiera.
-               </p>`;
-
-        // El rol semilla no ofrece los botones en vez de mostrarlos apagados:
-        // un botón deshabilitado invita a preguntarse qué hay que hacer para
-        // encenderlo, y aquí la respuesta es "nada, y es a propósito".
-        const acciones = rol.semilla
-          ? `<p class="tarjeta-rol__sin-permisos">
-               Rol protegido: es la vía de vuelta si otro queda mal configurado.
-             </p>`
-          : `<div class="tarjeta-rol__acciones">
-               <button type="button" class="btn-action" data-accion="editar"
-                       data-rol="${escapar(rol.nombre)}">Editar</button>
-               <button type="button" class="btn-action btn-action--peligro" data-accion="borrar"
-                       data-rol="${escapar(rol.nombre)}" ${rol.cuentas > 0 ? 'disabled' : ''}>
-                 Eliminar
-               </button>
-             </div>`;
-
-        return `
-          <article class="tarjeta-rol">
-            <div>
-              <h3 class="tarjeta-rol__nombre">${escapar(rol.nombre)}</h3>
-              <p class="tarjeta-rol__meta">${rol.cuentas} cuenta(s)</p>
-            </div>
-            ${
-              rol.descripcion
-                ? `<p class="tarjeta-rol__descripcion">${escapar(rol.descripcion)}</p>`
-                : ''
-            }
-            ${permisos}
-            ${acciones}
-          </article>`;
-      })
-      .join('');
-  }
-
-  listaRoles.addEventListener('click', (evento) => {
-    const boton = evento.target.closest('[data-accion]');
-    if (!boton) return;
-
-    const rol = estado.roles.find((r) => r.nombre === boton.dataset.rol);
-    if (!rol) return;
-
-    if (boton.dataset.accion === 'editar') return abrirModalRol(rol);
-
-    confirmar({
-      titulo: '¿Eliminar este rol?',
-      texto: `El rol "${rol.nombre}" desaparecerá de la lista.`,
-      nota: 'No se puede deshacer, pero se puede volver a crear con el mismo nombre.',
-      etiqueta: 'Sí, eliminar',
-      alConfirmar: () =>
-        operar(
-          () => pedir(`/api/roles/${encodeURIComponent(rol.nombre)}`, { metodo: 'DELETE' }),
-          `Rol "${rol.nombre}" eliminado.`
-        ),
-    });
-  });
-
-  // ---------------------------------------------------------------------------
   // Bitácora
   // ---------------------------------------------------------------------------
 
@@ -327,15 +264,18 @@
         accesos.length === 0
           ? '<tr><td colspan="4" class="no-results">Todavía no hay accesos registrados.</td></tr>'
           : accesos
-              .map(
-                (a) => `
+              .map((a) => {
+                const r = RESULTADO_ACCESO[a.resultado];
+                return `
                 <tr>
                   <td class="dato-servicio">${fechaLarga(a.ocurrido_en)}</td>
-                  <td>${escapar(a.usuario)}</td>
-                  <td>${escapar(a.resultado)}</td>
-                  <td class="dato-servicio">${escapar(a.ip)}</td>
-                </tr>`
-              )
+                  <td><strong>${escapar(a.usuario)}</strong></td>
+                  <td><span class="badge ${r ? r.clase : 'badge-inactivo'}">${
+                    escapar(r ? r.texto : a.resultado)
+                  }</span></td>
+                  <td class="dato-servicio dato-ip">${escapar(a.ip)}</td>
+                </tr>`;
+              })
               .join('');
     } catch (err) {
       tablaAccesos.innerHTML = `<tr><td colspan="4" class="no-results no-results--error">${escapar(
@@ -421,73 +361,6 @@
   });
 
   // ---------------------------------------------------------------------------
-  // Modal: crear o editar rol
-  // ---------------------------------------------------------------------------
-
-  const modalRol = $('modalRol');
-  const formRol = $('formRol');
-  const rolNombre = $('rolNombre');
-  const listaPermisos = $('listaPermisos');
-  // null = estamos creando; un nombre = estamos editando ese rol.
-  let rolEnEdicion = null;
-
-  function abrirModalRol(rol) {
-    rolEnEdicion = rol ? rol.nombre : null;
-
-    $('tituloModalRol').textContent = rol ? `Editar rol "${rol.nombre}"` : 'Crear rol';
-    // El nombre es clave primaria y clave foránea desde `cuentas.rol`: al editar
-    // no se enseña siquiera, para no ofrecer un campo que el servidor ignora.
-    $('grupoNombreRol').hidden = Boolean(rol);
-    rolNombre.required = !rol;
-    rolNombre.value = '';
-    $('rolDescripcion').value = rol?.descripcion || '';
-
-    listaPermisos.innerHTML = estado.permisos
-      .map(
-        (permiso) => `
-        <label class="permisos__opcion">
-          <input type="checkbox" value="${escapar(permiso)}"
-                 ${rol?.permisos.includes(permiso) ? 'checked' : ''}>
-          <span>
-            ${escapar(NOMBRE_PERMISO[permiso] || permiso)}
-            ${AYUDA_PERMISO[permiso] ? `<code>${escapar(AYUDA_PERMISO[permiso])}</code>` : ''}
-          </span>
-        </label>`
-      )
-      .join('');
-
-    modalRol.style.display = 'flex';
-    (rol ? $('rolDescripcion') : rolNombre).focus();
-  }
-
-  function cerrarModalRol() {
-    modalRol.style.display = 'none';
-    rolEnEdicion = null;
-  }
-
-  formRol.addEventListener('submit', async (evento) => {
-    evento.preventDefault();
-
-    const permisos = [...listaPermisos.querySelectorAll('input:checked')].map((c) => c.value);
-    const descripcion = $('rolDescripcion').value.trim();
-    const editando = rolEnEdicion;
-    const nombre = editando || rolNombre.value.trim().toLowerCase();
-
-    cerrarModalRol();
-
-    await operar(
-      () =>
-        editando
-          ? pedir(`/api/roles/${encodeURIComponent(editando)}`, {
-              metodo: 'PUT',
-              cuerpo: { descripcion, permisos },
-            })
-          : pedir('/api/roles', { metodo: 'POST', cuerpo: { nombre, descripcion, permisos } }),
-      editando ? `Rol "${editando}" actualizado.` : `Rol "${nombre}" creado.`
-    );
-  });
-
-  // ---------------------------------------------------------------------------
   // Diálogo de confirmación
   // ---------------------------------------------------------------------------
 
@@ -528,7 +401,6 @@
       estado.yo = yo;
       estado.cuentas = cuentas;
       estado.roles = roles.roles;
-      estado.permisos = roles.permisos;
     } catch (err) {
       // El 401 lo trata sesion.js llevando al login; lo que llegue aquí es otra
       // cosa —la red, un 500— y la pantalla tiene que decirlo en vez de
@@ -539,16 +411,46 @@
       return;
     }
 
+    pintarResumen();
     pintarCuentas();
-    pintarRoles();
     await pintarBitacora();
+  }
+
+  // Cuántas cuentas hay y en qué estado, en una frase. Misma primitiva que el
+  // resumen del inventario: una línea de texto, no una rejilla de cifrones.
+  //
+  // No cuenta los roles: son dos y no cambian, así que la cifra sería un "2"
+  // perpetuo — más ruido que dato.
+  const resumenCuentas = $('resumenCuentas');
+
+  function pintarResumen() {
+    const activas = estado.cuentas.filter((c) => c.activa).length;
+    const bajas = estado.cuentas.length - activas;
+
+    const partes = [
+      [estado.cuentas.length, estado.cuentas.length === 1 ? 'cuenta' : 'cuentas'],
+      [activas, activas === 1 ? 'activa' : 'activas'],
+    ];
+
+    // El cero permanente se lee como un contador que hay que vaciar.
+    if (bajas > 0) partes.push([bajas, 'de baja']);
+
+    resumenCuentas.replaceChildren(
+      ...partes.map(([n, palabra]) => {
+        const span = document.createElement('span');
+        const cifra = document.createElement('strong');
+        cifra.textContent = String(n);
+        span.append(cifra, document.createTextNode(` ${palabra}`));
+        return span;
+      })
+    );
+
+    resumenCuentas.hidden = false;
   }
 
   $('btnNuevaCuenta').addEventListener('click', abrirModalCuenta);
   $('btnCancelarCuenta').addEventListener('click', cerrarModalCuenta);
   $('btnCancelarClave').addEventListener('click', cerrarModalClave);
-  $('btnNuevoRol').addEventListener('click', () => abrirModalRol(null));
-  $('btnCancelarRol').addEventListener('click', cerrarModalRol);
 
   // Clic en el fondo del modal = cancelar, igual que en el inventario.
   modalCuenta.addEventListener('click', (e) => {
@@ -556,9 +458,6 @@
   });
   modalClave.addEventListener('click', (e) => {
     if (e.target === modalClave) cerrarModalClave();
-  });
-  modalRol.addEventListener('click', (e) => {
-    if (e.target === modalRol) cerrarModalRol();
   });
 
   limpiarAviso();

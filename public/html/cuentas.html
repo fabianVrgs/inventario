@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Cuentas y roles — Ok-producciones</title>
+  <title>Cuentas — Ok-producciones</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/style-cuentas.css" />
@@ -31,7 +31,7 @@
 <main class="container">
 
   <div class="cabecera-pantalla">
-    <h1>Cuentas y roles</h1>
+    <h1>Cuentas</h1>
     <p class="cabecera-pantalla__sub">Quién entra al almacén y qué puede hacer cada uno.</p>
   </div>
 
@@ -39,6 +39,10 @@
        role="status": lo que se anuncia aquí lo lee también un lector de
        pantalla sin robar el foco a lo que estabas haciendo. -->
   <p class="aviso" id="aviso" role="status" hidden></p>
+
+  <!-- Cuántas cuentas hay y cuántas están activas, en una frase.
+       Lo rellena cuentas.js. -->
+  <p class="resumen-linea" id="resumenCuentas" hidden></p>
 
   <!-- ===================== CUENTAS ===================== -->
   <section class="bloque" aria-labelledby="tituloCuentas">
@@ -69,26 +73,11 @@
     </div>
   </section>
 
-  <!-- ===================== ROLES ===================== -->
-  <section class="bloque" aria-labelledby="tituloRoles">
-    <div class="bloque__cabecera">
-      <div>
-        <h2 id="tituloRoles" class="bloque__titulo">Roles</h2>
-        <p class="bloque__ayuda">
-          Un rol es un nombre y las casillas que lleva marcadas. Lo que no
-          aparece en esta lista —ver el inventario, editarlo, emitir órdenes y
-          recibir devoluciones— lo puede hacer cualquier cuenta.
-        </p>
-      </div>
-      <button class="btn btn--primario" id="btnNuevoRol" type="button">Crear rol</button>
-    </div>
-
-    <div class="rejilla-roles" id="listaRoles"></div>
-  </section>
-
   <!-- ===================== BITÁCORA ===================== -->
-  <!-- Se oculta entera si la cuenta no tiene `accesos.ver`: es un permiso
-       aparte del de gestionar, y un rol puede llevar uno y no el otro. -->
+  <!-- Se oculta entera si la cuenta no tiene `accesos.ver`. Hoy los dos
+       permisos viajan juntos en superadmin, pero se preguntan por separado:
+       son dos cosas distintas, y esconderla es cosmético — la frontera está
+       en `exigirPermiso('accesos.ver')`, en la ruta. -->
   <section class="bloque" aria-labelledby="tituloBitacora" id="bloqueBitacora" hidden>
     <div class="bloque__cabecera">
       <div>
@@ -183,43 +172,10 @@
   </div>
 </div>
 
-<!-- MODAL: crear o editar rol -->
-<div id="modalRol" class="modal">
-  <div class="modal-content">
-    <h3 class="modal-titulo" id="tituloModalRol">Crear rol</h3>
-
-    <form id="formRol">
-      <div class="form-group" id="grupoNombreRol">
-        <label for="rolNombre">Nombre</label>
-        <input type="text" id="rolNombre" class="campo" autocomplete="off" maxlength="32">
-        <p class="form-group__pista">
-          Minúsculas, números, guion y guion bajo. No se puede cambiar después:
-          es la referencia que guardan las cuentas.
-        </p>
-      </div>
-
-      <div class="form-group">
-        <label for="rolDescripcion">Descripción</label>
-        <input type="text" id="rolDescripcion" class="campo" autocomplete="off" maxlength="200">
-      </div>
-
-      <fieldset class="permisos">
-        <legend class="permisos__leyenda">Qué puede hacer</legend>
-        <div id="listaPermisos"></div>
-      </fieldset>
-
-      <div class="modal-buttons">
-        <button type="button" class="btn btn--fantasma" id="btnCancelarRol">Cancelar</button>
-        <button type="submit" class="btn btn--primario">Guardar</button>
-      </div>
-    </form>
-  </div>
-</div>
-
 <!-- DIÁLOGO: confirmar lo que tiene consecuencias.
      <dialog> nativo y no el .modal de arriba: aquí salen gratis el backdrop,
-     el Escape y la devolución del foco. Sirve para dar de baja una cuenta
-     (cierra sus sesiones) y para borrar un rol. -->
+     el Escape y la devolución del foco. Sirve para dar de baja una cuenta,
+     que es lo único de esta pantalla que cierra sesiones ajenas. -->
 <dialog id="dialogoConfirmar" class="dialogo" aria-labelledby="dialogoTitulo">
   <h2 id="dialogoTitulo" class="dialogo__titulo"></h2>
   <p class="dialogo__texto" id="dialogoTexto"></p>

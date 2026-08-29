@@ -25,6 +25,7 @@
     <!-- Usuario y contraseña. -->
     <form class="acceso__form" id="formAcceso" novalidate>
       <h1 class="acceso__titulo">Entrar</h1>
+      <p class="acceso__intro">Usa la cuenta que te entregaron en el almacén.</p>
 
       <div class="acceso__campo">
         <label for="usuario">Usuario</label>
@@ -43,6 +44,15 @@
     <!-- role="alert" para que un lector de pantalla anuncie el fallo sin que
          haya que ir a buscarlo: quien no ve la pantalla no sabe que apareció. -->
     <p class="acceso__aviso" id="avisoAcceso" role="alert" hidden></p>
+
+    <!-- Aquí no hay registro ni "olvidé mi contraseña": las cuentas se crean
+         desde /html/cuentas.html y la contraseña se entrega en persona. Sin
+         esta línea, quien no puede entrar se queda mirando una pantalla que no
+         le ofrece ninguna salida. -->
+    <p class="acceso__pie">
+      ¿Sin cuenta o contraseña olvidada? Pídesela a quien administra el almacén:
+      desde aquí no se crea ni se recupera.
+    </p>
   </div>
 
 </main>

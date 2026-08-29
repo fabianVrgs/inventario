@@ -62,24 +62,24 @@ CREATE TABLE devoluciones (
   recibida_por  text
 );
 
--- Los roles y lo que cada uno puede hacer. Antes esto era un CHECK con dos
--- valores escritos a mano en la columna `cuentas.rol`; convertirlo en tabla es
--- lo que permite crear roles nuevos desde la pantalla de cuentas sin tocar el
--- esquema ni desplegar.
+-- Los roles y lo que cada uno puede hacer. Son DOS y no se crean desde ningún
+-- sitio: se probó tener una pantalla que los creara y se retiró. Que aun así
+-- sean una tabla y no el CHECK de dos valores que había antes es lo que permite
+-- preguntar por el permiso —`'cuentas.gestionar' = ANY (permisos)`— en vez de
+-- comparar contra la cadena 'superadmin', y eso es lo que hace el servidor.
 --
--- `permisos` NO se valida aquí. El catálogo de permisos vive en server.js —que
--- es quien los aplica— y repetirlo en un CHECK sería la misma lista escrita dos
--- veces, con la copia de la base envejeciendo sola cada vez que se añada uno.
--- La API rechaza con 400 cualquier permiso fuera del catálogo, y ésa es la
--- única puerta por la que se escribe esta columna.
+-- `permisos` NO se valida aquí, y tampoco lo valida nadie más: NINGUNA ruta
+-- escribe esta columna. Reajustar lo que un rol puede hacer es hoy un UPDATE a
+-- mano contra la base. Un CHECK con la lista de permisos sería esa misma lista
+-- escrita dos veces, con la copia de aquí envejeciendo sola.
 CREATE TABLE roles (
   nombre      text PRIMARY KEY,
   descripcion text,
   permisos    text[] NOT NULL DEFAULT '{}',
-  -- 1 = intocable desde la web: ni se editan sus permisos ni se borra. Sólo lo
-  -- lleva `superadmin`, y es el suelo conocido al que siempre se puede volver
-  -- cuando un rol nuevo se configura mal. `admin` NO es semilla a propósito:
-  -- es el rol operativo, el que más va a cambiar.
+  -- 1 = rol de sistema. Sólo lo lleva `superadmin`. Hoy ninguna ruta lo mira
+  -- —no queda nada que editar ni borrar desde la web—, pero se queda porque es
+  -- lo que distingue el rol que abre la gestión del que sólo opera el almacén,
+  -- y porque quitarlo pediría un ALTER contra la base ya desplegada.
   semilla     integer NOT NULL DEFAULT 0
 );
 
@@ -88,10 +88,14 @@ CREATE TABLE roles (
 -- cuenta: son parte de la estructura, no datos de ejemplo.
 --
 -- `superadmin` lleva los tres permisos ESCRITOS, no un comodín. Un '*' haría
--- que cada permiso nuevo del catálogo cayera solo en el rol más poderoso; así,
--- añadir uno obliga a decidir a quién dárselo.
+-- que cada permiso nuevo cayera solo en el rol más poderoso; así, añadir uno
+-- obliga a decidir a quién dárselo.
+--
+-- `admin` va con la lista vacía a propósito: hace todo el almacén —ver el
+-- inventario, editarlo, emitir órdenes, recibir devoluciones—, porque nada de
+-- eso está detrás de un permiso. Lo que no hace es lo que hay aquí escrito.
 INSERT INTO roles (nombre, descripcion, permisos, semilla) VALUES
-  ('superadmin', 'Gestiona cuentas y roles, ve la bitácora y borra productos.',
+  ('superadmin', 'Gestiona las cuentas, ve la bitácora de accesos y borra productos.',
    '{productos.eliminar,cuentas.gestionar,accesos.ver}', 1),
   ('admin', 'Operación diaria del almacén: inventario, órdenes y devoluciones.',
    '{}', 0);

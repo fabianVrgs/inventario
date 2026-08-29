@@ -20,10 +20,19 @@
 
 body {
   min-height: 100dvh;
-  /* La barra superior comparte caja con la hoja (700px), no con el ancho de
-     contenido por defecto: si no, el nav quedaba más ancho que el papel que
-     tiene justo debajo. Lo lee .barra-app__interior en base.css. */
-  --ancho-pagina: var(--ancho-hoja);
+  /* La barra superior compartía caja con la hoja (700px) para que el nav no
+     quedara más ancho que el papel que tiene debajo. Ya no cabe: eran dos
+     enlaces y un botón, y ahora son cuatro enlaces —"Cuentas" lo inyecta
+     sesion.js—, la sesión y el botón de imprimir. En 700px eso envolvía en
+     tres filas y dejaba 155px de barra pegados arriba, con el botón de la
+     acción irreversible descolgado a la izquierda.
+     Una barra un poco más ancha que la hoja se nota mucho menos que eso, y es
+     además lo que ya pasa en las otras tres pantallas.
+
+     1060px no es un número redondo: es lo que miden esas seis cosas en una
+     línea, medido. Con --ancho-contenido (940) el botón todavía caía a una
+     segunda fila. El @media de abajo usa el mismo número. */
+  --ancho-pagina: 1060px;
 }
 
 /* ---------- Acción de imprimir, dentro de la barra compartida ---------- */
@@ -34,13 +43,16 @@ body {
   cursor: progress;
 }
 
-/* Por debajo del ancho de la hoja, la barra superior envuelve en tres filas y
-   se comía 155px pegados arriba, con el botón descolgado a la izquierda. La
-   acción principal baja al pulgar, igual que la barra de selección de la
-   Principal. Sigue siendo hijo de .barra-app, así que @media print lo oculta
-   con ella; y `position: sticky` en el ancestro no crea containing block, de
-   modo que `fixed` se ancla al viewport como debe. */
-@media (max-width: 700px) {
+/* Por debajo del ancho de la barra, ésta envuelve y se come la parte de arriba
+   de la pantalla, con el botón descolgado a la izquierda. La acción principal
+   baja al pulgar, igual que la barra de selección de la Principal. Sigue
+   siendo hijo de .barra-app, así que @media print lo oculta con ella; y
+   `position: sticky` en el ancestro no crea containing block, de modo que
+   `fixed` se ancla al viewport como debe.
+
+   El umbral sigue al ancho que de verdad necesitan los cuatro enlaces, la
+   sesión y el botón; antes era 700px porque ésa era la caja de la barra. */
+@media (max-width: 1060px) {
   .btn-imprimir {
     position: fixed;
     left: var(--esp-pagina);
@@ -86,6 +98,53 @@ body {
 
 .btn-volver-vacio:hover {
   background-color: var(--tinta);
+}
+
+/* ---------- Estado de la orden, antes de la hoja ----------
+   La orden en borrador y la orden ya descontada se veían EXACTAMENTE igual: la
+   única diferencia era el recuadro verde, que sólo aparece después. Alguien que
+   volvía a esta pestaña no tenía forma de saber si el material ya había salido
+   del almacén o no, y el botón decía "Imprimir y descontar" en los dos casos.
+
+   Va sobre la hoja y no dentro: es información de la aplicación, no del papel.
+   Y por eso lleva .no-imprimir. */
+
+.estado-orden {
+  max-width: var(--ancho-hoja);
+  margin: var(--esp-5) auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--esp-2) var(--esp-3);
+  padding-bottom: var(--esp-3);
+  border-bottom: 1px solid var(--filete);
+}
+
+/* "BORRADOR" en morado: es el rótulo que dice en qué estado está esto, el
+   mismo trabajo que hace el rótulo de área en la Principal. */
+.estado-orden__rotulo {
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-etiqueta);
+  text-transform: uppercase;
+  color: var(--marca-fuerte);
+}
+
+.estado-orden__texto {
+  font-size: var(--texto-sm);
+  color: var(--tinta-suave);
+}
+
+.estado-orden__cifras {
+  margin-left: auto;
+  font-size: var(--texto-sm);
+  color: var(--tinta-tenue);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.estado-orden__cifras strong {
+  color: var(--tinta-fuerte);
+  font-weight: var(--peso-medio);
 }
 
 /* ---------- Aviso de faltantes / errores (409, 400, etc.) ---------- */
@@ -335,6 +394,30 @@ body {
 .acciones-linea__quitar:hover {
   background-color: var(--peligro-lavado);
   color: var(--peligro-texto);
+}
+
+/* ---------- Total de la hoja ----------
+   Esto SÍ se imprime. Quien recibe el material en el almacén cuenta bultos
+   contra el papel, y hasta ahora tenía que sumar las líneas a mano.
+
+   Alineado a la derecha, sobre la misma columna que las cantidades y en cifra
+   tabular: se lee como el cierre de esa columna y no como una línea más. */
+
+.total-hoja {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--esp-3);
+  padding-top: var(--esp-3);
+  border-top: 1px solid var(--filete-fuerte);
+  font-size: var(--texto-sm);
+}
+
+.total-hoja__valor {
+  font-weight: var(--peso-fuerte);
+  min-width: 2.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .pie-firma {

@@ -32,15 +32,55 @@
       <p class="cabecera-pantalla__sub">Ajusta la cantidad de lo que sale hoy.</p>
     </div>
 
+    <!-- EL CICLO. Las tres pantallas son un mismo recorrido y hasta ahora nada
+         lo decía: cada una se presentaba como una herramienta suelta. Va como
+         <ol> porque es una secuencia, y el paso actual lleva aria-current.
+
+         Cada paso trae el rótulo largo y el corto; el CSS enseña uno u otro
+         según el ancho, y así el móvil no reparte trece caracteres entre tres
+         columnas de 100px. -->
+    <ol class="flujo">
+      <li class="flujo__paso flujo__paso--actual" aria-current="step">
+        <span class="flujo__num cifra">1</span>
+        <span class="flujo__largo">Elegir material</span><span class="flujo__corto">Elegir</span>
+      </li>
+      <li class="flujo__sep" aria-hidden="true"></li>
+      <li class="flujo__paso">
+        <span class="flujo__num cifra">2</span>
+        <span class="flujo__largo">Imprimir la orden · descuenta</span><span class="flujo__corto">Imprimir</span>
+      </li>
+      <li class="flujo__sep" aria-hidden="true"></li>
+      <li class="flujo__paso">
+        <span class="flujo__num cifra">3</span>
+        <span class="flujo__largo">Recibir devolución · repone</span><span class="flujo__corto">Devolver</span>
+      </li>
+    </ol>
+
     <!-- Dos columnas a partir de 1024px: catálogo a la izquierda, selección
          fija a la derecha. Por debajo se apila. -->
     <div class="disposicion">
 
       <div class="disposicion__principal">
         <div class="buscador">
-          <label class="visualmente-oculto" for="buscar">Buscar producto</label>
-          <input type="search" id="buscar" class="campo" placeholder="Buscar producto…" autocomplete="off">
+          <div class="buscador__campo">
+            <label class="visualmente-oculto" for="buscar">Buscar producto</label>
+            <!-- SVG en línea, como los iconos de edit.js: sin build step y sin
+                 depender de la red para dibujarse. aria-hidden porque la
+                 etiqueta del campo ya dice lo que hace. -->
+            <svg class="buscador__lupa" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+              <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
+            </svg>
+            <input type="search" id="buscar" class="campo" placeholder="Buscar producto…" autocomplete="off">
+          </div>
+          <!-- role="status": al filtrar, el recuento cambia sin mover el foco, y
+               quien no ve la pantalla necesita que se le anuncie. -->
+          <p class="buscador__conteo cifra" id="conteoResultados" role="status"></p>
         </div>
+
+        <!-- logica.js monta aquí un botón por área existente. Vacío hasta que
+             responda la API: no hay lista de áreas escrita a mano. -->
+        <div class="filtros" id="filtrosArea" role="group" aria-label="Filtrar por área"></div>
 
         <!-- logica.js monta aquí .grupo-area > .rejilla-productos > .producto -->
         <div id="resultados" class="resultados"></div>
@@ -56,6 +96,11 @@
           <ul id="lista" class="lista__items"></ul>
           <a id="ctaOrden" href="/html/orden_del_dia.html"
              class="btn btn--primario panel-seleccion__cta" hidden>Ver orden del día</a>
+          <!-- El botón dice "Ver", que suena a mirar; detrás hay un descuento
+               que no se deshace. Se avisa aquí, no sólo en el diálogo. -->
+          <p class="panel-seleccion__pista" id="pistaOrden" hidden>
+            Allí se imprime el papel y se descuenta del inventario.
+          </p>
         </section>
       </aside>
 
@@ -69,7 +114,10 @@
        `hidden`, que funciona gracias a [hidden]{display:none!important}. -->
   <div id="barraSeleccion" class="barra-seleccion" hidden>
     <div class="barra-seleccion__interior">
-      <p class="barra-seleccion__resumen cifra" data-resumen></p>
+      <p class="barra-seleccion__resumen cifra">
+        <span data-resumen></span>
+        <span class="barra-seleccion__nota">Se descuenta al imprimir</span>
+      </p>
       <a href="/html/orden_del_dia.html" class="btn btn--primario">Ver orden del día</a>
     </div>
   </div>

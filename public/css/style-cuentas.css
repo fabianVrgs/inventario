@@ -15,9 +15,8 @@
 
    Contrato con cuentas.js — no renombrar, lo emite el JS:
      .aviso--error, .aviso--exito, .fila-inactiva, .badge, .badge-activo,
-     .badge-inactivo, .actions, .btn-action, .tarjeta-rol, .chip,
-     .rol-select, .permisos__opcion
-   Y los 3 modales se abren con `style.display = 'flex'` desde el JS, igual que
+     .badge-inactivo, .actions, .btn-action, .rol-select
+   Y los 2 modales se abren con `style.display = 'flex'` desde el JS, igual que
    en el inventario: .modal se queda en `display:none` y deja ganar al inline.
    ============================================================================ */
 
@@ -147,6 +146,26 @@
   white-space: nowrap;
 }
 
+/* Una IP se compara dígito a dígito con otra. En monoespaciada las cuatro
+   partes se alinean solas y la comparación deja de ser un ejercicio de vista.
+   Es el único uso de --fuente-mono en el proyecto, y es el que lo justifica. */
+.dato-ip {
+  font-family: var(--fuente-mono);
+  font-size: var(--texto-etiqueta);
+}
+
+/* La cuenta con la que estás dentro, dicha en su propia fila. Sin esto, en una
+   lista de cuentas parecidas es fácil darse de baja a uno mismo — el servidor
+   sólo lo impide si eres el último que puede gestionar cuentas. */
+.marca-tu {
+  margin-left: var(--esp-2);
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-etiqueta);
+  text-transform: uppercase;
+  color: var(--marca-fuerte);
+}
+
 /* Cuenta de baja. Mismo tratamiento que el producto desactivado: fondo hundido
    y nombre tachado, nunca `opacity` — atenuar con opacidad rompe cualquier
    contraste que se haya medido. */
@@ -163,18 +182,18 @@
 
 /* ---------- Estado ---------- */
 
-/* "De baja" NO es un error: es un estado normal. Por eso va en neutro y no en
+/* La primitiva `.badge` NO se redefine aquí: la de base.css es la que vale.
+   Esta hoja la sobreescribía —píldora de radio completo, peso medio,
+   mayúsculas— y la misma etiqueta "Activo" salía con dos formas distintas
+   según la pantalla en la que estuvieras. La forma rectangular de base.css es
+   además la que va con el resto del sistema: el radio completo es de las
+   aplicaciones de consumo que este diseño rechaza por su nombre.
+
+   Sólo se declaran las dos variantes de color, con los mismos valores que
+   style-inventario.css.
+
+   "De baja" NO es un error: es un estado normal. Por eso va en neutro y no en
    rojo — el rojo de este sistema es exclusivo de lo irreversible. */
-.badge {
-  display: inline-block;
-  padding: var(--esp-1) var(--esp-2);
-  border-radius: var(--radio-full);
-  font-size: var(--texto-etiqueta);
-  font-weight: var(--peso-medio);
-  letter-spacing: var(--tracking-etiqueta);
-  text-transform: uppercase;
-  white-space: nowrap;
-}
 
 .badge-activo {
   background-color: var(--exito-lavado);
@@ -182,9 +201,16 @@
 }
 
 .badge-inactivo {
-  background-color: var(--papel-hundido);
+  background-color: var(--superficie);
   color: var(--tinta-suave);
-  border: 1px solid var(--filete-fuerte);
+  box-shadow: inset 0 0 0 1px var(--filete-fuerte);
+}
+
+/* Sólo en la bitácora: un intento frenado por el limitador. Ámbar y no rojo —
+   el limitador funcionando no es un fallo, es el sistema haciendo su trabajo. */
+.badge-aviso {
+  background-color: var(--aviso-lavado);
+  color: var(--aviso-texto);
 }
 
 /* ---------- Selector de rol dentro de la fila ---------- */
@@ -261,81 +287,6 @@
   border-color: var(--peligro);
 }
 
-/* ---------- Roles ---------- */
-
-.rejilla-roles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
-  gap: var(--esp-4);
-}
-
-.tarjeta-rol {
-  display: flex;
-  flex-direction: column;
-  gap: var(--esp-3);
-  padding: var(--esp-4);
-  background-color: var(--superficie);
-  border: 1px solid var(--filete);
-  border-radius: var(--radio-lg);
-  box-shadow: var(--sombra-hoja);
-}
-
-.tarjeta-rol__nombre {
-  margin: 0;
-  font-size: var(--texto-titulo);
-  font-weight: var(--peso-fuerte);
-  color: var(--tinta-fuerte);
-}
-
-.tarjeta-rol__meta {
-  margin: var(--esp-1) 0 0;
-  font-size: var(--texto-etiqueta);
-  letter-spacing: var(--tracking-etiqueta);
-  text-transform: uppercase;
-  color: var(--tinta-tenue);
-}
-
-.tarjeta-rol__descripcion {
-  margin: 0;
-  font-size: var(--texto-sm);
-  color: var(--tinta-suave);
-}
-
-.tarjeta-rol__permisos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--esp-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.chip {
-  padding: var(--esp-1) var(--esp-2);
-  border-radius: var(--radio-full);
-  background-color: var(--marca-lavado);
-  border: 1px solid var(--marca-filete);
-  font-size: var(--texto-etiqueta);
-  color: var(--tinta);
-}
-
-/* Un rol sin ni una casilla marcada no está roto: puede entrar y trabajar en el
-   almacén como cualquiera. Que lo diga con palabras evita que se lea como un
-   error. */
-.tarjeta-rol__sin-permisos {
-  margin: 0;
-  font-size: var(--texto-sm);
-  font-style: italic;
-  color: var(--tinta-tenue);
-}
-
-.tarjeta-rol__acciones {
-  display: flex;
-  gap: var(--esp-2);
-  margin-top: auto;
-  padding-top: var(--esp-2);
-}
-
 /* ---------- Estado vacío / error ---------- */
 
 .no-results {
@@ -353,15 +304,19 @@
 
 /* display:none y no [hidden]: el JS los abre poniendo `style.display = 'flex'`
    en línea, igual que los del inventario, y el inline tiene que poder ganar. */
+/* z-index e velo con los tokens del sistema, no a mano. El 100 escrito aquí
+   era el mismo número que --z-barra: un modal y una barra fija empatados, y
+   quién tapaba a quién dependía del orden en el DOM. El color era además el
+   único oklch suelto del proyecto, copiado a mano de --velo-modal. */
 .modal {
   display: none;
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--z-modal);
   align-items: center;
   justify-content: center;
   padding: var(--esp-4);
-  background-color: oklch(20.5% 0.021 338 / .45);
+  background-color: var(--velo-modal);
 }
 
 .modal-content {
@@ -412,52 +367,6 @@
   justify-content: flex-end;
   gap: var(--esp-3);
   margin-top: var(--esp-5);
-}
-
-/* ---------- Casillas de permiso ---------- */
-
-.permisos {
-  margin: 0 0 var(--esp-4);
-  padding: var(--esp-3) var(--esp-4);
-  border: 1px solid var(--filete);
-  border-radius: var(--radio-md);
-}
-
-.permisos__leyenda {
-  padding: 0 var(--esp-2);
-  font-size: var(--texto-etiqueta);
-  font-weight: var(--peso-fuerte);
-  letter-spacing: var(--tracking-etiqueta);
-  text-transform: uppercase;
-  color: var(--tinta-tenue);
-}
-
-/* Toda la etiqueta es zona de clic, no sólo la casilla de 13px. */
-.permisos__opcion {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--esp-3);
-  min-height: var(--objetivo-tactil);
-  padding: var(--esp-2) 0;
-  font-size: var(--texto-sm);
-  color: var(--tinta);
-  cursor: pointer;
-}
-
-.permisos__opcion input {
-  margin-top: 0.2rem;
-  width: 1.05rem;
-  height: 1.05rem;
-  accent-color: var(--marca);
-  flex-shrink: 0;
-}
-
-.permisos__opcion code {
-  display: block;
-  margin-top: var(--esp-1);
-  font-family: var(--fuente-mono);
-  font-size: var(--texto-etiqueta);
-  color: var(--tinta-tenue);
 }
 
 /* ---------- Móvil ---------- */
