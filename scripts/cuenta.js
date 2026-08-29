@@ -12,10 +12,12 @@
 //   node scripts/cuenta.js alta <usuario>
 //   node scripts/cuenta.js cerrar-sesiones [usuario]
 //
-// Los roles ya NO son dos valores fijos: viven en la tabla `roles` y se crean
-// desde la pantalla de cuentas (/html/cuentas.html). Este script los lee de ahí
-// y `roles` los enseña. Sigue siendo la única forma de crear la PRIMERA cuenta,
-// que es lo que abre esa pantalla.
+// Los roles son dos —`superadmin`, que gestiona cuentas y ve la bitácora, y
+// `admin`, que hace el resto del almacén—, y viven como filas en la tabla
+// `roles` con los permisos que cada uno lleva. Nada los crea ni los edita: ni
+// este script ni la web. Aquí sólo se LEEN, y `roles` los enseña. Sigue siendo
+// la única forma de crear la PRIMERA cuenta, que es lo que abre
+// /html/cuentas.html.
 //
 // La base sale de DATABASE_URL (o DATABASE_URL_TEST, que db.js prioriza) y del
 // esquema en ESQUEMA_BD — sin ella, `public`, que es la base real. Se imprime
@@ -30,10 +32,11 @@ const { consultar, pool } = require('../db.js');
 const auth = require('../auth.js');
 
 // Ni la lista de roles ni las reglas de la contraseña se escriben aquí. Los
-// roles están en la base, porque se crean desde la pantalla. Las reglas están
-// en auth.js, porque ahora hay DOS puertas por las que nace una cuenta —esta y
-// la pantalla— y con las reglas escritas dos veces, la segunda copia se afloja
-// el día que estorbe: sería justo la que deja pasar la contraseña débil.
+// roles están en la base, que es también de donde los lee el servidor: una
+// constante aquí sería la misma verdad en dos sitios. Las reglas están en
+// auth.js, porque hay DOS puertas por las que nace una cuenta —esta y la
+// pantalla— y con las reglas escritas dos veces, la segunda copia se afloja el
+// día que estorbe: sería justo la que deja pasar la contraseña débil.
 
 function fallar(mensaje) {
   console.error(`ERROR: ${mensaje}`);
@@ -254,8 +257,8 @@ const ejecutar = async (sql, parametros = []) => (await consultar(sql, parametro
 const unaFila = async (sql, parametros = []) => (await consultar(sql, parametros)).rows[0];
 const todas = async (sql, parametros = []) => (await consultar(sql, parametros)).rows;
 
-// Los roles salen de la tabla, no de una constante: la pantalla de cuentas
-// puede crear los que haga falta y este script tiene que reconocerlos.
+// Los roles salen de la tabla, no de una constante: es la misma fuente que lee
+// el servidor, así que los dos reconocen siempre lo mismo.
 async function rolesDisponibles() {
   return (await todas('SELECT nombre FROM roles ORDER BY nombre')).map((f) => f.nombre);
 }
@@ -275,9 +278,10 @@ async function gestionaCuentas(rol) {
 
 // El mismo invariante que impone la API, y por el mismo motivo: si no queda
 // ninguna cuenta activa capaz de gestionar cuentas, la gestión se cierra por
-// dentro. Sustituye al viejo guardia del "último superadmin", que dejó de valer
-// en cuanto los roles pasaron a ser filas: hoy el poder está en el permiso, no
-// en el nombre.
+// dentro. Está repetido aquí, y no reutilizado, porque este script escribe la
+// base sin pasar por la API. Pregunta por el PERMISO y no por el nombre del
+// rol, igual que el servidor: sustituye al viejo guardia del "último
+// superadmin", que dejó de valer en cuanto los roles pasaron a ser filas.
 //
 // count(*)::int: sin el cast, `pg` devuelve el bigint como cadena ("0") para no
 // perder precisión, y `=== 0` nunca sería cierto.
@@ -434,7 +438,9 @@ const ordenes = {
           `${f.permisos.length > 0 ? f.permisos.join(', ') : '—'}`
       );
     }
-    console.log('\nLos roles se crean y se editan desde /html/cuentas.html.');
+    // Si alguna vez hay que reajustar lo que un rol puede hacer, es un UPDATE
+    // a mano sobre `roles.permisos` contra la base — no hay ruta que lo escriba.
+    console.log('\nSon fijos: no hay forma de crear ni editar roles desde la aplicación.');
   },
 
   async rol(argumentos) {

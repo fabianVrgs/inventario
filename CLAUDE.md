@@ -17,7 +17,7 @@ escribir código o mensajes de commit aquí.
 ```bash
 npm install                    # sólo JS: pg no compila nada nativo (a diferencia de sqlite3)
 npm start                      # --env-file=.env, arranca en :3000 (PORT lo cambia)
-npm test                       # 134 tests con el runner nativo de node
+npm test                       # 127 tests con el runner nativo de node
 
 # Sin cuentas no se puede entrar a ninguna pantalla: no hay ninguna por defecto.
 # Ésta es la vía de arranque; las demás cuentas se crean ya desde /html/cuentas.html.
@@ -105,7 +105,9 @@ cuentas y devuelve la cookie. Si el test provoca logins fallidos, hay que llamar
 **Modelo de datos.** Doce tablas en `db/esquema.sql`, aplicado una sola vez contra Supabase —
 ya no hay migraciones ni runner: eso vivía en SQLite y se fue con ella. `db/cambio-2026-08-roles.sql`
 NO es una migración ni resucita el runner: es el ALTER de un solo uso que le puso la tabla
-`roles` a la base que ya estaba desplegada. El estado final sigue viviendo en `esquema.sql`.
+`roles` a la base que ya estaba desplegada. **No lo borres aunque el CRUD de roles se haya
+retirado**: describe un cambio que la base real TIENE aplicado, y la tabla sigue ahí. El
+estado final sigue viviendo en `esquema.sql`.
 
 ```
 areas                          productos
@@ -147,12 +149,15 @@ reto o un contador guardado en una no existía para las demás—:
 `retos_totp(reto PK, id_cuenta FK, expira_en)` (dormida, 2º factor pendiente, 5 min) e
 `intentos_login(clave PK "ip:x"/"usuario:y", fallos, ultimo_en)` (el limitador).
 
-- **`roles.permisos` es un `text[]` SIN `CHECK`, y es correcto.** El catálogo de permisos vive
-  en `PERMISOS`, en `server.js`, que es quien los aplica; un CHECK sería la misma lista escrita
-  dos veces y la copia de la base envejecería sola. La API rechaza con 400 lo que no esté en el
-  catálogo, y es la única puerta por la que se escribe esa columna.
+- **`roles.permisos` es un `text[]` SIN `CHECK`, y NINGUNA ruta lo escribe.** Los roles son dos
+  filas fijas y no hay API que las toque: reajustar lo que un rol puede hacer es un `UPDATE` a
+  mano contra la base. Un CHECK con la lista de permisos sería esa misma lista escrita dos veces
+  y la copia de la base envejecería sola. Que sea tabla y no el viejo `CHECK (rol IN (...))` es
+  lo que permite preguntar por el permiso en vez de comparar contra la cadena `'superadmin'`.
 - **`superadmin` NO lleva comodín**: tiene los tres permisos escritos. Un `*` haría que cada
   permiso nuevo cayera solo en el rol más poderoso; así, añadir uno obliga a decidir a quién.
+- **`roles.semilla` no lo lee nadie ya**, y se queda: distingue el rol que abre la gestión del
+  que sólo opera el almacén, y quitarlo pediría un ALTER contra la base desplegada.
 - **La cantidad vive en el producto** (no en tabla puente); `activo` decide si sale en la Principal.
 - **`ordenes`/`orden_lineas` son el registro histórico**, escrito en el MISMO `COMMIT` que el
   descuento; `orden_lineas.nombre` duplica el del producto a propósito para que la orden vieja
@@ -168,7 +173,7 @@ reto o un contador guardado en una no existía para las demás—:
 `/css/*` y `/img/*`. Principal (`index.html`+`logica.js`, elige de lo disponible), Inventario
 (`inventario.html`+`edit.js`, CRUD y `devolucion.js`), Orden del día
 (`orden_del_dia.html`+`orden.js`, imprime y descuenta de verdad) y Cuentas
-(`cuentas.html`+`cuentas.js`, cuentas, roles y bitácora); `sesion.js` compartido por las
+(`cuentas.html`+`cuentas.js`, cuentas y bitácora); `sesion.js` compartido por las
 cuatro. El porqué de cada pantalla está en `DESIGN.md` y `PRODUCT.md`.
 
 `cuentas.html` y `js/cuentas.js` son los ÚNICOS estáticos con guardia propia, en un `app.use`
@@ -178,11 +183,28 @@ servirle a nadie una pantalla que sólo le va a dar 403.
 
 Contratos que siguen mordiendo:
 
+- **Nada que dependa del stock se repinta: se PARCHEA.** Es la misma razón por la que la
+  fila del producto no se reconstruye (el foco del teclado se iría a `<body>` en cada
+  pulsación), y ahora alcanza a tres sitios más de `logica.js`: el recuento de cada área
+  (`actualizarConteosDeArea`), el de cada chip de filtro (`actualizarConteosDeFiltro`) y el
+  total de la Orden del día (`actualizarResumenDeOrden`, en `orden.js`). Si alguno deja de
+  llamarse, la cabecera dice "4 unidades" sobre una fila que dice "Queda 1" — y el de la
+  orden **se imprime**.
+- **En móvil, la fila del inventario deja UN botón: el del detalle.** Los otros tres se
+  ocultan por CSS a ≤640px, así que **el modal de detalle no puede volver a quedarse sólo
+  con "Cerrar"**: sus tres acciones (`#btnDetalleEditar`, `#btnDetalleAlternar`,
+  `#btnDetalleEliminar`) son las únicas que hay desde un teléfono. Cierran el detalle
+  ANTES de actuar, porque dos de ellas abren otra ventana encima y el modal de abajo se
+  quedaría atrapando los clics de fuera.
+- **`--ancho-pagina` de Orden del día ya no es el de la hoja.** Era `var(--ancho-hoja)` para
+  que el nav no saliera más ancho que el papel; con cuatro enlaces, la sesión y el botón de
+  imprimir eso envolvía en tres filas. Ahora son 1060px —medido, no redondo— y el `@media`
+  que baja el botón al pulgar usa ese mismo número.
 - **La clase que `sesion.js` pone en `<html>` es POR PERMISO, no por rol**
   (`permiso-productos-eliminar`), y el CSS pregunta en negativo
-  (`:root:not(.permiso-productos-eliminar) .btn-delete`). Con `rol-admin` —como estaba— un rol
-  creado desde la pantalla no casaría con ninguna regla y el botón de borrar reaparecería
-  justo para quien no debe verlo.
+  (`:root:not(.permiso-productos-eliminar) .btn-delete`). Con `rol-admin` —como estaba— haría
+  falta una regla por rol, y el día que un permiso se mueva de sitio hay que repasarlas todas
+  para que el botón de borrar no reaparezca justo para quien no debe verlo.
 - **`sessionStorage` mueve la orden en tres claves que van SIEMPRE juntas**: `ordenSeleccion`
   (las líneas), `ordenAplicada` (`"true"` tras el descuento), `ordenId` (el número impreso).
   Quien reescriba `ordenSeleccion` borra las otras dos —selección distinta, otra orden— o acaba
@@ -199,24 +221,38 @@ Contratos que siguen mordiendo:
 
 ## Autenticación
 
-**Roles con permisos, no dos nombres fijos.** `exigirSuperadmin` (que comparaba contra la
-cadena `'superadmin'`) ya no existe: en su sitio está `exigirPermiso('cuentas.gestionar')` y
-compañía. Los permisos se resuelven en la MISMA consulta que resuelve la sesión —un JOIN con
-`roles`—, así que el rol y lo que permite se releen en cada petición y recortarlo surte
-efecto en la siguiente, no dentro de doce horas. Por eso cambiar un rol o editar sus permisos
-NO cierra sesiones; restablecer una contraseña sí, y por otro motivo: ahí se sospecha que
+**Dos roles fijos, pero el guardia pregunta por el PERMISO.** Los roles son `superadmin` y
+`admin`, y no hay forma de crear ni editar ninguno: no queda ninguna ruta que escriba
+`roles`. Aun así `exigirSuperadmin` (que comparaba contra la cadena `'superadmin'`) NO
+existe: en su sitio está `exigirPermiso('cuentas.gestionar')` y compañía, leyendo
+`roles.permisos`. La diferencia importa en dos sitios — el CSS del frontend, que esconde por
+permiso y no por rol, y `hayOtroGestor()`, que cuenta quién puede gestionar sin saberse el
+nombre del rol.
+
+Los permisos se resuelven en la MISMA consulta que resuelve la sesión —un JOIN con `roles`—,
+así que el rol y lo que permite se releen en cada petición y mover a alguien de rol surte
+efecto en la siguiente, no dentro de doce horas. Por eso cambiar el rol de una cuenta NO
+cierra sesiones; restablecer una contraseña sí, y por otro motivo: ahí se sospecha que
 alguien tiene la anterior.
 
-El catálogo son tres: `productos.eliminar`, `cuentas.gestionar` y `accesos.ver` — sólo lo que
-antes separaba a admin de superadmin. Ver el inventario, editarlo, emitir órdenes y recibir
+Son tres permisos, y los tres son de `superadmin`: `productos.eliminar`, `cuentas.gestionar`
+y `accesos.ver` — exactamente lo que separa a admin de superadmin. `admin` va con la lista
+VACÍA y hace todo lo demás: ver el inventario, editarlo, emitir órdenes y recibir
 devoluciones siguen abiertos a cualquier sesión.
 
-**Dos invariantes que el servidor impone y ningún cliente puede saltarse**: el rol
-`superadmin` (`semilla = 1`) no se edita ni se borra —es la vía de vuelta si otro queda mal
-configurado; `admin` sí, es el operativo—, y nunca puede quedar cero cuentas activas con
-`cuentas.gestionar`. Lo segundo generaliza el viejo guardia del "último superadmin", vive en
-`hayOtroGestor()` de `server.js` y está repetido en `scripts/cuenta.js` porque el script
-escribe la base sin pasar por la API.
+**Se probó una pantalla que creaba roles a medida, y se retiró** (2026-08-29). Con dos roles
+no hacía falta, y un CRUD de roles es una manera fácil de dejarse fuera solo. Lo que quedó de
+ella: la tabla `roles` (con la fila `admin` a cero permisos y `semilla` sin lectores), el
+`GET /api/roles` de sólo lectura que llena el `<select>` del alta, y `exigirPermiso`. Lo que
+NO quedó: `PERMISOS`, `revisarPermisos`, `ROL_VALIDO`, las tres rutas de escritura y la
+sección Roles de la pantalla. Si vuelve, vuelve con su catálogo — no antes.
+
+**Un invariante que el servidor impone y ningún cliente puede saltarse**: nunca puede quedar
+cero cuentas activas con `cuentas.gestionar`. Generaliza el viejo guardia del "último
+superadmin", vive en `hayOtroGestor()` de `server.js` y está repetido en `scripts/cuenta.js`
+porque el script escribe la base sin pasar por la API. Con el CRUD de roles fuera quedan dos
+maneras de romperlo y las dos pasan por una cuenta —bajarla o moverla a `admin`—; la tercera,
+quitarle el permiso al rol, ya no tiene puerta.
 
 Lo demás sigue igual que en SQLite —y comentado en detalle en `server.js`—: guardia que
 **deniega por defecto**, SHA-256 del token en `sesiones` (nunca el token), nada de

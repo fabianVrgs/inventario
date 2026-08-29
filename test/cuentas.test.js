@@ -1,12 +1,13 @@
-// Tests del centro de gestión: altas, contraseñas, roles y permisos.
+// Tests del centro de gestión: altas, contraseñas y permisos.
 //
 // Van aparte de auth.test.js porque aquél comprueba cómo se entra y se sale, y
 // aquí lo que se prueba es lo que puede hacer quien ya entró — y sobre todo lo
 // que NO puede, que es donde vive el riesgo.
 //
-// El test que más vale de este archivo es "un rol creado desde la API borra
-// productos de verdad": es la diferencia entre roles que son permisos y roles
-// que son etiquetas de adorno.
+// Los roles son dos y NINGUNA ruta los escribe, así que aquí no hay tests de
+// crearlos ni editarlos: hay tests de lo que cada uno puede. El que más vale es
+// "superadmin borra productos y admin no", que es la diferencia entre roles que
+// son permisos y roles que son etiquetas de adorno.
 
 const { test, before, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -37,26 +38,21 @@ before(async () => {
 });
 
 // Los roles se limpian AQUÍ y no en helpers/sesion.js a propósito: éste es el
-// único archivo que los crea, y meter en el helper compartido un borrado de
+// único archivo que mete alguno, y meter en el helper compartido un borrado de
 // roles obligaría a re-sembrar allí las dos filas que db/esquema.sql ya escribe
 // — la misma verdad en dos sitios, y la copia del helper envejeciendo sola.
 //
-// `admin` y `superadmin` se dejan y se devuelven a sus permisos de fábrica: son
-// parte del esquema, no datos de un test. `admin` los pierde de vista con
-// facilidad porque es editable.
-async function restaurarRoles() {
+// Sólo hay un test que escriba esta tabla (el de `accesos.ver`), y lo hace por
+// SQL porque no queda ninguna ruta que lo haga. `admin` y `superadmin` no se
+// tocan: son parte del esquema, no datos de un test.
+async function borrarRolesDePrueba() {
   await consultar("DELETE FROM roles WHERE nombre NOT IN ('admin', 'superadmin')");
-  await consultar("UPDATE roles SET permisos = '{}' WHERE nombre = 'admin'");
-  await consultar(
-    `UPDATE roles SET permisos = '{productos.eliminar,cuentas.gestionar,accesos.ver}'
-     WHERE nombre = 'superadmin'`
-  );
 }
 
 beforeEach(async () => {
   await sembrar();
   await sembrarCuentas();
-  await restaurarRoles();
+  await borrarRolesDePrueba();
   // Varios tests de aquí provocan logins fallidos a propósito (la contraseña
   // vieja después de restablecerla). Sin esto, los siguientes se encontrarían
   // bloqueados por IP: todos salen de 127.0.0.1.
@@ -95,9 +91,6 @@ const cookieDeLogin = async (usuario, clave) => {
 
 const crearCuenta = (cuerpo, galleta = cookie) =>
   con(galleta, '/api/cuentas', { method: 'POST', body: JSON.stringify(cuerpo) });
-
-const crearRol = (cuerpo, galleta = cookie) =>
-  con(galleta, '/api/roles', { method: 'POST', body: JSON.stringify(cuerpo) });
 
 const idDe = async (usuario) =>
   (await consultar('SELECT id_cuenta FROM cuentas WHERE usuario = $1', [usuario])).rows[0]
@@ -202,33 +195,29 @@ test('la contraseña nueva también pasa por el validador', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Roles con permisos de verdad
+// Los dos roles, y lo que separa a uno del otro
 // ---------------------------------------------------------------------------
 
-test('un rol creado desde la API borra productos de verdad', async () => {
-  // ÉSTE es el test que separa "roles con permisos" de "roles decorativos".
-  const rol = await crearRol({
-    nombre: 'bodega',
-    descripcion: 'Sólo el almacén físico.',
-    permisos: ['productos.eliminar'],
-  });
-  assert.equal(rol.status, 201);
-
-  await crearCuenta({ usuario: 'bodeguero', clave: CLAVE_NUEVA, rol: 'bodega' });
+test('superadmin borra productos y admin no: los tres permisos son suyos', async () => {
+  // ÉSTE es el test que separa "roles con permisos" de "roles decorativos", y
+  // es el único sitio donde la frontera entre los dos roles se prueba entera.
+  await crearCuenta({ usuario: 'bodeguero', clave: CLAVE_NUEVA, rol: 'superadmin' });
   const suya = await cookieDeLogin('bodeguero', CLAVE_NUEVA);
 
-  // Puede lo que su rol incluye…
+  // Los tres permisos de superadmin, cada uno por su puerta.
   assert.equal((await con(suya, '/api/productos/3', { method: 'DELETE' })).status, 200);
+  assert.equal((await con(suya, '/api/cuentas')).status, 200);
+  assert.equal((await con(suya, '/api/accesos')).status, 200);
 
-  // …y nada de lo que no.
-  assert.equal((await con(suya, '/api/cuentas')).status, 403);
-  assert.equal((await con(suya, '/api/accesos')).status, 403);
-  assert.equal((await con(suya, '/api/roles')).status, 403);
+  // Y admin, que no lleva ninguno, choca contra las tres.
+  const deAdmin = await iniciarSesion(base, 'admin');
+  assert.equal((await con(deAdmin, '/api/productos/2', { method: 'DELETE' })).status, 403);
+  assert.equal((await con(deAdmin, '/api/cuentas')).status, 403);
+  assert.equal((await con(deAdmin, '/api/accesos')).status, 403);
 });
 
 test('el rol sin permisos entra y trabaja, pero no borra', async () => {
-  await crearRol({ nombre: 'ayudante', descripcion: '', permisos: [] });
-  await crearCuenta({ usuario: 'ayudita', clave: CLAVE_NUEVA, rol: 'ayudante' });
+  await crearCuenta({ usuario: 'ayudita', clave: CLAVE_NUEVA, rol: 'admin' });
   const suya = await cookieDeLogin('ayudita', CLAVE_NUEVA);
 
   // El día a día del almacén no está detrás de ningún permiso, y así sigue.
@@ -246,110 +235,21 @@ test('el rol sin permisos entra y trabaja, pero no borra', async () => {
   assert.equal((await con(suya, '/api/productos/3', { method: 'DELETE' })).status, 403);
 });
 
-test('el catálogo de permisos es cerrado: uno inventado se rechaza', async () => {
-  const respuesta = await crearRol({
-    nombre: 'todopoderoso',
-    descripcion: '',
-    permisos: ['productos.eliminar', 'base.borrar'],
-  });
-  assert.equal(respuesta.status, 400);
-  assert.match((await respuesta.json()).error, /base\.borrar/);
+test('GET /api/roles manda los dos roles y no sus permisos', async () => {
+  const { roles } = await (await con(cookie, '/api/roles')).json();
 
-  const { rows } = await consultar("SELECT count(*)::int AS total FROM roles WHERE nombre = 'todopoderoso'");
-  assert.equal(rows[0].total, 0);
-});
-
-test('el nombre del rol se normaliza y se valida', async () => {
-  assert.equal((await crearRol({ nombre: 'Bodega', permisos: [] })).status, 201);
-
-  const { rows } = await consultar('SELECT nombre FROM roles ORDER BY nombre');
-  assert.ok(rows.some((f) => f.nombre === 'bodega'));
-
-  assert.equal((await crearRol({ nombre: 'ab', permisos: [] })).status, 400);
-  assert.equal((await crearRol({ nombre: 'con espacio', permisos: [] })).status, 400);
-  assert.equal((await crearRol({ nombre: '9lives', permisos: [] })).status, 400);
-});
-
-test('editar un rol cambia lo que pueden sus cuentas sin volver a entrar', async () => {
-  await crearRol({ nombre: 'bodega', permisos: ['productos.eliminar'] });
-  await crearCuenta({ usuario: 'bodeguero', clave: CLAVE_NUEVA, rol: 'bodega' });
-  const suya = await cookieDeLogin('bodeguero', CLAVE_NUEVA);
-
-  assert.equal((await con(suya, '/api/productos/3', { method: 'DELETE' })).status, 200);
-
-  // Se le quita el permiso al ROL, sin tocar ni la cuenta ni su sesión.
-  const editado = await con(cookie, '/api/roles/bodega', {
-    method: 'PUT',
-    body: JSON.stringify({ descripcion: 'Ya no borra.', permisos: [] }),
-  });
-  assert.equal(editado.status, 200);
-
-  // La MISMA cookie, sin volver a entrar: el permiso se relee en cada petición.
-  assert.equal((await con(suya, '/api/productos/2', { method: 'DELETE' })).status, 403);
-});
-
-test('el rol semilla superadmin no se edita ni se borra', async () => {
-  const editado = await con(cookie, '/api/roles/superadmin', {
-    method: 'PUT',
-    body: JSON.stringify({ descripcion: 'mío', permisos: [] }),
-  });
-  assert.equal(editado.status, 409);
-
-  const borrado = await con(cookie, '/api/roles/superadmin', { method: 'DELETE' });
-  assert.equal(borrado.status, 409);
-
-  const { rows } = await consultar("SELECT permisos FROM roles WHERE nombre = 'superadmin'");
-  assert.deepEqual(rows[0].permisos.sort(), [
-    'accesos.ver',
-    'cuentas.gestionar',
-    'productos.eliminar',
-  ]);
-});
-
-test('admin sí es editable: es el rol operativo, no la vía de vuelta', async () => {
-  const respuesta = await con(cookie, '/api/roles/admin', {
-    method: 'PUT',
-    body: JSON.stringify({ descripcion: 'Ahora también borra.', permisos: ['productos.eliminar'] }),
-  });
-  assert.equal(respuesta.status, 200);
-
-  const suya = await iniciarSesion(base, 'admin');
-  assert.equal((await con(suya, '/api/productos/3', { method: 'DELETE' })).status, 200);
-});
-
-test('un rol con cuentas dentro no se puede borrar', async () => {
-  await crearRol({ nombre: 'bodega', permisos: [] });
-  await crearCuenta({ usuario: 'bodeguero', clave: CLAVE_NUEVA, rol: 'bodega' });
-
-  const respuesta = await con(cookie, '/api/roles/bodega', { method: 'DELETE' });
-  assert.equal(respuesta.status, 409);
-  assert.match((await respuesta.json()).error, /Cámbiales el rol/);
-
-  // Vaciado el rol, sí se va.
-  const id = await idDe('bodeguero');
-  assert.equal(
-    (await con(cookie, `/api/cuentas/${id}/rol`, { method: 'PATCH', body: JSON.stringify({ rol: 'admin' }) }))
-      .status,
-    200
+  // Los dos, y sólo los dos: es lo que llena el <select> del alta de cuenta.
+  assert.deepEqual(
+    roles.map((r) => r.nombre),
+    ['superadmin', 'admin']
   );
-  assert.equal((await con(cookie, '/api/roles/bodega', { method: 'DELETE' })).status, 200);
-});
 
-test('GET /api/roles manda el catálogo junto a los roles', async () => {
-  const cuerpo = await (await con(cookie, '/api/roles')).json();
+  // Con las cuentas de cada uno, que la pantalla enseña…
+  assert.equal(roles[0].cuentas, 1);
 
-  assert.deepEqual(cuerpo.permisos.sort(), [
-    'accesos.ver',
-    'cuentas.gestionar',
-    'productos.eliminar',
-  ]);
-
-  const superadmin = cuerpo.roles.find((r) => r.nombre === 'superadmin');
-  assert.equal(superadmin.semilla, true);
-  assert.equal(superadmin.cuentas, 1);
-
-  const admin = cuerpo.roles.find((r) => r.nombre === 'admin');
-  assert.equal(admin.semilla, false);
+  // …y SIN la columna `permisos`: nadie la pinta, y mandarla sería contarle a
+  // la sesión más de lo que necesita para elegir un rol de una lista.
+  for (const rol of roles) assert.equal(rol.permisos, undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -409,8 +309,7 @@ test('no se puede mover al último gestor a un rol que no gestiona', async () =>
 });
 
 test('a otro gestor sí se le puede mover, mientras quede alguien', async () => {
-  await crearRol({ nombre: 'gestor', permisos: ['cuentas.gestionar'] });
-  await crearCuenta({ usuario: 'segundo', clave: CLAVE_NUEVA, rol: 'gestor' });
+  await crearCuenta({ usuario: 'segundo', clave: CLAVE_NUEVA, rol: 'superadmin' });
   const id = await idDe('segundo');
 
   assert.equal(
@@ -424,39 +323,6 @@ test('a otro gestor sí se le puede mover, mientras quede alguien', async () => 
   assert.equal((await con(suya, '/api/cuentas')).status, 403);
 });
 
-test('no se le puede quitar la gestión al único rol que la tiene', async () => {
-  // superadmin es semilla y ya lo protege el 409 de "no se puede modificar";
-  // aquí se comprueba el otro camino: un rol gestor normal.
-  await crearRol({ nombre: 'gestor', permisos: ['cuentas.gestionar'] });
-  await crearCuenta({ usuario: 'segundo', clave: CLAVE_NUEVA, rol: 'gestor' });
-
-  // Con el superadmin de fábrica todavía activo, quitarlo se permite.
-  assert.equal(
-    (await con(cookie, '/api/roles/gestor', { method: 'PUT', body: JSON.stringify({ permisos: [] }) }))
-      .status,
-    200
-  );
-
-  // Se devuelve el permiso y se deja a `gestor` como único camino.
-  await con(cookie, '/api/roles/gestor', {
-    method: 'PUT',
-    body: JSON.stringify({ permisos: ['cuentas.gestionar'] }),
-  });
-  const suyo = await idDe(USUARIOS.superadmin);
-  const suya = await cookieDeLogin('segundo', CLAVE_NUEVA);
-  await con(suya, `/api/cuentas/${suyo}/activa`, {
-    method: 'PATCH',
-    body: JSON.stringify({ activa: false }),
-  });
-
-  const respuesta = await con(suya, '/api/roles/gestor', {
-    method: 'PUT',
-    body: JSON.stringify({ permisos: [] }),
-  });
-  assert.equal(respuesta.status, 409);
-  assert.match((await respuesta.json()).error, /sin ninguna cuenta/);
-});
-
 // ---------------------------------------------------------------------------
 // Quién puede entrar aquí
 // ---------------------------------------------------------------------------
@@ -468,9 +334,6 @@ test('sin cuentas.gestionar, todo el centro de gestión responde 403', async () 
     ['GET', '/api/cuentas'],
     ['POST', '/api/cuentas'],
     ['GET', '/api/roles'],
-    ['POST', '/api/roles'],
-    ['PUT', '/api/roles/admin'],
-    ['DELETE', '/api/roles/admin'],
     ['PATCH', '/api/cuentas/1/activa'],
     ['PATCH', '/api/cuentas/1/rol'],
     ['POST', '/api/cuentas/1/clave'],
@@ -500,7 +363,13 @@ test('la pantalla de gestión no se sirve a quien no la puede usar', async () =>
 });
 
 test('accesos.ver es un permiso aparte del de gestionar', async () => {
-  await crearRol({ nombre: 'auditor', permisos: ['accesos.ver'] });
+  // Los dos permisos viajan juntos en superadmin, así que sin un tercer rol no
+  // hay forma de ver que se preguntan por separado — y se preguntan: son dos
+  // `exigirPermiso` distintos. El rol se siembra por SQL porque ninguna ruta
+  // escribe `roles`, que es exactamente como se ajustaría hoy en producción.
+  await consultar(
+    "INSERT INTO roles (nombre, descripcion, permisos) VALUES ('auditor', 'Sólo mira.', '{accesos.ver}')"
+  );
   await crearCuenta({ usuario: 'auditora', clave: CLAVE_NUEVA, rol: 'auditor' });
   const suya = await cookieDeLogin('auditora', CLAVE_NUEVA);
 
@@ -510,13 +379,22 @@ test('accesos.ver es un permiso aparte del de gestionar', async () => {
 });
 
 test('/api/auth/yo entrega los permisos, no sólo el nombre del rol', async () => {
-  await crearRol({ nombre: 'bodega', permisos: ['productos.eliminar'] });
-  await crearCuenta({ usuario: 'bodeguero', clave: CLAVE_NUEVA, rol: 'bodega' });
-  const suya = await cookieDeLogin('bodeguero', CLAVE_NUEVA);
+  // El frontend esconde botones por PERMISO y no por rol: sin esta lista, el
+  // CSS tendría que deducir de "eres admin" qué puede hacer un admin.
+  const mio = await (await con(cookie, '/api/auth/yo')).json();
+  assert.equal(mio.rol, 'superadmin');
+  assert.deepEqual(mio.permisos.sort(), [
+    'accesos.ver',
+    'cuentas.gestionar',
+    'productos.eliminar',
+  ]);
 
-  const cuerpo = await (await con(suya, '/api/auth/yo')).json();
-  assert.equal(cuerpo.rol, 'bodega');
-  assert.deepEqual(cuerpo.permisos, ['productos.eliminar']);
+  // Y admin llega con la lista vacía, no sin la clave: el frontend hace
+  // `.includes()` sobre ella sin comprobar antes que exista.
+  const suya = await iniciarSesion(base, 'admin');
+  const suyo = await (await con(suya, '/api/auth/yo')).json();
+  assert.equal(suyo.rol, 'admin');
+  assert.deepEqual(suyo.permisos, []);
 });
 
 test('ni el alta ni el listado dejan salir un hash', async () => {

@@ -439,25 +439,20 @@ app.get('/api/salud', async (req, res) => {
 // Permisos
 // ---------------------------------------------------------------------------
 //
-// EL CATÁLOGO VIVE AQUÍ, en el código, y no en la base. Es la lista cerrada de
-// cosas que un rol puede incluir, y la base no la valida: `roles.permisos` es
-// un text[] sin CHECK. No es un descuido — quien aplica un permiso es este
-// archivo, y tener la lista escrita también en el esquema sería la misma
-// verdad en dos sitios, con la copia de allí envejeciendo sola. La API rechaza
-// con 400 cualquier permiso que no esté aquí, y es la única puerta por la que
-// esa columna se escribe.
+// Hay TRES permisos, y son los que separan a superadmin de admin:
+// `productos.eliminar`, `cuentas.gestionar` y `accesos.ver`. Los lleva
+// `roles.permisos`, un text[] sin CHECK, y no hay ninguna lista de ellos en
+// este archivo porque no queda nadie a quien validársela: los roles son dos
+// filas semilla y NINGUNA ruta escribe esa columna. Si algún día vuelve una
+// pantalla que cree roles, vuelve con ella el catálogo — no antes.
 //
-// Es corto a propósito: sólo entra lo que ANTES separaba a admin de superadmin.
 // Ver el inventario, editarlo, emitir órdenes y recibir devoluciones siguen
-// abiertos a cualquier sesión, igual que siempre. Añadir uno nuevo es sumarlo a
-// esta lista y decidir a qué roles dárselo — nunca hay comodín que lo reparta
-// solo.
-const PERMISOS = ['productos.eliminar', 'cuentas.gestionar', 'accesos.ver'];
+// abiertos a cualquier sesión, igual que siempre.
 
 // Sustituye al viejo `exigirSuperadmin`, que comparaba contra la cadena
-// 'superadmin'. Con roles creados desde la pantalla, esa comparación dejaba
-// fuera por definición a cualquier rol nuevo: no había forma de que hiciera
-// nada. Ahora el guardia pregunta por la CAPACIDAD, no por el nombre.
+// 'superadmin'. Se pregunta por la CAPACIDAD y no por el nombre porque el
+// permiso es lo que las rutas de verdad necesitan saber, y porque así mover a
+// alguien de rol surte efecto en su siguiente petición sin tocar ninguna ruta.
 function exigirPermiso(permiso) {
   return (req, res, next) => {
     if (!req.cuenta?.permisos?.includes(permiso)) {
@@ -636,9 +631,10 @@ app.post('/api/auth/salir', async (req, res) => {
 // cuenta no puede hacer. Ese ocultamiento es cosmético: la frontera de verdad
 // está en `exigirPermiso`, y así lo comprueban los tests.
 //
-// Se manda la lista de permisos y no sólo el nombre del rol porque el frontend
-// ya no puede deducir uno de otro: con roles creados desde la pantalla, "eres
-// admin" no dice si puedes borrar un producto.
+// Se manda la lista de permisos y no sólo el nombre del rol porque es el
+// permiso, y no el nombre, lo que el frontend tiene que preguntar. Con "eres
+// admin" el CSS acabaría con una regla por rol, y cada permiso que se moviera
+// de sitio obligaría a repasarlas todas.
 app.get('/api/auth/yo', (req, res) => {
   res.json({
     usuario: req.cuenta.usuario,
@@ -648,7 +644,7 @@ app.get('/api/auth/yo', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Administración de cuentas y roles
+// Administración de cuentas
 // ---------------------------------------------------------------------------
 //
 // El centro de gestión del superadministrador, que la pantalla
@@ -686,24 +682,24 @@ const ULTIMO_GESTOR =
   'Es la única cuenta activa que puede gestionar cuentas. Dejarla fuera cerraría ' +
   'la gestión por dentro, sin forma de reabrirla desde la web.';
 
-// ¿Queda alguien MÁS que pueda gestionar cuentas? Los dos filtros son las dos
-// maneras de romper el invariante: tocando una cuenta (bajarla, cambiarle el
-// rol) o tocando un rol (quitarle el permiso). Con los valores por defecto no
-// excluyen nada, porque no hay id_cuenta 0 ni rol con nombre vacío.
+// ¿Queda alguien MÁS que pueda gestionar cuentas? Quedan dos maneras de romper
+// el invariante, y las dos pasan por una cuenta: bajarla o cambiarle el rol. La
+// tercera —quitarle `cuentas.gestionar` al único rol que lo tenía— murió con el
+// CRUD de roles: ninguna ruta escribe ya `roles.permisos`. Por eso el filtro es
+// uno solo, y con su valor por defecto no excluye nada: no hay id_cuenta 0.
 //
 // count(*)::int y no count(*): sin el cast, `pg` devuelve el bigint como cadena
 // para no perder precisión, y la comparación sería contra "0". Es la misma
 // trampa que ya mordió en `existe` y en el aviso de arranque.
-async function hayOtroGestor({ salvoCuenta = 0, salvoRol = '' } = {}) {
+async function hayOtroGestor({ salvoCuenta = 0 } = {}) {
   const { rows } = await consultar(
     `SELECT count(*)::int AS total
      FROM cuentas c
      JOIN roles r ON r.nombre = c.rol
      WHERE c.activa = 1
        AND 'cuentas.gestionar' = ANY (r.permisos)
-       AND c.id_cuenta <> $1
-       AND c.rol <> $2`,
-    [salvoCuenta, salvoRol]
+       AND c.id_cuenta <> $1`,
+    [salvoCuenta]
   );
   return rows[0].total > 0;
 }
@@ -865,154 +861,31 @@ app.post('/api/cuentas/:id/clave', exigirPermiso('cuentas.gestionar'), async (re
 // Roles
 // ---------------------------------------------------------------------------
 
-const ROL_VALIDO = /^[a-z][a-z0-9_-]{2,31}$/;
-
-// Devuelve el motivo del rechazo o null. La lista se deduplica al guardar: el
-// mismo permiso dos veces no es un error del que valga la pena avisar.
-function revisarPermisos(valor) {
-  if (!Array.isArray(valor)) return 'Los permisos tienen que venir en una lista.';
-
-  const fuera = valor.filter((p) => !PERMISOS.includes(p));
-  if (fuera.length > 0) return `Permiso desconocido: ${fuera.join(', ')}.`;
-
-  return null;
-}
-
-// El catálogo viaja junto a los roles: es lo que la pantalla necesita para
-// pintar las casillas, y mandarlo desde aquí evita que el frontend tenga su
-// propia copia de la lista — que es como dos listas empiezan a no coincidir.
+// La ÚNICA ruta de roles, y es de lectura. Los roles son dos filas semilla en
+// la base —`superadmin`, que gestiona cuentas y ve la bitácora, y `admin`, que
+// hace el resto— y no hay forma de crear, editar ni borrar ninguno desde la
+// web: se probó tener esa pantalla y se retiró, porque el almacén no necesita
+// más de dos y un CRUD de roles es una manera fácil de dejarse fuera solo.
+// Cambiar los permisos de un rol es hoy un UPDATE a mano contra la base.
+//
+// Esto existe para llenar el <select> del alta de cuenta. Va con las cuentas de
+// cada rol porque la pantalla las enseña, y sin la columna `permisos`: nadie la
+// pinta, y mandarla sería contarle a la sesión más de lo que necesita.
 app.get('/api/roles', exigirPermiso('cuentas.gestionar'), async (req, res) => {
   try {
     const { rows } = await consultar(
-      `SELECT r.nombre, r.descripcion, r.permisos, r.semilla,
+      `SELECT r.nombre, r.descripcion,
               (SELECT count(*)::int FROM cuentas c WHERE c.rol = r.nombre) AS cuentas
        FROM roles r
        ORDER BY r.semilla DESC, r.nombre`
     );
-    res.json({
-      permisos: PERMISOS,
-      roles: rows.map((f) => ({ ...f, semilla: f.semilla === 1 })),
-    });
+    res.json({ roles: rows });
   } catch (err) {
     console.error('[roles]', err.message);
     res.status(500).json({ error: 'Error interno.' });
   }
 });
 
-app.post('/api/roles', exigirPermiso('cuentas.gestionar'), async (req, res) => {
-  // Se pasa a minúsculas antes de validar: "Bodega" es un nombre razonable de
-  // teclear y `bodega` es el que va a la clave primaria. Rechazarlo por la
-  // mayúscula sería una pega, no una regla.
-  const nombre = typeof req.body?.nombre === 'string' ? req.body.nombre.trim().toLowerCase() : '';
-  const descripcion = normalizarTexto(req.body?.descripcion);
-  const permisos = req.body?.permisos;
-
-  if (!ROL_VALIDO.test(nombre)) {
-    return res.status(400).json({
-      error: 'El rol admite minúsculas, números, guion y guion bajo, entre 3 y 32 caracteres.',
-    });
-  }
-
-  const problema = revisarPermisos(permisos);
-  if (problema) return res.status(400).json({ error: problema });
-
-  try {
-    const { rows } = await consultar(
-      `INSERT INTO roles (nombre, descripcion, permisos, semilla)
-       VALUES ($1, $2, $3, 0)
-       RETURNING nombre, descripcion, permisos`,
-      [nombre, descripcion, [...new Set(permisos)]]
-    );
-    res.status(201).json({ ...rows[0], semilla: false, cuentas: 0 });
-  } catch (err) {
-    if (err.code === '23505') {
-      return res.status(409).json({ error: `Ya existe el rol "${nombre}".` });
-    }
-    console.error('[roles/crear]', err.message);
-    res.status(500).json({ error: 'Error interno.' });
-  }
-});
-
-// El NOMBRE de un rol no se edita: es clave primaria y clave foránea desde
-// `cuentas.rol`, así que renombrarlo arrastraría filas por delante para
-// arreglar una errata. Para eso se borra y se crea otro.
-app.put('/api/roles/:nombre', exigirPermiso('cuentas.gestionar'), async (req, res) => {
-  const nombre = String(req.params.nombre).trim().toLowerCase();
-  const descripcion = normalizarTexto(req.body?.descripcion);
-  const permisos = req.body?.permisos;
-
-  const problema = revisarPermisos(permisos);
-  if (problema) return res.status(400).json({ error: problema });
-
-  try {
-    const { rows } = await consultar('SELECT semilla FROM roles WHERE nombre = $1', [nombre]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Ese rol no existe.' });
-
-    // `superadmin` es el único rol semilla, y es intocable a propósito: el suelo
-    // conocido al que se puede volver cuando un rol nuevo queda mal configurado.
-    // `admin` NO lo es — es el rol operativo, el que más va a cambiar.
-    if (rows[0].semilla === 1) {
-      return res.status(409).json({
-        error: `El rol "${nombre}" no se puede modificar: es el que garantiza que siempre haya una vía de vuelta.`,
-      });
-    }
-
-    if (!permisos.includes('cuentas.gestionar') && !(await hayOtroGestor({ salvoRol: nombre }))) {
-      return res.status(409).json({
-        error:
-          'Quitarle la gestión de cuentas a este rol dejaría el sistema sin ninguna cuenta ' +
-          'activa que pueda gestionarlas.',
-      });
-    }
-
-    await consultar('UPDATE roles SET descripcion = $1, permisos = $2 WHERE nombre = $3', [
-      descripcion,
-      [...new Set(permisos)],
-      nombre,
-    ]);
-    res.json({ mensaje: 'Rol actualizado.' });
-  } catch (err) {
-    console.error('[roles/editar]', err.message);
-    res.status(500).json({ error: 'Error interno.' });
-  }
-});
-
-app.delete('/api/roles/:nombre', exigirPermiso('cuentas.gestionar'), async (req, res) => {
-  const nombre = String(req.params.nombre).trim().toLowerCase();
-
-  try {
-    const { rows } = await consultar(
-      `SELECT r.semilla,
-              (SELECT count(*)::int FROM cuentas c WHERE c.rol = r.nombre) AS cuentas
-       FROM roles r WHERE r.nombre = $1`,
-      [nombre]
-    );
-    if (rows.length === 0) return res.status(404).json({ error: 'Ese rol no existe.' });
-
-    if (rows[0].semilla === 1) {
-      return res.status(409).json({ error: `El rol "${nombre}" no se puede borrar.` });
-    }
-
-    // La clave foránea de `cuentas.rol` ya lo impediría con un 23503, pero eso
-    // llega como "error de base de datos" y no como "cámbiale antes el rol a las
-    // dos cuentas que lo usan". El conteo se comprueba igual; el catch de abajo
-    // queda de red por si alguien asigna el rol entre las dos consultas.
-    if (rows[0].cuentas > 0) {
-      return res.status(409).json({
-        error: `Todavía hay ${rows[0].cuentas} cuenta(s) con el rol "${nombre}". Cámbiales el rol antes de borrarlo.`,
-      });
-    }
-
-    await consultar('DELETE FROM roles WHERE nombre = $1', [nombre]);
-    res.json({ mensaje: 'Rol eliminado.' });
-  } catch (err) {
-    if (err.code === '23503') {
-      return res.status(409).json({ error: `Todavía hay cuentas con el rol "${nombre}".` });
-    }
-    console.error('[roles/borrar]', err.message);
-    res.status(500).json({ error: 'Error interno.' });
-  }
-});
 
 app.get('/api/accesos', exigirPermiso('accesos.ver'), async (req, res) => {
   try {

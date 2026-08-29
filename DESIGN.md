@@ -317,7 +317,19 @@ anidadas están prohibidas y no existe ningún caso que las necesite.
 "Recibir devolución", en Inventario, es el caso de prueba de esta regla: es una sección con
 su propio título, formulario, panel de resultado y aviso, y aun así **no lleva caja**. Se
 delimita con un filete inferior y espacio, como todo lo demás. Un bloque así es exactamente
-donde la tentación de la tarjeta aparece; ceder ahí es empezar el dashboard.
+donde la tentación de la tarjeta aparece; ceder ahí es empezar el dashboard. Y va en UNA
+sola fila —rótulo y ayuda a la izquierda, campo y botón a la derecha—, no apilada: el
+trabajo principal de esa pantalla es el catálogo, y apilada se llevaba el tercio superior de
+la ventana antes de que se viera un producto.
+
+**Las dos cajas con superficie que sí existen, y por qué no contradicen la regla.** El panel
+de Selección (Principal, sólo en escritorio) y el contenedor de la tabla (Inventario y
+Cuentas) llevan superficie, radio de 8px y filete de 1px — pero **ninguna lleva sombra**: no
+flotan, se separan del papel por tono. Hubo una tercera, la tarjeta de rol de Cuentas, y se
+fue con la rejilla de roles que la pantalla ya no tiene; llevaba `--sombra-hoja`, que es la
+del papel sobre el escritorio, y se le había quitado por esta misma regla. Si a alguna de las
+dos que quedan le hace falta sombra para leerse como grupo, lo que le falta es filete o
+espacio.
 
 ### Diálogo de confirmación
 
@@ -346,11 +358,31 @@ equivocado es el error que ningún diálogo genérico atrapa.
 
 ### Navigation
 
-Una barra superior compartida por las tres pantallas: marca a la izquierda, enlaces a la
+Una barra superior compartida por las cuatro pantallas: marca a la izquierda, enlaces a la
 derecha. Fondo superficie, filete inferior de 1px, sin sombra. El enlace de la pantalla
 actual va en tinta de imprenta con peso 600 y una regla de 2px en morado bajo el texto; los
-demás en tinta tenue con peso 500. En móvil los enlaces se envuelven, no se colapsan en un
-menú: son dos, y esconderlos detrás de una hamburguesa costaría un toque de más.
+demás en tinta tenue con peso 500.
+
+**En móvil el nav baja a una fila propia, y sigue sin colapsarse en un menú.** La regla
+original decía "son dos, y esconderlos detrás de una hamburguesa costaría un toque de más".
+Ya son cuatro —"Cuentas" lo inyecta `sesion.js` cuando la cuenta tiene el permiso— y
+envolviéndose caían en tres filas: 155px de barra pegados arriba en un teléfono de 390px,
+antes de ver un solo producto. La segunda mitad de la regla sigue en pie, así que no se
+esconde ninguno: por debajo de 640px el `<nav>` ocupa el ancho entero en una fila bajo la
+marca, repartido con `space-between`. Dos filas, ~112px, los cuatro destinos a la vista.
+Los 44px de objetivo táctil no se tocan; lo que se recorta es el padding lateral.
+
+### El paso del ciclo (Principal)
+
+Bajo la cabecera de la Principal va una línea de tres pasos —elegir, imprimir (descuenta),
+recibir (repone)— en tipografía de Label, con el número del paso actual en lavado de morado.
+Las tres pantallas son un mismo recorrido y nada lo decía: cada una se presentaba como una
+herramienta suelta y había que deducir que la de al lado era el paso siguiente.
+
+**No es un asistente por pasos.** No se completa, no guarda progreso y no bloquea nada:
+sólo dice dónde estás y qué viene después. Por eso va en tipografía de etiqueta y sin
+iconos ni colores de estado — si se pareciera a una barra de progreso, prometería algo que
+no hace.
 
 ### Tabla de inventario
 
@@ -368,6 +400,25 @@ El componente denso del sistema, pensado para monitor.
   `opacity` para atenuar — bajar opacidad rompe el contraste medido.
 - En móvil se ocultan por CSS ID, Marca, Descripción y Área; el dato sigue completo en el
   modal de detalle.
+- **Cabecera ordenable en dos columnas**: Nombre (para encontrar algo) y Cantidad (para ver
+  qué se está acabando). Es un `<button>` dentro del `<th>`, no un manejador en la celda, así
+  que se llega con el tabulador; `aria-sort` va en el `<th>`, y la columna activa es el único
+  morado de la tabla. Arranca por nombre ascendente y no por lo que devuelva Postgres, que es
+  el orden físico de las filas: con dos productos llamados "BT3" salían separados por media
+  tabla.
+- **Un filete entre las tres acciones reversibles y la que no lo es.** Cuatro botones del
+  mismo tamaño, el mismo color y pegados, y el cuarto borra un producto del catálogo. El
+  filete desaparece con el botón cuando la cuenta no tiene `productos.eliminar`.
+- **En móvil la fila conserva UN solo botón: el del detalle.** A 390px los cuatro objetivos
+  de 44px se llevaban 176 del ancho útil y el nombre —lo único por lo que se reconoce una
+  fila— se partía en tres líneas. Las otras tres acciones viven en el modal de detalle, que
+  ya era la ventana que traía los datos que el móvil oculta. **Ese modal no puede volver a
+  quedarse sólo con "Cerrar"**: sería la única pantalla donde desde un teléfono no se puede
+  editar nada.
+- Encima de la tabla, una **línea de resumen** (`.resumen-linea`, en `base.css`): cuántos
+  productos, cuántos activos, cuántas unidades. Es una frase, no una rejilla de tarjetas con
+  cifrones — ese tablero es la primera anti-referencia del sistema. La comparte la pantalla
+  de Cuentas.
 
 ### Contador de fila (componente firma)
 
@@ -391,6 +442,27 @@ La línea de la Orden del día: nombre a la izquierda, cantidad a la derecha, y 
 `<span>` vacío que crece con `flex: 1` y lleva `border-bottom: 1px dotted`. La línea de
 puntos que guía el ojo del nombre a la cantidad en el papel es **100% CSS**. Es el
 componente más importante del sistema porque es el que se imprime.
+
+**El nombre lleva la marca detrás** (`vim2 · Clay Paky`). En el catálogo hay dos productos
+llamados "BT3" y dos llamados "Array": un papel que dice `BT3 ....... 4` no le sirve a quien
+tiene que ir a buscarlo al almacén.
+
+**Al pie de las áreas, el total de unidades**, alineado sobre la misma columna que las
+cantidades y en cifra tabular. Quien recibe el material cuenta bultos contra el papel y
+hasta ahora los sumaba a mano. Se recalcula en cada `−`/`+`: un total impreso que se quedara
+con la suma anterior sería peor que no imprimir ninguno.
+
+### Estado de la orden (sólo pantalla)
+
+Sobre la hoja, una línea con el rótulo **BORRADOR** en morado, la frase "Todavía no se ha
+descontado nada del inventario" y el recuento de áreas, productos y unidades. Lleva
+`.no-imprimir`: es información de la aplicación, no del papel.
+
+Existe porque el borrador y la orden ya descontada **se veían exactamente igual**: la única
+diferencia era el recuadro verde, que sólo aparece después de descontar. Quien volvía a esa
+pestaña no tenía forma de saber si el material ya había salido del almacén, y el botón decía
+"Imprimir y descontar" en los dos casos. Al aplicarse la orden, esta línea se esconde: ahí
+habla el recuadro verde, que dice algo distinto y más importante.
 
 ## 6. Do's and Don'ts
 

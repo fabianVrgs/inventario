@@ -53,22 +53,23 @@ acaba en el historial del shell y es visible en `ps` para todos los usuarios de 
 
 Desde que existe la pantalla de **Cuentas**, esto es sobre todo la vía de arranque y de
 rescate: crear la primera cuenta, o recuperar el acceso desde el servidor. Las altas del día
-a día se hacen en el navegador. Los roles NO se crean aquí — se crean en la pantalla; el
-script los lee y los enseña con `roles`.
+a día se hacen en el navegador. Los roles son dos y no se crean en ninguno de los dos sitios;
+`roles` los enseña.
 Para automatizar, por tubería:
 
     echo 'Almacen2026Prueba!' | node --env-file=.env scripts/cuenta.js crear almacen --rol admin
 
 ### Qué puede cada rol
 
-Un rol es un nombre y una lista de **permisos**, y los dos viven en la tabla `roles`. El
-catálogo de permisos, en cambio, está escrito en `server.js` y es corto a propósito:
+Hay **dos roles**, y son fijos: `superadmin` y `admin`. Viven como filas en la tabla `roles`
+con la lista de **permisos** que cada uno lleva, y nada los crea ni los edita — ni la web ni
+el script. Son tres permisos, y es corto a propósito:
 
-| Permiso | Qué abre |
-|---|---|
-| `productos.eliminar` | **Borrar** un producto del catálogo |
-| `cuentas.gestionar` | La pantalla de cuentas: altas, roles y contraseñas |
-| `accesos.ver` | La bitácora de accesos |
+| Permiso | Qué abre | superadmin | admin |
+|---|---|:--:|:--:|
+| `productos.eliminar` | **Borrar** un producto del catálogo | ✅ | — |
+| `cuentas.gestionar` | La pantalla de cuentas: altas, roles y contraseñas | ✅ | — |
+| `accesos.ver` | La bitácora de accesos | ✅ | — |
 
 **Todo lo demás no tiene permiso porque no lo necesita**: elegir material, emitir órdenes,
 recibir devoluciones y dar de alta, editar o desactivar productos los puede hacer cualquier
@@ -77,17 +78,21 @@ cuenta con sesión. El criterio de lo que sí lleva permiso no es "es peligroso"
 borrarlo se lleva la fila por delante y deja huérfanas sus `orden_lineas`, y con ellas la
 devolución de esa orden.
 
-El sistema nace con dos roles: `superadmin` con los tres permisos y `admin` sin ninguno —
-que es exactamente el reparto que había antes de que los roles fueran filas. Desde
-**Cuentas** (`/html/cuentas.html`) se crean los que hagan falta marcando casillas.
+Dicho de otro modo: **el admin hace todo el almacén y el superadmin además administra**. La
+pantalla de **Cuentas** (`/html/cuentas.html`) —altas, cambios de rol, contraseñas y la
+bitácora— es lo único que el admin no ve; el servidor ni siquiera se la sirve.
 
-Dos guardarraíles que el servidor impone y no se pueden saltar desde ninguna pantalla:
+Se probó tener una pantalla que creara roles a medida marcando casillas, y se retiró: un
+almacén con dos roles no la necesitaba, y un CRUD de roles es una manera fácil de dejarse
+fuera solo. Reajustar lo que un rol puede hacer es hoy un `UPDATE` a mano sobre
+`roles.permisos`, y por eso el guardia sigue preguntando por el permiso y no por el nombre:
+mover a alguien de rol surte efecto en su siguiente petición.
 
-- **`superadmin` no se edita ni se borra.** Es el suelo conocido al que volver si un rol
-  nuevo queda mal configurado. `admin` sí es editable: es el rol operativo.
+Un guardarraíl que el servidor impone y no se puede saltar desde ninguna pantalla:
+
 - **Nunca puede quedar cero cuentas activas con `cuentas.gestionar`.** Dar de baja a la
-  última, moverla a otro rol o quitarle el permiso a ese rol responden `409`: quedarse sin
-  ninguna cerraría la gestión por dentro, sin forma de reabrirla desde la web.
+  última o moverla a `admin` responden `409`: quedarse sin ninguna cerraría la gestión por
+  dentro, sin forma de reabrirla desde la web.
 
 ### Antes de publicar
 
@@ -100,7 +105,7 @@ node --env-file=.env scripts/cuenta.js cerrar-sesiones    # cierra lo que quedar
 Órdenes completas del script:
 
     node --env-file=.env scripts/cuenta.js listar
-    node --env-file=.env scripts/cuenta.js roles                 # qué roles hay y qué permite cada uno
+    node --env-file=.env scripts/cuenta.js roles                 # los dos roles y qué permite cada uno
     node --env-file=.env scripts/cuenta.js crear <usuario> --rol <rol>
     node --env-file=.env scripts/cuenta.js clave <usuario>       # cambia la clave Y cierra sus sesiones
     node --env-file=.env scripts/cuenta.js rol <usuario> <rol>
@@ -125,7 +130,7 @@ node --env-file=.env scripts/cuenta.js cerrar-sesiones    # cierra lo que quedar
     test/
       api.test.js           reglas de negocio
       auth.test.js           guardia, sesiones, CSRF, fuerza bruta
-      cuentas.test.js        altas, contraseñas, roles con permisos y sus guardarraíles
+      cuentas.test.js        altas, contraseñas, permisos y sus guardarraíles
       cripto.test.js         auth.js, sin levantar servidor
       db.test.js             db.js contra Postgres real: consultar, enTransaccion, aislamiento
       helpers/db.js          crea/borra el esquema de cada archivo de test y lo siembra
@@ -171,7 +176,7 @@ dos — el detalle completo, y por qué, está en `CLAUDE.md`.
 
 ## Probar
 
-    npm test                                                 # los 108 tests
+    npm test                                                 # los 127 tests
     node --env-file=.env --test test/auth.test.js            # un solo archivo
     node --env-file=.env --test --test-name-pattern "elimina el producto"   # un solo test
 
@@ -201,8 +206,7 @@ al login.
 | PATCH | `/api/cuentas/:id/activa` | Dar de alta o de baja — `cuentas.gestionar` |
 | PATCH | `/api/cuentas/:id/rol` | Cambiar su rol — `cuentas.gestionar` |
 | POST | `/api/cuentas/:id/clave` | Restablecer su contraseña y cerrar sus sesiones — `cuentas.gestionar` |
-| GET | `/api/roles` | Los roles y el catálogo de permisos — `cuentas.gestionar` |
-| POST/PUT/DELETE | `/api/roles[/:nombre]` | Crear, editar y borrar roles — `cuentas.gestionar` |
+| GET | `/api/roles` | Los dos roles, para el `<select>` del alta — `cuentas.gestionar` |
 | GET | `/api/accesos` | Bitácora de los últimos 200 accesos — `accesos.ver` |
 | GET | `/api/productos` `?activo=1` | Catálogo completo, o sólo lo disponible |
 | POST/PUT/DELETE | `/api/productos[/:id]` | CRUD. Borrar exige `productos.eliminar` |
@@ -235,7 +239,7 @@ el CRUD, que la fija a mano.
 | Enumerar usuarios | Mismo mensaje y mismo tiempo para usuario inexistente y contraseña mala. |
 | Robo de la base | scrypt N=2^16 con sal por cuenta; de las sesiones sólo el SHA-256 del token. RLS activo en las doce tablas, sin políticas: `anon`/`authenticated` no leen nada. |
 | Contraseña filtrada | **Nada.** El segundo factor se retiró a propósito (ver «Estado conocido» en `CLAUDE.md`): es el riesgo aceptado a cambio de un login de un solo paso. |
-| Escalada de rol | El rol y sus permisos se releen de la base en CADA petición, en la misma consulta que resuelve la sesión: recortar un rol surte efecto en la siguiente, no dentro de doce horas. |
+| Escalada de rol | El rol y sus permisos se releen de la base en CADA petición, en la misma consulta que resuelve la sesión: mover a alguien de rol surte efecto en la siguiente, no dentro de doce horas. Y ninguna ruta escribe `roles.permisos`, así que no hay forma de darse permisos desde dentro. |
 | Quedarse fuera de la gestión | El servidor rechaza con `409` cualquier cambio que deje cero cuentas activas con `cuentas.gestionar`, y `superadmin` no se puede editar ni borrar. |
 | Escucha de red | HTTPS obligatorio en producción (cookie `Secure` + HSTS), terminado por el proxy. |
 
