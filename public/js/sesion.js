@@ -90,7 +90,11 @@
     quien.className = 'barra-app__usuario';
     // textContent y no innerHTML: el nombre de usuario lo eligió una persona.
     quien.textContent = cuenta.usuario;
-    quien.title = cuenta.rol === 'superadmin' ? 'Superadministrador' : 'Administrador';
+    // El rol tal cual, sin traducirlo: ya no son dos valores conocidos que se
+    // puedan mapear a "Administrador" y "Superadministrador" — quien gestiona
+    // cuentas puede crear `bodega` o `taquilla`, y el nombre que eligió es
+    // justo el que hay que enseñar.
+    quien.title = `Rol: ${cuenta.rol}`;
 
     const boton = document.createElement('button');
     boton.type = 'button';
@@ -100,6 +104,24 @@
 
     bloque.append(quien, boton);
     nav.after(bloque);
+  }
+
+  // El enlace al centro de gestión se INYECTA en vez de escribirse en el HTML de
+  // cada pantalla: así las tres de siempre no se tocan, y ninguna se queda con
+  // un enlace visible que lleva a una redirección.
+  function pintarEnlaceCuentas() {
+    const nav = document.querySelector('.barra-app__nav');
+    if (!nav || nav.querySelector('[href="/html/cuentas.html"]')) return;
+
+    const enlace = document.createElement('a');
+    enlace.className = 'barra-app__enlace';
+    enlace.href = '/html/cuentas.html';
+    enlace.textContent = 'Cuentas';
+    if (window.location.pathname === '/html/cuentas.html') {
+      enlace.setAttribute('aria-current', 'page');
+    }
+
+    nav.append(enlace);
   }
 
   async function iniciar() {
@@ -117,13 +139,22 @@
     // pinte el cuerpo, así que lo que esta cuenta no puede hacer no llega a
     // parpadear en pantalla antes de esconderse.
     //
+    // UNA CLASE POR PERMISO, y ya no una por rol. No es un cambio de estilo: con
+    // roles que se crean desde la pantalla, `rol-bodega` no le dice nada al CSS
+    // —no existía cuando se escribió— y la regla que escondía el botón de
+    // eliminar dejaría de aplicarse justo donde debía. El permiso sí se puede
+    // preguntar sin conocer el rol de antemano.
+    //
     // Esto es MAQUILLAJE, y conviene decirlo: esconder el botón de eliminar no
-    // impide borrar nada. La frontera de verdad es `exigirSuperadmin` en el
-    // servidor, y así lo comprueban los tests — un admin que llame a la API a
-    // mano recibe 403 igual. Aquí sólo se evita ofrecer lo que va a fallar.
-    document.documentElement.classList.add(`rol-${cuenta.rol}`);
+    // impide borrar nada. La frontera de verdad es `exigirPermiso` en el
+    // servidor, y así lo comprueban los tests — quien llame a la API a mano
+    // recibe 403 igual. Aquí sólo se evita ofrecer lo que va a fallar.
+    for (const permiso of cuenta.permisos || []) {
+      document.documentElement.classList.add(`permiso-${permiso.replace('.', '-')}`);
+    }
 
     pintarBarra(cuenta);
+    if ((cuenta.permisos || []).includes('cuentas.gestionar')) pintarEnlaceCuentas();
   }
 
   // La barra vive dentro del <body>, así que hay que esperar a tenerlo. La

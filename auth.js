@@ -297,6 +297,58 @@ function normalizarCodigoRespaldo(codigo) {
   return String(codigo ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
+// ---------------------------------------------------------------------------
+// Reglas de una cuenta
+// ---------------------------------------------------------------------------
+
+// Qué es un usuario y qué es una contraseña aceptable. Vive AQUÍ y no en
+// server.js ni en scripts/cuenta.js porque ahora hay dos puertas por las que se
+// crea una cuenta —la pantalla de cuentas y el script— y las reglas tienen que
+// ser exactamente las mismas por las dos. Escritas dos veces, la segunda copia
+// se afloja el día que estorbe, y sería la que deja pasar la contraseña débil.
+//
+// Aquí no hay criptografía, pero sí el mismo motivo que puso el resto del
+// archivo fuera de server.js: son funciones puras, sin una petición HTTP a la
+// vista, y se prueban sin levantar nada.
+
+// Mínimo LARGO, no "una mayúscula y un símbolo". Las reglas de composición
+// producen Password1! —que está en todos los diccionarios— y no producen
+// entropía; el largo sí. Doce es el suelo, no el objetivo.
+const LARGO_MINIMO_CLAVE = 12;
+
+// Lista corta a propósito: no pretende ser un diccionario, sino atrapar el
+// impulso de escribir lo primero para "probar" y dejarlo puesto para siempre.
+const CLAVES_PROHIBIDAS = new Set([
+  '123456789012', 'contraseña12', 'password1234', 'qwertyuiop12',
+  'administrador', 'inventario12', 'okproducciones', 'almacen12345',
+  'aaaaaaaaaaaa', '111111111111', 'passwordpassword', '123456123456',
+]);
+
+// Letras, números, punto, guion y guion bajo. Nada de espacios ni de acentos:
+// el nombre se teclea al entrar y se compara con lower(usuario) en la base.
+const USUARIO_VALIDO = /^[a-zA-Z0-9._-]{3,32}$/;
+
+// Las dos devuelven el motivo del rechazo o null si está bien. Devolver el
+// texto —en vez de un booleano— es lo que permite que la pantalla y el script
+// digan lo MISMO cuando rechazan lo mismo.
+function revisarUsuario(usuario) {
+  if (typeof usuario !== 'string' || !USUARIO_VALIDO.test(usuario)) {
+    return 'El usuario admite letras, números, punto, guion y guion bajo, entre 3 y 32 caracteres.';
+  }
+  return null;
+}
+
+function revisarClave(clave) {
+  if (typeof clave !== 'string' || clave.length < LARGO_MINIMO_CLAVE) {
+    const tiene = typeof clave === 'string' ? clave.length : 0;
+    return `La contraseña debe tener al menos ${LARGO_MINIMO_CLAVE} caracteres (tiene ${tiene}).`;
+  }
+  if (CLAVES_PROHIBIDAS.has(clave.toLowerCase())) {
+    return 'Esa contraseña está en las listas de las que se prueban primero. Elige otra.';
+  }
+  return null;
+}
+
 module.exports = {
   hashear,
   verificar,
@@ -312,4 +364,8 @@ module.exports = {
   normalizarCodigoRespaldo,
   PASO_SEGUNDOS,
   CODIGOS_RESPALDO,
+  LARGO_MINIMO_CLAVE,
+  USUARIO_VALIDO,
+  revisarUsuario,
+  revisarClave,
 };

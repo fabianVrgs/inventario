@@ -1,0 +1,474 @@
+/* ============================================================================
+   Pantalla "Cuentas y roles" (centro de gestión del superadministrador).
+   Requiere base.css antes.
+
+   Por qué esta hoja existe en vez de reutilizar style-inventario.css, que ya
+   trae .table y .modal: aquella tiene reglas atadas al ORDEN de las columnas
+   del inventario — td:nth-child(4) trunca la descripción, td:nth-child(6)
+   alinea la cantidad a la derecha— y aquí esas posiciones son otras cosas. El
+   resultado sería una tabla con la columna equivocada truncada. Cada pantalla
+   con su hoja es además lo que ya hacen style.css, style-inventario.css y
+   style-orden.css.
+
+   Densidad: la del inventario. Quien mira esto está sentado, no de pie con el
+   pulgar, así que la escala baja a --texto-sm igual que allí.
+
+   Contrato con cuentas.js — no renombrar, lo emite el JS:
+     .aviso--error, .aviso--exito, .fila-inactiva, .badge, .badge-activo,
+     .badge-inactivo, .actions, .btn-action, .tarjeta-rol, .chip,
+     .rol-select, .permisos__opcion
+   Y los 3 modales se abren con `style.display = 'flex'` desde el JS, igual que
+   en el inventario: .modal se queda en `display:none` y deja ganar al inline.
+   ============================================================================ */
+
+:root {
+  --ancho-pagina: var(--ancho-tabla);
+}
+
+.container {
+  width: 100%;
+  max-width: var(--ancho-pagina);
+  margin: 0 auto;
+  padding: var(--esp-5) var(--esp-pagina) var(--esp-7);
+}
+
+/* ---------- Aviso de la última operación ---------- */
+
+/* Un solo sitio para las respuestas del servidor. En neutro por defecto: el
+   color lo pone la clase que añade el JS, y así un mensaje sin resolver nunca
+   se pinta de verde por descuido. */
+.aviso {
+  margin: 0 0 var(--esp-5);
+  padding: var(--esp-3) var(--esp-4);
+  border-radius: var(--radio-md);
+  border: 1px solid var(--filete);
+  background-color: var(--papel-hundido);
+  font-size: var(--texto-sm);
+  color: var(--tinta);
+}
+
+.aviso--error {
+  border-color: var(--peligro);
+  background-color: var(--peligro-lavado);
+  color: var(--peligro-texto);
+}
+
+.aviso--exito {
+  border-color: var(--exito);
+  background-color: var(--exito-lavado);
+  color: var(--exito-texto);
+}
+
+/* ---------- Bloques de la pantalla ---------- */
+
+.bloque {
+  margin-bottom: var(--esp-7);
+}
+
+.bloque__cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--esp-4);
+  margin-bottom: var(--esp-4);
+}
+
+.bloque__titulo {
+  margin: 0;
+  font-size: var(--texto-headline);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-titulo);
+  line-height: var(--interlineado-titulo);
+  color: var(--tinta-fuerte);
+}
+
+.bloque__ayuda {
+  margin: var(--esp-2) 0 0;
+  max-width: 62ch;
+  font-size: var(--texto-sm);
+  color: var(--tinta-suave);
+}
+
+/* ---------- Tablas ---------- */
+
+.table-container {
+  background-color: var(--superficie);
+  border: 1px solid var(--filete);
+  border-radius: var(--radio-lg);
+  /* El scroll horizontal de la tabla es intencional; el del <body> no. */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--texto-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--esp-3);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table thead th {
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-etiqueta);
+  text-transform: uppercase;
+  color: var(--tinta-tenue);
+  background-color: var(--papel-hundido);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--filete-fuerte);
+}
+
+/* Filas separadas por filete. SIN rayado alterno, igual que en el inventario:
+   el zebra junto a los filetes sólo añade ruido. */
+.table tbody tr + tr td {
+  border-top: 1px solid var(--filete);
+}
+
+.table tbody tr:hover {
+  background-color: var(--papel-hundido);
+}
+
+.table tbody td strong {
+  font-weight: var(--peso-fuerte);
+  color: var(--tinta-fuerte);
+}
+
+/* La fecha y la IP son datos de servicio: se consultan, no se leen. */
+.dato-servicio {
+  color: var(--tinta-tenue);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Cuenta de baja. Mismo tratamiento que el producto desactivado: fondo hundido
+   y nombre tachado, nunca `opacity` — atenuar con opacidad rompe cualquier
+   contraste que se haya medido. */
+.table tbody tr.fila-inactiva {
+  background-color: var(--papel-hundido);
+  color: var(--tinta-suave);
+}
+
+.table tbody tr.fila-inactiva td strong {
+  text-decoration: line-through;
+  color: var(--tinta-suave);
+  font-weight: var(--peso-medio);
+}
+
+/* ---------- Estado ---------- */
+
+/* "De baja" NO es un error: es un estado normal. Por eso va en neutro y no en
+   rojo — el rojo de este sistema es exclusivo de lo irreversible. */
+.badge {
+  display: inline-block;
+  padding: var(--esp-1) var(--esp-2);
+  border-radius: var(--radio-full);
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-medio);
+  letter-spacing: var(--tracking-etiqueta);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge-activo {
+  background-color: var(--exito-lavado);
+  color: var(--exito-texto);
+}
+
+.badge-inactivo {
+  background-color: var(--papel-hundido);
+  color: var(--tinta-suave);
+  border: 1px solid var(--filete-fuerte);
+}
+
+/* ---------- Selector de rol dentro de la fila ---------- */
+
+/* El rol se cambia aquí mismo y no en un modal: es reversible en un clic, el
+   servidor impide el único cambio que no lo sería (quedarse sin nadie que
+   gestione cuentas), y abrir una ventana para elegir de una lista de tres
+   sería ceremonia sin nada que proteger. */
+.rol-select {
+  min-width: 11rem;
+  padding: var(--esp-1) var(--esp-2);
+  font-size: var(--texto-sm);
+  font-family: inherit;
+  color: var(--tinta);
+  background-color: var(--superficie);
+  border: 1px solid var(--borde-control);
+  border-radius: var(--radio-sm);
+}
+
+.rol-select:focus-visible {
+  outline: none;
+  box-shadow: var(--anillo-foco);
+  border-color: var(--marca);
+}
+
+/* ---------- Acciones de la fila ---------- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--esp-2);
+}
+
+.btn-action {
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-2) var(--esp-3);
+  font-size: var(--texto-sm);
+  font-family: inherit;
+  font-weight: var(--peso-medio);
+  color: var(--tinta);
+  background-color: var(--superficie);
+  border: 1px solid var(--filete-fuerte);
+  border-radius: var(--radio-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--dur-rapida) var(--curva),
+              border-color var(--dur-rapida) var(--curva);
+}
+
+.btn-action:hover {
+  background-color: var(--papel-hundido);
+  border-color: var(--borde-control);
+}
+
+.btn-action:focus-visible {
+  outline: none;
+  box-shadow: var(--anillo-foco);
+}
+
+.btn-action[disabled] {
+  color: var(--tinta-tenue);
+  cursor: not-allowed;
+  background-color: var(--papel-hundido);
+}
+
+.btn-action--peligro {
+  color: var(--peligro-texto);
+  border-color: var(--peligro-lavado);
+}
+
+.btn-action--peligro:hover {
+  background-color: var(--peligro-lavado);
+  border-color: var(--peligro);
+}
+
+/* ---------- Roles ---------- */
+
+.rejilla-roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  gap: var(--esp-4);
+}
+
+.tarjeta-rol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-3);
+  padding: var(--esp-4);
+  background-color: var(--superficie);
+  border: 1px solid var(--filete);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-hoja);
+}
+
+.tarjeta-rol__nombre {
+  margin: 0;
+  font-size: var(--texto-titulo);
+  font-weight: var(--peso-fuerte);
+  color: var(--tinta-fuerte);
+}
+
+.tarjeta-rol__meta {
+  margin: var(--esp-1) 0 0;
+  font-size: var(--texto-etiqueta);
+  letter-spacing: var(--tracking-etiqueta);
+  text-transform: uppercase;
+  color: var(--tinta-tenue);
+}
+
+.tarjeta-rol__descripcion {
+  margin: 0;
+  font-size: var(--texto-sm);
+  color: var(--tinta-suave);
+}
+
+.tarjeta-rol__permisos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  padding: var(--esp-1) var(--esp-2);
+  border-radius: var(--radio-full);
+  background-color: var(--marca-lavado);
+  border: 1px solid var(--marca-filete);
+  font-size: var(--texto-etiqueta);
+  color: var(--tinta);
+}
+
+/* Un rol sin ni una casilla marcada no está roto: puede entrar y trabajar en el
+   almacén como cualquiera. Que lo diga con palabras evita que se lea como un
+   error. */
+.tarjeta-rol__sin-permisos {
+  margin: 0;
+  font-size: var(--texto-sm);
+  font-style: italic;
+  color: var(--tinta-tenue);
+}
+
+.tarjeta-rol__acciones {
+  display: flex;
+  gap: var(--esp-2);
+  margin-top: auto;
+  padding-top: var(--esp-2);
+}
+
+/* ---------- Estado vacío / error ---------- */
+
+.no-results {
+  padding: var(--esp-7) var(--esp-4);
+  text-align: center;
+  color: var(--tinta-tenue);
+  font-size: var(--texto-sm);
+}
+
+.no-results--error {
+  color: var(--peligro-texto);
+}
+
+/* ---------- Modales ---------- */
+
+/* display:none y no [hidden]: el JS los abre poniendo `style.display = 'flex'`
+   en línea, igual que los del inventario, y el inline tiene que poder ganar. */
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  padding: var(--esp-4);
+  background-color: oklch(20.5% 0.021 338 / .45);
+}
+
+.modal-content {
+  width: 100%;
+  max-width: 32rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: var(--esp-5);
+  background-color: var(--superficie);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-modal);
+}
+
+.modal-titulo {
+  margin: 0 0 var(--esp-4);
+  font-size: var(--texto-display);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-titulo);
+  color: var(--tinta-fuerte);
+}
+
+.modal-nota {
+  margin: 0 0 var(--esp-4);
+  font-size: var(--texto-sm);
+  color: var(--tinta-suave);
+}
+
+.form-group {
+  margin-bottom: var(--esp-4);
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: var(--esp-2);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-medio);
+  color: var(--tinta-fuerte);
+}
+
+.form-group__pista {
+  margin: var(--esp-2) 0 0;
+  font-size: var(--texto-sm);
+  color: var(--tinta-tenue);
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--esp-3);
+  margin-top: var(--esp-5);
+}
+
+/* ---------- Casillas de permiso ---------- */
+
+.permisos {
+  margin: 0 0 var(--esp-4);
+  padding: var(--esp-3) var(--esp-4);
+  border: 1px solid var(--filete);
+  border-radius: var(--radio-md);
+}
+
+.permisos__leyenda {
+  padding: 0 var(--esp-2);
+  font-size: var(--texto-etiqueta);
+  font-weight: var(--peso-fuerte);
+  letter-spacing: var(--tracking-etiqueta);
+  text-transform: uppercase;
+  color: var(--tinta-tenue);
+}
+
+/* Toda la etiqueta es zona de clic, no sólo la casilla de 13px. */
+.permisos__opcion {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-3);
+  min-height: var(--objetivo-tactil);
+  padding: var(--esp-2) 0;
+  font-size: var(--texto-sm);
+  color: var(--tinta);
+  cursor: pointer;
+}
+
+.permisos__opcion input {
+  margin-top: 0.2rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--marca);
+  flex-shrink: 0;
+}
+
+.permisos__opcion code {
+  display: block;
+  margin-top: var(--esp-1);
+  font-family: var(--fuente-mono);
+  font-size: var(--texto-etiqueta);
+  color: var(--tinta-tenue);
+}
+
+/* ---------- Móvil ---------- */
+
+@media (max-width: 640px) {
+  .bloque__cabecera {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+}

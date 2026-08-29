@@ -41,30 +41,53 @@ arranca— y un proyecto de Supabase (o cualquier Postgres) con `db/esquema.sql`
 
    ```bash
    npm install
-   node --env-file=.env scripts/cuenta.js crear almacen --rol admin
    node --env-file=.env scripts/cuenta.js crear erick --rol superadmin
    npm start                                          # http://localhost:3000
    ```
 
+   Con esa primera cuenta ya se entra a **Cuentas** (`/html/cuentas.html`) y las demás se
+   crean desde ahí, sin volver a la terminal.
+
 El script pide la contraseña por teclado y **sin eco**; nunca por argumento, porque `argv`
 acaba en el historial del shell y es visible en `ps` para todos los usuarios de la máquina.
+
+Desde que existe la pantalla de **Cuentas**, esto es sobre todo la vía de arranque y de
+rescate: crear la primera cuenta, o recuperar el acceso desde el servidor. Las altas del día
+a día se hacen en el navegador. Los roles NO se crean aquí — se crean en la pantalla; el
+script los lee y los enseña con `roles`.
 Para automatizar, por tubería:
 
     echo 'Almacen2026Prueba!' | node --env-file=.env scripts/cuenta.js crear almacen --rol admin
 
 ### Qué puede cada rol
 
-| | `admin` | `superadmin` |
-|---|---|---|
-| Elegir material y emitir órdenes | ✅ | ✅ |
-| Recibir devoluciones | ✅ | ✅ |
-| Alta, edición, activar/desactivar | ✅ | ✅ |
-| **Borrar** un producto | ❌ | ✅ |
-| Gestionar cuentas y ver la bitácora | ❌ | ✅ |
+Un rol es un nombre y una lista de **permisos**, y los dos viven en la tabla `roles`. El
+catálogo de permisos, en cambio, está escrito en `server.js` y es corto a propósito:
 
-El criterio del reparto no es "es peligrosa" sino **"es irreversible"**. Desactivar un
-producto se deshace con un clic y editarlo también; borrarlo se lleva la fila por delante y
-deja huérfanas sus `orden_lineas`, y con ellas la devolución de esa orden.
+| Permiso | Qué abre |
+|---|---|
+| `productos.eliminar` | **Borrar** un producto del catálogo |
+| `cuentas.gestionar` | La pantalla de cuentas: altas, roles y contraseñas |
+| `accesos.ver` | La bitácora de accesos |
+
+**Todo lo demás no tiene permiso porque no lo necesita**: elegir material, emitir órdenes,
+recibir devoluciones y dar de alta, editar o desactivar productos los puede hacer cualquier
+cuenta con sesión. El criterio de lo que sí lleva permiso no es "es peligroso" sino
+**"es irreversible"**: desactivar un producto se deshace con un clic y editarlo también;
+borrarlo se lleva la fila por delante y deja huérfanas sus `orden_lineas`, y con ellas la
+devolución de esa orden.
+
+El sistema nace con dos roles: `superadmin` con los tres permisos y `admin` sin ninguno —
+que es exactamente el reparto que había antes de que los roles fueran filas. Desde
+**Cuentas** (`/html/cuentas.html`) se crean los que hagan falta marcando casillas.
+
+Dos guardarraíles que el servidor impone y no se pueden saltar desde ninguna pantalla:
+
+- **`superadmin` no se edita ni se borra.** Es el suelo conocido al que volver si un rol
+  nuevo queda mal configurado. `admin` sí es editable: es el rol operativo.
+- **Nunca puede quedar cero cuentas activas con `cuentas.gestionar`.** Dar de baja a la
+  última, moverla a otro rol o quitarle el permiso a ese rol responden `409`: quedarse sin
+  ninguna cerraría la gestión por dentro, sin forma de reabrirla desde la web.
 
 ### Antes de publicar
 
@@ -77,7 +100,8 @@ node --env-file=.env scripts/cuenta.js cerrar-sesiones    # cierra lo que quedar
 Órdenes completas del script:
 
     node --env-file=.env scripts/cuenta.js listar
-    node --env-file=.env scripts/cuenta.js crear <usuario> --rol admin|superadmin
+    node --env-file=.env scripts/cuenta.js roles                 # qué roles hay y qué permite cada uno
+    node --env-file=.env scripts/cuenta.js crear <usuario> --rol <rol>
     node --env-file=.env scripts/cuenta.js clave <usuario>       # cambia la clave Y cierra sus sesiones
     node --env-file=.env scripts/cuenta.js rol <usuario> <rol>
     node --env-file=.env scripts/cuenta.js baja <usuario> | alta <usuario>
@@ -88,7 +112,7 @@ node --env-file=.env scripts/cuenta.js cerrar-sesiones    # cierra lo que quedar
     server.js              backend: guardia y todas las rutas (monolito a propósito)
     auth.js                criptografía: scrypt, tokens de sesión, y TOTP dormido (ver «Estado conocido» en CLAUDE.md)
     db.js                  única puerta a Postgres: el pool, consultar() y enTransaccion()
-    scripts/cuenta.js      alta y gestión de cuentas (la única forma de crear una)
+    scripts/cuenta.js      alta y gestión de cuentas desde la terminal (crea la primera)
     scripts/limpiar-esquemas-de-prueba.js   barre esquemas de test huérfanos (pretest)
     public/                lo que sirve express.static, tal cual corre en el navegador
       html/                una página por pantalla, más login.html
@@ -96,10 +120,12 @@ node --env-file=.env scripts/cuenta.js cerrar-sesiones    # cierra lo que quedar
       js/                  un archivo por pantalla, más sesion.js (compartido)
     db/
       esquema.sql           el DDL completo, aplicado una sola vez
+      cambio-2026-08-roles.sql   cambio de un solo uso sobre la base ya desplegada
     certs/supabase-ca.crt  CA pública del pooler, versionada a propósito (NO bajo db/)
     test/
       api.test.js           reglas de negocio
-      auth.test.js           guardia, roles, sesiones, CSRF, fuerza bruta
+      auth.test.js           guardia, sesiones, CSRF, fuerza bruta
+      cuentas.test.js        altas, contraseñas, roles con permisos y sus guardarraíles
       cripto.test.js         auth.js, sin levantar servidor
       db.test.js             db.js contra Postgres real: consultar, enTransaccion, aislamiento
       helpers/db.js          crea/borra el esquema de cada archivo de test y lo siembra
@@ -169,12 +195,17 @@ al login.
 |---|---|---|
 | POST | `/api/auth/login` | Entrar. Devuelve la cookie de sesión |
 | POST | `/api/auth/salir` | Cerrar sesión |
-| GET | `/api/auth/yo` | `{ usuario, rol }`, para pintar la barra |
-| GET | `/api/cuentas` | Listar cuentas — sólo superadmin |
-| PATCH | `/api/cuentas/:id/activa` | Dar de alta o de baja — sólo superadmin |
-| GET | `/api/accesos` | Bitácora de los últimos 200 accesos — sólo superadmin |
+| GET | `/api/auth/yo` | `{ usuario, rol, permisos }`, para pintar la barra y esconder lo que no toca |
+| GET | `/api/cuentas` | Listar cuentas — `cuentas.gestionar` |
+| POST | `/api/cuentas` | Crear una cuenta — `cuentas.gestionar` |
+| PATCH | `/api/cuentas/:id/activa` | Dar de alta o de baja — `cuentas.gestionar` |
+| PATCH | `/api/cuentas/:id/rol` | Cambiar su rol — `cuentas.gestionar` |
+| POST | `/api/cuentas/:id/clave` | Restablecer su contraseña y cerrar sus sesiones — `cuentas.gestionar` |
+| GET | `/api/roles` | Los roles y el catálogo de permisos — `cuentas.gestionar` |
+| POST/PUT/DELETE | `/api/roles[/:nombre]` | Crear, editar y borrar roles — `cuentas.gestionar` |
+| GET | `/api/accesos` | Bitácora de los últimos 200 accesos — `accesos.ver` |
 | GET | `/api/productos` `?activo=1` | Catálogo completo, o sólo lo disponible |
-| POST/PUT/DELETE | `/api/productos[/:id]` | CRUD. Borrar es sólo superadmin |
+| POST/PUT/DELETE | `/api/productos[/:id]` | CRUD. Borrar exige `productos.eliminar` |
 | PATCH | `/api/productos/:id/activo` | Activar / desactivar |
 | GET | `/api/areas` | Poblar el selector de área |
 | POST | `/api/ordenes` | Confirmar la orden, descontar y registrarla |
@@ -202,9 +233,10 @@ el CRUD, que la fija a mano.
 | CSRF | `SameSite=Strict` + rechazo de todo método con efectos cuyo `Origin` no sea el propio. |
 | Fuerza bruta | Retraso creciente por IP y por usuario (2 s, 4 s, 8 s… hasta 15 min). Sin bloqueo de cuenta. |
 | Enumerar usuarios | Mismo mensaje y mismo tiempo para usuario inexistente y contraseña mala. |
-| Robo de la base | scrypt N=2^16 con sal por cuenta; de las sesiones sólo el SHA-256 del token. RLS activo en las once tablas, sin políticas: `anon`/`authenticated` no leen nada. |
+| Robo de la base | scrypt N=2^16 con sal por cuenta; de las sesiones sólo el SHA-256 del token. RLS activo en las doce tablas, sin políticas: `anon`/`authenticated` no leen nada. |
 | Contraseña filtrada | **Nada.** El segundo factor se retiró a propósito (ver «Estado conocido» en `CLAUDE.md`): es el riesgo aceptado a cambio de un login de un solo paso. |
-| Escalada de admin a superadmin | El rol se relee de la base en cada petición. |
+| Escalada de rol | El rol y sus permisos se releen de la base en CADA petición, en la misma consulta que resuelve la sesión: recortar un rol surte efecto en la siguiente, no dentro de doce horas. |
+| Quedarse fuera de la gestión | El servidor rechaza con `409` cualquier cambio que deje cero cuentas activas con `cuentas.gestionar`, y `superadmin` no se puede editar ni borrar. |
 | Escucha de red | HTTPS obligatorio en producción (cookie `Secure` + HSTS), terminado por el proxy. |
 
 La sesión dura **12 horas** como techo absoluto y se cierra sola tras **2 horas** sin

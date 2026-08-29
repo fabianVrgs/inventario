@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cuentas y roles — Ok-producciones</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/style-cuentas.css" />
+</head>
+
+<body>
+
+<!-- BARRA SUPERIOR: la misma que en las otras tres pantallas. El enlace
+     "Cuentas" NO se escribe aquí: lo inyecta sesion.js cuando la cuenta tiene
+     el permiso, y de paso le pone el aria-current si ya estás en esta página.
+     Así no hay un enlace escrito a mano que se olvide de esconderse. -->
+<header class="barra-app">
+  <div class="barra-app__interior">
+    <a class="barra-app__marca" href="/">
+      <img src="/img/logo.jpg" alt="" class="barra-app__logo">
+      <span class="barra-app__nombre">Ok-producciones<br>Almacén</span>
+    </a>
+    <nav class="barra-app__nav" aria-label="Principal">
+      <a class="barra-app__enlace" href="/">Elegir</a>
+      <a class="barra-app__enlace" href="/html/inventario.html">Inventario</a>
+      <a class="barra-app__enlace" href="/html/orden_del_dia.html">Orden del día</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+
+  <div class="cabecera-pantalla">
+    <h1>Cuentas y roles</h1>
+    <p class="cabecera-pantalla__sub">Quién entra al almacén y qué puede hacer cada uno.</p>
+  </div>
+
+  <!-- Un solo sitio para las respuestas del servidor, arriba del todo y con
+       role="status": lo que se anuncia aquí lo lee también un lector de
+       pantalla sin robar el foco a lo que estabas haciendo. -->
+  <p class="aviso" id="aviso" role="status" hidden></p>
+
+  <!-- ===================== CUENTAS ===================== -->
+  <section class="bloque" aria-labelledby="tituloCuentas">
+    <div class="bloque__cabecera">
+      <div>
+        <h2 id="tituloCuentas" class="bloque__titulo">Cuentas</h2>
+        <p class="bloque__ayuda">
+          El rol se cambia en el momento y se aplica en la siguiente petición de
+          esa persona: no hace falta que vuelva a entrar.
+        </p>
+      </div>
+      <button class="btn btn--primario" id="btnNuevaCuenta" type="button">Crear cuenta</button>
+    </div>
+
+    <div class="table-container">
+      <table class="table">
+        <thead>
+          <tr>
+            <th scope="col">Usuario</th>
+            <th scope="col">Rol</th>
+            <th scope="col">Estado</th>
+            <th scope="col">Creada</th>
+            <th scope="col"><span class="visualmente-oculto">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody id="tablaCuentas"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== ROLES ===================== -->
+  <section class="bloque" aria-labelledby="tituloRoles">
+    <div class="bloque__cabecera">
+      <div>
+        <h2 id="tituloRoles" class="bloque__titulo">Roles</h2>
+        <p class="bloque__ayuda">
+          Un rol es un nombre y las casillas que lleva marcadas. Lo que no
+          aparece en esta lista —ver el inventario, editarlo, emitir órdenes y
+          recibir devoluciones— lo puede hacer cualquier cuenta.
+        </p>
+      </div>
+      <button class="btn btn--primario" id="btnNuevoRol" type="button">Crear rol</button>
+    </div>
+
+    <div class="rejilla-roles" id="listaRoles"></div>
+  </section>
+
+  <!-- ===================== BITÁCORA ===================== -->
+  <!-- Se oculta entera si la cuenta no tiene `accesos.ver`: es un permiso
+       aparte del de gestionar, y un rol puede llevar uno y no el otro. -->
+  <section class="bloque" aria-labelledby="tituloBitacora" id="bloqueBitacora" hidden>
+    <div class="bloque__cabecera">
+      <div>
+        <h2 id="tituloBitacora" class="bloque__titulo">Bitácora de accesos</h2>
+        <p class="bloque__ayuda">
+          Los últimos 200 intentos. El usuario es lo que se TECLEÓ, exista o no
+          la cuenta: los nombres inventados son justo los que delatan un ataque.
+        </p>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table class="table">
+        <thead>
+          <tr>
+            <th scope="col">Cuándo</th>
+            <th scope="col">Usuario tecleado</th>
+            <th scope="col">Resultado</th>
+            <th scope="col">IP</th>
+          </tr>
+        </thead>
+        <tbody id="tablaAccesos"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<!-- MODAL: crear cuenta -->
+<div id="modalCuenta" class="modal">
+  <div class="modal-content">
+    <h3 class="modal-titulo">Crear cuenta</h3>
+
+    <form id="formCuenta">
+      <div class="form-group">
+        <label for="cuentaUsuario">Usuario</label>
+        <input type="text" id="cuentaUsuario" class="campo" autocomplete="off"
+               maxlength="32" required>
+        <p class="form-group__pista">
+          Letras, números, punto, guion y guion bajo. Entre 3 y 32 caracteres.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <label for="cuentaClave">Contraseña</label>
+        <!-- autocomplete="new-password" para que el navegador no ofrezca la
+             contraseña de quien está sentado delante: la que se teclea aquí es
+             la de OTRA persona. -->
+        <input type="password" id="cuentaClave" class="campo"
+               autocomplete="new-password" minlength="12" required>
+        <p class="form-group__pista">
+          Doce caracteres como mínimo. Entrégasela en persona y pídele que la
+          cambie: desde aquí también se restablece.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <label for="cuentaRol">Rol</label>
+        <select id="cuentaRol" class="campo" required></select>
+      </div>
+
+      <div class="modal-buttons">
+        <button type="button" class="btn btn--fantasma" id="btnCancelarCuenta">Cancelar</button>
+        <button type="submit" class="btn btn--primario">Crear</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: restablecer contraseña -->
+<div id="modalClave" class="modal">
+  <div class="modal-content">
+    <h3 class="modal-titulo">Restablecer contraseña</h3>
+    <p class="modal-nota" id="textoClave"></p>
+
+    <form id="formClave">
+      <div class="form-group">
+        <label for="claveNueva">Contraseña nueva</label>
+        <input type="password" id="claveNueva" class="campo"
+               autocomplete="new-password" minlength="12" required>
+      </div>
+
+      <p class="modal-nota">
+        Al guardarla se cierran todas las sesiones abiertas de esa cuenta.
+      </p>
+
+      <div class="modal-buttons">
+        <button type="button" class="btn btn--fantasma" id="btnCancelarClave">Cancelar</button>
+        <button type="submit" class="btn btn--primario">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: crear o editar rol -->
+<div id="modalRol" class="modal">
+  <div class="modal-content">
+    <h3 class="modal-titulo" id="tituloModalRol">Crear rol</h3>
+
+    <form id="formRol">
+      <div class="form-group" id="grupoNombreRol">
+        <label for="rolNombre">Nombre</label>
+        <input type="text" id="rolNombre" class="campo" autocomplete="off" maxlength="32">
+        <p class="form-group__pista">
+          Minúsculas, números, guion y guion bajo. No se puede cambiar después:
+          es la referencia que guardan las cuentas.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <label for="rolDescripcion">Descripción</label>
+        <input type="text" id="rolDescripcion" class="campo" autocomplete="off" maxlength="200">
+      </div>
+
+      <fieldset class="permisos">
+        <legend class="permisos__leyenda">Qué puede hacer</legend>
+        <div id="listaPermisos"></div>
+      </fieldset>
+
+      <div class="modal-buttons">
+        <button type="button" class="btn btn--fantasma" id="btnCancelarRol">Cancelar</button>
+        <button type="submit" class="btn btn--primario">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- DIÁLOGO: confirmar lo que tiene consecuencias.
+     <dialog> nativo y no el .modal de arriba: aquí salen gratis el backdrop,
+     el Escape y la devolución del foco. Sirve para dar de baja una cuenta
+     (cierra sus sesiones) y para borrar un rol. -->
+<dialog id="dialogoConfirmar" class="dialogo" aria-labelledby="dialogoTitulo">
+  <h2 id="dialogoTitulo" class="dialogo__titulo"></h2>
+  <p class="dialogo__texto" id="dialogoTexto"></p>
+  <p class="dialogo__nota" id="dialogoNota"></p>
+
+  <div class="dialogo__acciones">
+    <button id="btnCancelarConfirmar" class="btn btn--fantasma" type="button">Cancelar</button>
+    <button id="btnConfirmar" class="btn btn--peligro" type="button">Confirmar</button>
+  </div>
+</dialog>
+
+<!-- sesion.js va PRIMERO: envuelve fetch para tratar la sesión caducada, y
+     sólo cubre lo que se pida después de estar cargado. -->
+<script src="/js/sesion.js"></script>
+<script src="/js/cuentas.js"></script>
+</body>
+</html>

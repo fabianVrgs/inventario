@@ -4,12 +4,18 @@
 //
 // Uso:
 //   node scripts/cuenta.js listar
-//   node scripts/cuenta.js crear <usuario> --rol admin|superadmin
+//   node scripts/cuenta.js roles
+//   node scripts/cuenta.js crear <usuario> --rol <rol>
 //   node scripts/cuenta.js clave <usuario>
-//   node scripts/cuenta.js rol <usuario> <admin|superadmin>
+//   node scripts/cuenta.js rol <usuario> <rol>
 //   node scripts/cuenta.js baja <usuario>
 //   node scripts/cuenta.js alta <usuario>
 //   node scripts/cuenta.js cerrar-sesiones [usuario]
+//
+// Los roles ya NO son dos valores fijos: viven en la tabla `roles` y se crean
+// desde la pantalla de cuentas (/html/cuentas.html). Este script los lee de ahí
+// y `roles` los enseña. Sigue siendo la única forma de crear la PRIMERA cuenta,
+// que es lo que abre esa pantalla.
 //
 // La base sale de DATABASE_URL (o DATABASE_URL_TEST, que db.js prioriza) y del
 // esquema en ESQUEMA_BD — sin ella, `public`, que es la base real. Se imprime
@@ -23,20 +29,11 @@ const { execFileSync } = require('node:child_process');
 const { consultar, pool } = require('../db.js');
 const auth = require('../auth.js');
 
-const ROLES = ['admin', 'superadmin'];
-
-// Mínimo largo, no "una mayúscula y un símbolo". Las reglas de composición
-// producen Password1! —que está en todos los diccionarios— y no producen
-// entropía; el largo sí. Doce es el suelo, no el objetivo.
-const LARGO_MINIMO = 12;
-
-// Lista corta a propósito: no pretende ser un diccionario, sino atrapar el
-// impulso de escribir lo primero para "probar" y dejarlo puesto para siempre.
-const CLAVES_PROHIBIDAS = new Set([
-  '123456789012', 'contraseña12', 'password1234', 'qwertyuiop12',
-  'administrador', 'inventario12', 'okproducciones', 'almacen12345',
-  'aaaaaaaaaaaa', '111111111111', 'passwordpassword', '123456123456',
-]);
+// Ni la lista de roles ni las reglas de la contraseña se escriben aquí. Los
+// roles están en la base, porque se crean desde la pantalla. Las reglas están
+// en auth.js, porque ahora hay DOS puertas por las que nace una cuenta —esta y
+// la pantalla— y con las reglas escritas dos veces, la segunda copia se afloja
+// el día que estorbe: sería justo la que deja pasar la contraseña débil.
 
 function fallar(mensaje) {
   console.error(`ERROR: ${mensaje}`);
@@ -232,12 +229,8 @@ async function preguntarOculto(mensaje) {
 async function pedirClaveNueva() {
   const clave = await preguntarOculto('Contraseña nueva: ');
 
-  if (clave.length < LARGO_MINIMO) {
-    fallar(`La contraseña debe tener al menos ${LARGO_MINIMO} caracteres (tiene ${clave.length}).`);
-  }
-  if (CLAVES_PROHIBIDAS.has(clave.toLowerCase())) {
-    fallar('Esa contraseña está en las listas de las que se prueban primero. Elige otra.');
-  }
+  const problema = auth.revisarClave(clave);
+  if (problema) fallar(problema);
 
   // La confirmación existe para atrapar una errata al teclear a ciegas. Por
   // tubería no hay errata posible —lo que llega es lo que el script mandó— así
@@ -260,6 +253,52 @@ async function pedirClaveNueva() {
 const ejecutar = async (sql, parametros = []) => (await consultar(sql, parametros)).rowCount;
 const unaFila = async (sql, parametros = []) => (await consultar(sql, parametros)).rows[0];
 const todas = async (sql, parametros = []) => (await consultar(sql, parametros)).rows;
+
+// Los roles salen de la tabla, no de una constante: la pantalla de cuentas
+// puede crear los que haga falta y este script tiene que reconocerlos.
+async function rolesDisponibles() {
+  return (await todas('SELECT nombre FROM roles ORDER BY nombre')).map((f) => f.nombre);
+}
+
+async function exigirRolExistente(rol) {
+  const roles = await rolesDisponibles();
+  if (!roles.includes(rol)) fallar(`El rol debe ser uno de: ${roles.join(', ')}.`);
+}
+
+async function gestionaCuentas(rol) {
+  const fila = await unaFila(
+    "SELECT ('cuentas.gestionar' = ANY (permisos)) AS gestiona FROM roles WHERE nombre = $1",
+    [rol]
+  );
+  return fila?.gestiona === true;
+}
+
+// El mismo invariante que impone la API, y por el mismo motivo: si no queda
+// ninguna cuenta activa capaz de gestionar cuentas, la gestión se cierra por
+// dentro. Sustituye al viejo guardia del "último superadmin", que dejó de valer
+// en cuanto los roles pasaron a ser filas: hoy el poder está en el permiso, no
+// en el nombre.
+//
+// count(*)::int: sin el cast, `pg` devuelve el bigint como cadena ("0") para no
+// perder precisión, y `=== 0` nunca sería cierto.
+async function exigirQueQuedeUnGestor(cuenta) {
+  const { total } = await unaFila(
+    `SELECT count(*)::int AS total
+     FROM cuentas c
+     JOIN roles r ON r.nombre = c.rol
+     WHERE c.activa = 1
+       AND 'cuentas.gestionar' = ANY (r.permisos)
+       AND c.id_cuenta != $1`,
+    [cuenta.id_cuenta]
+  );
+
+  if (total === 0) {
+    fallar(
+      'Es la única cuenta activa que puede gestionar cuentas. Dejarla fuera cierra ' +
+        'la gestión por dentro, sin forma de reabrirla desde la web.'
+    );
+  }
+}
 
 async function buscarCuenta(usuario) {
   // lower(usuario) = lower($1): Postgres no tiene COLLATE NOCASE, y el índice
@@ -302,10 +341,12 @@ const ordenes = {
     const rol = argumentos.rol;
 
     if (!usuario) fallar('Falta el nombre de usuario.');
-    if (!ROLES.includes(rol)) fallar(`--rol debe ser ${ROLES.join(' o ')}.`);
-    if (!/^[a-zA-Z0-9._-]{3,32}$/.test(usuario)) {
-      fallar('El usuario admite letras, números, punto, guion y guion bajo, entre 3 y 32 caracteres.');
-    }
+
+    const problema = auth.revisarUsuario(usuario);
+    if (problema) fallar(problema);
+
+    if (!rol || rol === true) fallar(`Falta --rol. Los que hay: ${(await rolesDisponibles()).join(', ')}.`);
+    await exigirRolExistente(rol);
 
     // lower(usuario) = lower($1): mismo motivo que en buscarCuenta. Sin esto,
     // el alta parece válida y es el índice único de la base —no este script—
@@ -378,10 +419,34 @@ const ordenes = {
     console.log(`✅ Contraseña cambiada. Sesiones cerradas: ${borradas}.`);
   },
 
+  async roles() {
+    const filas = await todas(
+      `SELECT r.nombre, r.permisos,
+              (SELECT count(*)::int FROM cuentas c WHERE c.rol = r.nombre) AS cuentas
+       FROM roles r
+       ORDER BY r.semilla DESC, r.nombre`
+    );
+
+    console.log('ROL                  CUENTAS  PERMISOS');
+    for (const f of filas) {
+      console.log(
+        `${f.nombre.padEnd(20)} ${String(f.cuentas).padEnd(8)} ` +
+          `${f.permisos.length > 0 ? f.permisos.join(', ') : '—'}`
+      );
+    }
+    console.log('\nLos roles se crean y se editan desde /html/cuentas.html.');
+  },
+
   async rol(argumentos) {
     const cuenta = await buscarCuenta(argumentos._[0]);
     const nuevo = argumentos._[1];
-    if (!ROLES.includes(nuevo)) fallar(`El rol debe ser ${ROLES.join(' o ')}.`);
+    await exigirRolExistente(nuevo);
+
+    // Sólo hay algo que proteger si el rol de destino NO gestiona cuentas:
+    // mover a alguien de un rol gestor a otro no deja el sistema sin ninguno.
+    if ((await gestionaCuentas(cuenta.rol)) && !(await gestionaCuentas(nuevo))) {
+      await exigirQueQuedeUnGestor(cuenta);
+    }
 
     await ejecutar('UPDATE cuentas SET rol = $1 WHERE id_cuenta = $2', [nuevo, cuenta.id_cuenta]);
     console.log(`✅ "${cuenta.usuario}" pasa a ${nuevo}.`);
@@ -390,14 +455,8 @@ const ordenes = {
   async baja(argumentos) {
     const cuenta = await buscarCuenta(argumentos._[0]);
 
-    // count(*)::int: sin el cast, `pg` devuelve el bigint como cadena
-    // ("0") para no perder precisión, y `=== 0` nunca sería cierto.
-    const superadmins = await unaFila(
-      "SELECT count(*)::int AS total FROM cuentas WHERE rol = 'superadmin' AND activa = 1 AND id_cuenta != $1",
-      [cuenta.id_cuenta]
-    );
-    if (cuenta.rol === 'superadmin' && superadmins.total === 0) {
-      fallar('Es el último superadmin activo. Dar de baja al último cierra la gestión de cuentas por dentro.');
+    if (cuenta.activa === 1 && (await gestionaCuentas(cuenta.rol))) {
+      await exigirQueQuedeUnGestor(cuenta);
     }
 
     await ejecutar('UPDATE cuentas SET activa = 0 WHERE id_cuenta = $1', [cuenta.id_cuenta]);
@@ -460,10 +519,11 @@ async function principal() {
     console.error('Uso: node scripts/cuenta.js <orden> [argumentos]\n');
     console.error('Órdenes:');
     console.error('  listar');
-    console.error('  crear <usuario> --rol admin|superadmin');
+    console.error('  roles              los roles que hay y qué permite cada uno');
+    console.error('  crear <usuario> --rol <rol>');
     console.error('  clave <usuario>');
     console.error('  probar <usuario>   comprueba una contraseña sin abrir sesión');
-    console.error('  rol <usuario> <admin|superadmin>');
+    console.error('  rol <usuario> <rol>');
     console.error('  baja <usuario>   |  alta <usuario>');
     console.error('  cerrar-sesiones [usuario]');
     process.exit(1);
