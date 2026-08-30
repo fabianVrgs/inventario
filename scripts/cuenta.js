@@ -28,8 +28,8 @@
 // Para `stty`: es como se apaga el eco en las terminales donde node no puede
 // usar el modo crudo. Ver hayTerminal() y apagarEco(), más abajo.
 const { execFileSync } = require('node:child_process');
-const { consultar, pool } = require('../db.js');
-const auth = require('../auth.js');
+const { consultar, pool } = require('../src/db.js');
+const auth = require('../src/auth.js');
 
 // Ni la lista de roles ni las reglas de la contraseña se escriben aquí. Los
 // roles están en la base, que es también de donde los lee el servidor: una

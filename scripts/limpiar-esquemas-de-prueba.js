@@ -1,6 +1,6 @@
 // Si un proceso de test revienta o se corta con Ctrl-C, su esquema queda.
 // Esto los barre antes de cada corrida.
-const { pool } = require('../db.js');
+const { pool } = require('../src/db.js');
 // Este script corre como `pretest`: serializado, y ANTES de que arranquen los
 // cuatro archivos de test en paralelo. Bajo un solo `npm test` su propio
 // DROP SCHEMA nunca puede chocar con el de otro proceso —no hay "otro

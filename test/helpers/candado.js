@@ -8,7 +8,7 @@
 // descuido: tanto helpers/db.js como db.test.js fijan `process.env.ESQUEMA_BD`
 // por su cuenta ANTES de requerir `../../db.js` (helpers/db.js incluso lo hace
 // cumplir con un guardia que revienta si db.js ya estaba cargado). Si este
-// archivo hiciera su propio `require('../../db.js')` a nivel superior,
+// archivo hiciera su propio `require('../../src/db.js')` a nivel superior,
 // cualquiera de los dos que lo requiriera primero decidiría con qué
 // `ESQUEMA_BD` se construye el pool para el OTRO también, o dispararía ese
 // guardia sin venir a cuento. Recibir el `pool` ya abierto como parámetro

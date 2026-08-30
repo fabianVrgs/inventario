@@ -23,7 +23,7 @@ const {
   iniciarSesion,
   cookieDe,
 } = require('./helpers/sesion');
-const auth = require('../auth.js');
+const auth = require('../src/auth.js');
 
 let servidor;
 let base;
@@ -32,7 +32,7 @@ let app;
 before(async () => {
   await crearEsquema();
 
-  app = require('../server.js');
+  app = require('../src/server.js');
 
   servidor = app.listen(0);
   await once(servidor, 'listening');

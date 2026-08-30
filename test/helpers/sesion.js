@@ -4,7 +4,7 @@
 // denegar por defecto, así que esto es lo que la mantiene en pie: siembra las
 // dos cuentas y devuelve la cookie con la que hacer las peticiones.
 
-const auth = require('../../auth.js');
+const auth = require('../../src/auth.js');
 
 // Se importa el helper de test, no el db.js de la raíz directamente. No es
 // por sus símbolos —sólo se usan `consultar` y `exigirEsquemaDePruebas`,

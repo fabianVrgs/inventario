@@ -30,7 +30,7 @@ const OTRA_CLAVE = 'OtraClaveDePrueba22';
 before(async () => {
   await crearEsquema();
 
-  app = require('../server.js');
+  app = require('../src/server.js');
 
   servidor = app.listen(0);
   await once(servidor, 'listening');

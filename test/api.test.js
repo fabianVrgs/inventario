@@ -18,7 +18,7 @@ let cookie;
 before(async () => {
   await crearEsquema();
 
-  app = require('../server.js');
+  app = require('../src/server.js');
 
   servidor = app.listen(0); // puerto efímero: no choca con el 3000 en uso
   await once(servidor, 'listening');

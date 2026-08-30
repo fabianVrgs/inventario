@@ -18,12 +18,12 @@ const ESQUEMA = `inventario_test_${process.pid}`;
 // vivirían en `public` — la base real del almacén — y `sembrar()` haría
 // TRUNCATE ahí en cada test. El guardia de abajo existe precisamente para que
 // ese olvido no pueda pasar en silencio.
-if (require.cache[require.resolve('../../db.js')]) {
+if (require.cache[require.resolve('../../src/db.js')]) {
   throw new Error('db.js ya estaba cargado: ESQUEMA_BD llega tarde y el aislamiento no se aplicaría.');
 }
 process.env.ESQUEMA_BD = ESQUEMA;
 
-const { pool, consultar } = require('../../db.js');
+const { pool, consultar } = require('../../src/db.js');
 
 // El candado que serializa el DDL de esquema (CREATE/DROP SCHEMA) entre
 // procesos de test vive en su propio módulo — ./candado.js — y no aquí,

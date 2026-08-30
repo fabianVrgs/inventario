@@ -6,7 +6,8 @@ const path = require('node:path');
 // CA raíz del pooler de Supabase. Es pública, no es un secreto, y por eso se
 // versiona: el certificado del pooler no está firmado por una CA del trust
 // store de Node, así que sin esto no hay forma de verificarlo.
-const ca = fs.readFileSync(path.join(__dirname, 'certs', 'supabase-ca.crt'), 'utf8');
+// El `..` sale de `src/`: el certificado vive en `certs/`, en la raiz del repo.
+const ca = fs.readFileSync(path.join(__dirname, '..', 'certs', 'supabase-ca.crt'), 'utf8');
 
 // DATABASE_URL_TEST tiene prioridad a propósito: así un test no puede tocar
 // producción ni aunque el .env traiga las dos.

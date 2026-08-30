@@ -5,7 +5,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 
-const auth = require('../auth.js');
+const auth = require('../src/auth.js');
 
 // ---------------------------------------------------------------------------
 // Contraseñas

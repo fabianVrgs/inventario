@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const ESQUEMA = `db_test_${process.pid}`;
 process.env.ESQUEMA_BD = ESQUEMA;
 
-const { pool, consultar, enTransaccion } = require('../db.js');
+const { pool, consultar, enTransaccion } = require('../src/db.js');
 // Sólo el candado, NO test/helpers/db.js: este archivo prueba db.js
 // directamente, con su propio ESQUEMA_BD fijado arriba, y helpers/db.js fija
 // el suyo propio (con un guardia que revienta si db.js ya estaba cargado).

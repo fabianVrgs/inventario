@@ -1,12 +1,12 @@
 {
   "name": "inventario-ok-producciones",
   "version": "1.0.0",
-  "main": "server.js",
+  "main": "src/server.js",
   "engines": {
     "node": ">=20.6.0"
   },
   "scripts": {
-    "start": "node --env-file=.env server.js",
+    "start": "node --env-file=.env src/server.js",
     "pretest": "node --env-file=.env scripts/limpiar-esquemas-de-prueba.js",
     "test": "node --env-file=.env --test \"test/**/*.test.js\""
   },

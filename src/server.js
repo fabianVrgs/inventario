@@ -18,6 +18,13 @@ const { consultar, enTransaccion, pool } = require('./db.js');
 const app = express();
 const port = process.env.PORT || 3000;
 
+// `public/` esta un nivel por encima de `src/`, y las DOS formas de alcanzarla
+// salen de aqui. Antes no: `express.static` recibia la cadena 'public',
+// relativa al process.cwd(), mientras las pantallas usaban __dirname. Con los
+// modulos en la raiz daba igual; desde `src/` solo se habria roto una de las
+// dos, con un 404 en `/` y `/login` y los estaticos intactos.
+const PUBLICO = path.join(__dirname, '..', 'public');
+
 // ===========================================================================
 // AUTENTICACIÓN
 // ===========================================================================
@@ -496,7 +503,7 @@ app.use((req, res, next) => {
 //    desde la caché después de cerrar sesión. Las hojas de estilo y los scripts
 //    conservan su caché normal: ahí no hay nada privado.
 app.use(
-  express.static('public', {
+  express.static(PUBLICO, {
     setHeaders: (res, rutaArchivo) => {
       if (rutaArchivo.endsWith('.html')) res.setHeader('Cache-Control', 'no-store');
     },
@@ -511,7 +518,7 @@ app.use(
 // repiten el no-store por la misma razón que `express.static` de arriba.
 function enviarPantalla(res, archivo) {
   res.setHeader('Cache-Control', 'no-store');
-  res.sendFile(path.join(__dirname, 'public', 'html', archivo));
+  res.sendFile(path.join(PUBLICO, 'html', archivo));
 }
 
 app.get('/login', (req, res) => {
