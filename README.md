@@ -114,15 +114,16 @@ node --env-file=.env scripts/cuenta.js cerrar-sesiones    # cierra lo que quedar
 
 ## Cómo está organizado
 
-    server.js              backend: guardia y todas las rutas (monolito a propósito)
-    auth.js                criptografía: scrypt, tokens de sesión, y TOTP dormido (ver «Estado conocido» en CLAUDE.md)
-    db.js                  única puerta a Postgres: el pool, consultar() y enTransaccion()
+    vercel.json            punto de entrada y enrutado del despliegue, explícitos
+    src/
+      server.js             backend: guardia y todas las rutas (monolito a propósito)
+      auth.js               criptografía: scrypt, tokens de sesión, y TOTP dormido (ver «Estado conocido» en CLAUDE.md)
+      db.js                 única puerta a Postgres: el pool, consultar() y enTransaccion()
     scripts/cuenta.js      alta y gestión de cuentas desde la terminal (crea la primera)
-    scripts/limpiar-esquemas-de-prueba.js   barre esquemas de test huérfanos (pretest)
     public/                lo que sirve express.static, tal cual corre en el navegador
       html/                una página por pantalla, más login.html
       css/                 base.css (tokens y primitivas) + una hoja por pantalla
-      js/                  un archivo por pantalla, más sesion.js (compartido)
+      js/                  un archivo por pantalla, más sesion.js y devolucion.js
     db/
       esquema.sql           el DDL completo, aplicado una sola vez
       cambio-2026-08-roles.sql   cambio de un solo uso sobre la base ya desplegada
@@ -136,13 +137,24 @@ node --env-file=.env scripts/cuenta.js cerrar-sesiones    # cierra lo que quedar
       helpers/db.js          crea/borra el esquema de cada archivo de test y lo siembra
       helpers/sesion.js      siembra cuentas y devuelve la cookie
       helpers/candado.js     serializa el DDL de esquema entre procesos de test
-    DESIGN.md              el sistema visual: tokens, primitivas, decisiones
-    PRODUCT.md             para qué existe cada pantalla y qué se dejó fuera
+      helpers/limpiar-esquemas.js   barre esquemas huérfanos de una corrida cortada (pretest)
+    producto/
+      DESIGN.md             el sistema visual: tokens, primitivas, decisiones
+      PRODUCT.md            para qué existe cada pantalla y qué se dejó fuera
     CLAUDE.md              guía para agentes; incluye las trampas del repo
 
-Cada pantalla es su propio trío `html` + `css` + `js`, sin nada compartido salvo `base.css` y
-`sesion.js`. **Los nombres todavía no coinciden entre sí** (`index.html` va con `logica.js` y
-`style.css`; `inventario.html` con `edit.js`), que es la deuda más visible del repo.
+Cada pantalla es su propio trío `html` + `css` + `js`, y **los tres se llaman igual**:
+`principal`, `inventario`, `orden`, `cuentas`, `login`. Lo único compartido son `base.css`,
+`sesion.js` y `devolucion.js`, que no pertenecen a ninguna.
+
+Dos nombres de carpeta que conviene no tocar sin leer antes:
+
+- **`public/css`, `public/js`, `public/img` y `public/html`** no son sólo rutas: son reglas de
+  autorización. El guardia decide qué es público por prefijo (`/css/`, `/img/`) y protege la
+  pantalla de gestión nombrando `/html/cuentas.html` y `/js/cuentas.js`. Renombrar una de esas
+  carpetas no da un 404 — deja el login sin su CSS o la gestión sin guardia.
+- **`producto/` y no `doc/`**, porque `docs/` está en `.gitignore` y se diferencia en una
+  letra: un typo dejaría el archivo fuera del repo sin avisar.
 
 ## Las tres pantallas
 
@@ -150,7 +162,7 @@ Cada pantalla es su propio trío `html` + `css` + `js`, sin nada compartido salv
 |---|---|---|
 | **Principal** | `/` | Elegir de lo disponible, con cantidad. No edita el catálogo. |
 | **Inventario** | `/html/inventario.html` | Administrar el catálogo: alta, edición, activar/desactivar, borrado, export CSV. Y **recibir devoluciones**. |
-| **Orden del día** | `/html/orden_del_dia.html` | Revisar el formato, ajustarlo e imprimir. Aquí es donde baja el stock. |
+| **Orden del día** | `/html/orden.html` | Revisar el formato, ajustarlo e imprimir. Aquí es donde baja el stock. |
 
 El flujo va de izquierda a derecha: catálogo en Inventario → selección en la Principal →
 revisión en Orden del día → imprimir. Y cierra el círculo volviendo a Inventario cuando el
@@ -176,7 +188,7 @@ dos — el detalle completo, y por qué, está en `CLAUDE.md`.
 
 ## Probar
 
-    npm test                                                 # los 127 tests
+    npm test                                                 # los 128 tests
     node --env-file=.env --test test/auth.test.js            # un solo archivo
     node --env-file=.env --test --test-name-pattern "elimina el producto"   # un solo test
 
@@ -192,7 +204,7 @@ borrar **y el producto sigue existiendo después**.
 
 ## La API
 
-Todo vive en `server.js`. Todas las rutas exigen sesión salvo `/api/auth/login` y `/api/salud`;
+Todo vive en `src/server.js`. Todas las rutas exigen sesión salvo `/api/auth/login` y `/api/salud`;
 las peticiones a `/api/*` sin sesión reciben `401`, la navegación a una pantalla HTML un `302`
 al login.
 
@@ -250,6 +262,14 @@ actividad. Cerrar sesión borra también las tres claves de `sessionStorage`.
 
 La aplicación no termina TLS ella misma: eso lo hace un proxy inverso o la propia plataforma
 (Vercel, Railway…) delante.
+
+En Vercel el despliegue lo describe `vercel.json`, y no la autodetección: fija `src/server.js`
+como punto de entrada y manda **todo** el tráfico a Express. Dos detalles deciden si el
+despliegue arranca o no. El primero es `includeFiles`: el empaquetador decide qué sube leyendo
+los `require`, y ni `express.static` ni la lectura del certificado son analizables así, de modo
+que `public/` y `certs/` hay que nombrarlos a mano. El segundo es que sean `routes` y no
+`rewrites` — los `rewrites` consultan el sistema de archivos DESPUÉS de casar, así que los
+estáticos volverían a salir del CDN sin pasar por el guardia ni por la CSP.
 
     NODE_ENV=production CONFIAR_EN_PROXY=1 npm start
 

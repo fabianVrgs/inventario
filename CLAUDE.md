@@ -5,9 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Qué es
 
 Inventario de almacén para "Ok-producciones": Express 5 + Postgres (Supabase) sirviendo un
-frontend estático de HTML/CSS/JS sin framework ni build step. El código vive en `server.js`
-(backend, monolítico), `auth.js` (criptografía), `db.js` (única puerta al pool de Postgres),
-`public/` (frontend) y `scripts/cuenta.js` (alta de cuentas). **Dos dependencias en total**:
+frontend estático de HTML/CSS/JS sin framework ni build step. El código vive en
+`src/server.js` (backend, monolítico), `src/auth.js` (criptografía), `src/db.js` (única puerta
+al pool de Postgres), `public/` (frontend) y `scripts/cuenta.js` (alta de cuentas). **Dos dependencias en total**:
 `express` y `pg`. Antes de añadir una tercera, mira si `node:crypto` ya lo hace — es lo que se
 hizo con scrypt y TOTP. El código y los comentarios están en español: mantén ese idioma al
 escribir código o mensajes de commit aquí.
@@ -17,7 +17,7 @@ escribir código o mensajes de commit aquí.
 ```bash
 npm install                    # sólo JS: pg no compila nada nativo (a diferencia de sqlite3)
 npm start                      # --env-file=.env, arranca en :3000 (PORT lo cambia)
-npm test                       # 127 tests con el runner nativo de node
+npm test                       # 128 tests con el runner nativo de node
 
 # Sin cuentas no se puede entrar a ninguna pantalla: no hay ninguna por defecto.
 # Ésta es la vía de arranque; las demás cuentas se crean ya desde /html/cuentas.html.
@@ -38,7 +38,7 @@ ningún `node -e` con `sqlite3`.
 
 ## Arquitectura
 
-**Backend — `server.js`, `auth.js` y `db.js`.** `server.js` sigue siendo el monolito:
+**Backend — `src/`, tres archivos.** `server.js` sigue siendo el monolito:
 middlewares, guardia, rutas, `app.listen()`. `auth.js` es lo único que se sacó por no depender
 de HTTP —scrypt, tokens, y el TOTP y los códigos de respaldo que quedaron dormidos
 (ver «Estado conocido»)— y se prueba sin servidor
@@ -48,6 +48,14 @@ Expone `consultar()` (una consulta suelta) y `enTransaccion(fn)` (cliente dedica
 envuelto en `require.main === module`, y el final exporta la app con `pool` en `app.locals`
 para cerrarlo en el teardown. (El tercero de antes, `DB_PATH`, se fue con SQLite: la conexión
 sale de `DATABASE_URL`/`DATABASE_URL_TEST`, leídas dentro de `db.js`.)
+
+Los tres viven en `src/` desde la reorganización, y eso trae un detalle que ya mordió una vez:
+**`public/` y `certs/` están un nivel por encima**, así que toda ruta a ellas sube con `..`.
+En `server.js` las dos formas de alcanzar `public/` —el estático y el `sendFile` de las
+pantallas— salen ahora de la constante `PUBLICO`. Antes no: `express.static` recibía la cadena
+`'public'`, relativa al `process.cwd()`, mientras las pantallas usaban `__dirname`. Con los
+módulos en la raíz los dos caminos coincidían por casualidad; desde `src/` sólo se habría roto
+uno, dando un 404 en `/` y `/login` con los estáticos funcionando.
 
 **Doce cosas que se aprendieron migrando de SQLite y muerden si se editan a ciegas:**
 
@@ -73,15 +81,26 @@ sale de `DATABASE_URL`/`DATABASE_URL_TEST`, leídas dentro de `db.js`.)
   El de transacción no garantiza que un `SET search_path` sobreviva entre transacciones, y el
   aislamiento por esquema de los tests depende de eso.
 - **Un esquema Postgres por archivo de test.** `ESQUEMA_BD` se fija **antes** del
-  `require('../server.js')` —lo exige `test/helpers/db.js`, que revienta si `db.js` ya estaba en
+  `require('../src/server.js')` —lo exige `test/helpers/db.js`, que revienta si `db.js` ya estaba en
   `require.cache`—; toda función que trunque llama primero a `exigirEsquemaDePruebas()`, y el
   DDL de esquema pasa por el candado de `test/helpers/candado.js` (`pg_advisory_xact_lock`)
   para que dos corridas no se interbloqueen. En juego: que la suite haga `TRUNCATE` sobre
   `public`, la base real.
 - **`CONFIAR_EN_PROXY=1` es obligatoria en Vercel**, o `req.ip` es la IP del proxy para todos
   y el limitador por IP se vuelve un bloqueo global.
+- **`vercel.json` describe el despliegue entero, y sustituye a la autodetección.** Antes no
+  existía: Vercel encontraba `server.js` en la raíz exportando una app de Express y servía
+  `public/` desde su CDN por su cuenta. Mover el código a `src/` habría roto eso en silencio.
+  Dos detalles del archivo deciden si producción arranca. **`includeFiles`**: el empaquetador
+  decide qué sube analizando los `require`, y ni `express.static` ni el `readFileSync` del
+  certificado son analizables, así que `public/**` y `certs/**` van nombrados a mano — sin el
+  segundo la función muere al cargar `db.js`. **`routes` y no `rewrites`**: los `rewrites` se
+  compilan con `check: true`, o sea que la plataforma mira el sistema de archivos DESPUÉS de
+  casar, y los estáticos volverían a salir del CDN sin pasar por Express. Ese era justo el
+  agujero anterior: la CSP no llegaba a ninguna página HTML y el guardia de `cuentas.html` no
+  protegía nada en producción.
 - **El aviso de "no hay cuentas activas" corre fuera de `require.main === module`**, porque en
-  Vercel el módulo se importa y nunca se ejecuta con `node server.js`.
+  Vercel el módulo se importa y nunca se ejecuta con `node src/server.js`.
 - **Supabase activa RLS solo en cada tabla nueva** (`rls_auto_enable()`). Las doce tablas
   tienen RLS y CERO políticas, y ÉSE es el estado correcto: `anon`/`authenticated` no leen
   nada, la app entra como dueño por `pg`. **No crear políticas RLS**: no gobernarían ningún
@@ -95,7 +114,7 @@ sale de `DATABASE_URL`/`DATABASE_URL_TEST`, leídas dentro de `db.js`.)
 **Tests — `test/`.** Runner nativo de Node, cero dependencias extra. Cada archivo corre en su
 propio proceso y vive en su propio esquema, sembrado por `test/helpers/db.js`; la app se
 levanta en puerto efímero (`listen(0)`) y se consulta con `fetch`. `npm test` corre antes
-`scripts/limpiar-esquemas-de-prueba.js` como `pretest`: barre esquemas huérfanos de una
+`test/helpers/limpiar-esquemas.js` como `pretest`: barre esquemas huérfanos de una
 corrida cortada (`process.kill(pid, 0)` contra el PID del nombre). Sigue viva una trampa de
 antes: **toda petición a `/api/*` necesita sesión** — `test/helpers/sesion.js` siembra las
 cuentas y devuelve la cookie. Si el test provoca logins fallidos, hay que llamar a
@@ -170,22 +189,32 @@ reto o un contador guardado en una no existía para las demás—:
   habían borrado en SQLite antes de migrar a Postgres.
 
 **Frontend — `public/`.** Estático, detrás del guardia salvo `/login`, `/js/login.js`,
-`/css/*` y `/img/*`. Principal (`index.html`+`logica.js`, elige de lo disponible), Inventario
-(`inventario.html`+`edit.js`, CRUD y `devolucion.js`), Orden del día
-(`orden_del_dia.html`+`orden.js`, imprime y descuenta de verdad) y Cuentas
-(`cuentas.html`+`cuentas.js`, cuentas y bitácora); `sesion.js` compartido por las
-cuatro. El porqué de cada pantalla está en `DESIGN.md` y `PRODUCT.md`.
+`/css/*` y `/img/*`. **Cada pantalla se llama igual en sus tres archivos**: Principal
+(`principal.html`+`principal.css`+`principal.js`, elige de lo disponible), Inventario (CRUD, y
+`devolucion.js` aparte), Orden del día (`orden.*`, imprime y descuenta de verdad), Cuentas
+(cuentas y bitácora) y Acceso (`login.*`). Compartidos y de nadie: `base.css`, `sesion.js` y
+`devolucion.js`. El porqué de cada pantalla está en `producto/DESIGN.md` y
+`producto/PRODUCT.md`.
+
+**Los nombres de las cuatro carpetas de `public/` son reglas de autorización, no rutas.**
+`esPublica()` decide por prefijo (`/css/`, `/img/`) y `PANTALLA_DE_CUENTAS` nombra
+`/html/cuentas.html` y `/js/cuentas.js` literalmente. Renombrar `public/js` no daría un 404:
+dejaría `/js/login.js` fuera de las rutas públicas —login roto— y `cuentas.js` sin su guardia.
+Por eso la reorganización renombró los archivos y no las carpetas.
 
 `cuentas.html` y `js/cuentas.js` son los ÚNICOS estáticos con guardia propia, en un `app.use`
 colocado ANTES de `express.static` — el orden de los middlewares es lo único que lo hace
 cierto. Eso no es la frontera de seguridad (lo es `exigirPermiso` en cada ruta): es no
-servirle a nadie una pantalla que sólo le va a dar 403.
+servirle a nadie una pantalla que sólo le va a dar 403. **Y sólo es cierto en producción desde
+que existe `vercel.json`**: mientras Vercel sirvió `public/` desde su CDN, esta ruta no pasaba
+por Express, así que la pantalla se entregaba a cualquiera y la CSP no viajaba en ninguna
+página. Verde en test y distinto en producción, que es la peor combinación.
 
 Contratos que siguen mordiendo:
 
 - **Nada que dependa del stock se repinta: se PARCHEA.** Es la misma razón por la que la
   fila del producto no se reconstruye (el foco del teclado se iría a `<body>` en cada
-  pulsación), y ahora alcanza a tres sitios más de `logica.js`: el recuento de cada área
+  pulsación), y ahora alcanza a tres sitios más de `principal.js`: el recuento de cada área
   (`actualizarConteosDeArea`), el de cada chip de filtro (`actualizarConteosDeFiltro`) y el
   total de la Orden del día (`actualizarResumenDeOrden`, en `orden.js`). Si alguno deja de
   llamarse, la cabecera dice "4 unidades" sobre una fila que dice "Queda 1" — y el de la
@@ -211,7 +240,7 @@ Contratos que siguen mordiendo:
   devolviendo la orden equivocada, que no se deshace.
 - **CSP y escapado, dos capas contra XSS.** `script-src 'self'` prohíbe `onclick=`,
   `style=` y `<style>` en el markup (detalle en `server.js`); lo que teclea el usuario se
-  escapa antes de `innerHTML` (`escapar()` en `edit.js`, `escaparHtml()` en `orden.js`).
+  escapa antes de `innerHTML` (`escapar()` en `inventario.js`, `escaparHtml()` en `orden.js`).
 - **Para verificar el `@media print` no sirve `getComputedStyle`**: en un hijo de un elemento
   oculto devuelve su propio `display`, no `none`, y da por bueno lo que en papel no se ve. Usa
   `elemento.checkVisibility()` —mira los ancestros— con `page.emulateMedia({ media: 'print' })`.
@@ -287,7 +316,7 @@ NO es «cada 5 días» (son los días 1, 6, 11… y del 26 al 1 pasan 6), por es
   SQLite: `BT3` existe como id 5 y 7, `Array` como 6 y 8; los ids 5, 6 y 11 quedaron sin área
   y con cantidad 0. No se fusionaron a propósito — se limpian desde el CRUD.
 - Sí hay `.gitignore`: excluye `node_modules/`, `docs/`, `.claude/`, `.playwright-mcp/`,
-  `*.bak` y `.env`. **Ya no hay ninguna base de datos versionada** —`db/inventario.db3` se
+  `.superpowers/`, `*.bak` y `.env`. **Ya no hay ninguna base de datos versionada** —`db/inventario.db3` se
   borró junto con SQLite—; sólo `db/esquema.sql` y `certs/` (la CA del pooler) viajan.
 - **El segundo factor está DORMIDO, no borrado, y es deliberado.** Se retiró el 2026-08-28
   (la spec vive en `docs/`, que no se versiona): el login es de un solo paso. Pero siguen

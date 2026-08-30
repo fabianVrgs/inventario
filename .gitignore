@@ -9,6 +9,7 @@ docs/
 # Artefactos de herramientas de agentes
 .claude/
 .playwright-mcp/
+.superpowers/
 
 # Respaldos de la base de datos.
 *.bak
