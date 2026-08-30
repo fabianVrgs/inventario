@@ -44,6 +44,29 @@
   --tinta:          oklch(32%   0.02   338);  /* 12.14:1 — texto de cuerpo */
   --tinta-fuerte:   oklch(20.5% 0.021  338);  /* 17.08:1 — títulos y botón primario */
 
+  /* ---- Tinta como SUPERFICIE ---------------------------------------------
+     La tinta dejó de ser sólo el color del texto: ahora también es superficie.
+     La barra superior de las cuatro pantallas de la aplicación y la columna de
+     marca del acceso son LA MISMA cosa —el escritorio— y el papel se apoya
+     encima. Sin esta familia cada pantalla se inventaría su propio oscuro y
+     habría que volver a medir los contrastes en cada una.
+
+     Todos los contrastes en comentario están medidos contra --tinta-panel. */
+  --tinta-panel:       oklch(21.5% 0.023 338);  /* la superficie oscura */
+  --tinta-panel-alta:  oklch(27%   0.025 338);  /* su hover / hundido */
+  --filete-tinta:      oklch(34%   0.025 338);  /* divisor sobre tinta — 1.48:1, decorativo */
+  /* El borde del ÚNICO control que vive sobre tinta (el botón de salir). Va
+     aparte del filete por lo mismo que --borde-control en el papel: WCAG
+     1.4.11 pide 3:1 en el borde que es la única señal de que algo se pulsa,
+     y el filete decorativo no llega. 3.18:1. */
+  --borde-control-tinta: oklch(52% 0.02 338);
+  --sobre-tinta:       oklch(97%   0.005 338);  /* texto principal — 16.16:1 */
+  --sobre-tinta-suave: oklch(82%   0.012 338);  /* secundario — 10.06:1 */
+  --sobre-tinta-tenue: oklch(69%   0.015 338);  /* terciario — 6.33:1 */
+  /* El morado de marca NO sirve sobre tinta: mide 2.4:1 y no se lee. Éste es
+     el mismo tono subido de luminosidad hasta pasar AA con holgura. 7.69:1. */
+  --marca-clara:       oklch(76%   0.145 338);
+
   /* Marca: el morado del logo (#ae3592) al bit */
   --marca:          oklch(53.9% 0.186  338);  /* 5.35:1 sobre papel */
   --marca-fuerte:   oklch(46%   0.17   338);  /* 7.76:1 — hover, active */
@@ -108,20 +131,45 @@
   --tracking-etiqueta:    0.07em;
 
   /* ---- Forma ------------------------------------------------------------
-     "Ligeramente redondeados". Nada por encima de 8px: a partir de ahí la
-     herramienta empieza a parecer una app de consumo. */
-  --radio-sm:   3px;
-  --radio-md:   5px;
-  --radio-lg:   8px;
+     La escala es de RADIOS ANIDADOS, no un valor único: cuanto mayor es la
+     caja, mayor su radio, para que la curva exterior y la interior se vean
+     concéntricas. Un botón de 7px dentro de una hoja de 16px se lee bien;
+     los dos a 8px hacen que la hoja parezca una caja con las esquinas
+     limadas.
+
+     Antes el techo eran 8px "para no parecer una app de consumo". Lo que
+     hacía falta no era el techo sino la progresión: lo que abarata una
+     interfaz es el radio grande en el CONTROL, no en la superficie. */
+  --radio-sm:   4px;      /* badge, chip, indicador */
+  --radio-md:   7px;      /* botón, campo, control */
+  --radio-lg:  12px;      /* contenedor con superficie propia */
+  --radio-xl:  16px;      /* hoja, modal, panel de acceso */
   --radio-full: 9999px;
 
   /* ---- Elevación ---------------------------------------------------------
-     Solo tres, y las tres son para cosas que de verdad flotan. Contenedores,
-     secciones y filas van planos: los separa el filete, no la sombra. */
+     Una escala numerada de cuatro pasos, y TODAS de dos capas: una sombra de
+     contacto de 1-8px que ancla el objeto al plano y otra difusa que le da el
+     aire. Con una sola capa la caja parece pegada con un rectángulo gris
+     debajo, que es el aspecto que abarata cualquier interfaz.
+
+     Sigue en pie que la elevación se gana, no se reparte: filas, celdas y
+     secciones van planas y las separa el filete. Lo que cambió es que un
+     contenedor con superficie propia SÍ puede llegar al nivel 2 — antes iba
+     plano y por eso se leía como un rectángulo dibujado, no como un objeto.
+
+     Los alias de abajo existen para que el CSS de las pantallas siga
+     nombrando la INTENCIÓN ("esto es una hoja") y no un número. */
+  --sombra-1: 0 1px 2px oklch(20.5% 0.021 338 / .05);
+  --sombra-2: 0 1px 2px  oklch(20.5% 0.021 338 / .04),
+              0 4px 12px oklch(20.5% 0.021 338 / .06);
+  --sombra-3: 0 1px 3px   oklch(20.5% 0.021 338 / .05),
+              0 12px 32px oklch(20.5% 0.021 338 / .09);
+  --sombra-4: 0 8px 16px  oklch(20.5% 0.021 338 / .10),
+              0 32px 72px oklch(20.5% 0.021 338 / .28);
+
   --sombra-fija:  0 -1px 0 var(--filete), 0 -8px 24px oklch(20.5% 0.021 338 / .05);
-  --sombra-hoja:  0 1px 2px oklch(20.5% 0.021 338 / .04),
-                  0 8px 24px oklch(20.5% 0.021 338 / .05);
-  --sombra-modal: 0 16px 48px oklch(20.5% 0.021 338 / .22);
+  --sombra-hoja:  var(--sombra-3);
+  --sombra-modal: var(--sombra-4);
 
   --anillo-foco: 0 0 0 3px oklch(53.9% 0.186 338 / .3);
   --velo-modal:  oklch(20.5% 0.021 338 / .45);
@@ -129,6 +177,7 @@
   /* ---- Movimiento --------------------------------------------------------
      ease-out-quart. Sin rebote ni elástico: esto informa de un cambio de
      estado, no entretiene. */
+  --dur-pulsado: 80ms;  /* el hundido de un botón: por debajo de 100ms o no se percibe como respuesta */
   --dur-rapida: 120ms;
   --dur-media:  180ms;
   --dur-lenta:  260ms;
@@ -165,6 +214,15 @@
     --marca-fuerte:   #8f2378;
     --marca-lavado:   #fcecf7;
     --marca-filete:   #f3c9e5;
+    --marca-clara:    #eb8bd1;
+
+    --tinta-panel:         #21151d;
+    --tinta-panel-alta:    #2f222b;
+    --filete-tinta:        #41333c;
+    --borde-control-tinta: #71656d;
+    --sobre-tinta:         #f7f4f6;
+    --sobre-tinta-suave:   #cac1c7;
+    --sobre-tinta-tenue:   #a2989f;
     --peligro:        #b72121;
     --peligro-fuerte: #971316;
     --peligro-lavado: #fcebe8;
@@ -175,9 +233,15 @@
     --aviso-lavado:   #fbedda;
     --aviso-texto:    #6d4b13;
 
+    /* Sólo se repiten los NIVELES: --sombra-hoja y --sombra-modal son alias
+       con var(), y var() resuelve en el momento de usarse, así que cogen
+       solos el nivel que haya ganado. Repetir los alias aquí sería la clase
+       de duplicado que se desincroniza a la primera. */
+    --sombra-1: 0 1px 2px rgba(30, 19, 26, .05);
+    --sombra-2: 0 1px 2px rgba(30, 19, 26, .04), 0 4px 12px rgba(30, 19, 26, .06);
+    --sombra-3: 0 1px 3px rgba(30, 19, 26, .05), 0 12px 32px rgba(30, 19, 26, .09);
+    --sombra-4: 0 8px 16px rgba(30, 19, 26, .10), 0 32px 72px rgba(30, 19, 26, .28);
     --sombra-fija:  0 -1px 0 #e5e0e3, 0 -8px 24px rgba(30, 19, 26, .05);
-    --sombra-hoja:  0 1px 2px rgba(30, 19, 26, .04), 0 8px 24px rgba(30, 19, 26, .05);
-    --sombra-modal: 0 16px 48px rgba(30, 19, 26, .22);
     --anillo-foco:  0 0 0 3px rgba(174, 53, 147, .3);
     --velo-modal:   rgba(30, 19, 26, .45);
   }
@@ -265,9 +329,19 @@ a {
 
 /* ---- Foco visible ---------------------------------------------------------
    Un solo anillo para todo el sistema. Antes solo los <input> tenían :focus y
-   navegar con teclado era imposible de seguir en las tres pantallas. */
+   navegar con teclado era imposible de seguir en las tres pantallas.
+
+   El color sale de --color-foco y NO de --marca directamente: sobre tinta, el
+   morado de papel mide 2.4:1 y WCAG 1.4.11 pide 3:1 en un indicador de foco.
+   Cualquier superficie oscura redefine la variable y todo lo que tenga dentro
+   se ajusta solo — sin una regla `:focus-visible` por contexto, que es como se
+   pierde el foco en la mitad de los sitios. */
+:root {
+  --color-foco: var(--marca);
+}
+
 :focus-visible {
-  outline: 2px solid var(--marca);
+  outline: 2px solid var(--color-foco);
   outline-offset: 2px;
   border-radius: var(--radio-sm);
 }
@@ -376,7 +450,20 @@ a {
   cursor: pointer;
   transition: background-color var(--dur-media) var(--curva),
               color var(--dur-media) var(--curva),
-              box-shadow var(--dur-media) var(--curva);
+              box-shadow var(--dur-media) var(--curva),
+              transform var(--dur-pulsado) var(--curva);
+}
+
+/* El hundido al pulsar. Es `transform` y no `padding` ni `top` a propósito:
+   escala sobre su propio centro y no mueve NADA de alrededor, así que una
+   barra de botones no tiembla cuando se pulsa uno. .97 está medido en el
+   objetivo táctil de 44px: por debajo se nota como un salto.
+
+   Esto no cae con `prefers-reduced-motion`, y es correcto: lo que ese bloque
+   anula es la duración, no el estado. Quien pide menos movimiento sigue
+   necesitando saber que su dedo llegó. */
+.btn:active:not(:disabled) {
+  transform: scale(.97);
 }
 
 .btn:disabled,
@@ -385,14 +472,30 @@ a {
   cursor: not-allowed;
 }
 
-/* Primario = tinta, no morado. Uno por pantalla. */
-.btn--primario {
-  background-color: var(--tinta-fuerte);
-  color: var(--superficie);
+/* Primario = tinta, no morado. Uno por pantalla.
+
+   Va por tokens y no con los colores escritos dentro, y NO es abstracción
+   gratuita: desde que la barra superior es oscura, un primario dentro de ella
+   sería tinta sobre tinta — un botón invisible del que sólo se ve el rótulo.
+   Pasó de verdad con "Imprimir y descontar". Cualquier superficie oscura
+   redefine estas tres variables y el primario se invierte solo.
+
+   Quien saque un primario de una superficie oscura sin sacarlo del DOM tiene
+   que devolver los tokens a mano: es exactamente lo que hace .btn-imprimir en
+   style-orden.css cuando por debajo de 1060px se va al pulgar. */
+:root {
+  --btn-primario-fondo:       var(--tinta-fuerte);
+  --btn-primario-tinta:       var(--superficie);
+  --btn-primario-fondo-hover: var(--tinta);
 }
 
-.btn--primario:hover:not(:disabled) { background-color: var(--tinta); }
-.btn--primario:active:not(:disabled) { background-color: var(--tinta-fuerte); }
+.btn--primario {
+  background-color: var(--btn-primario-fondo);
+  color: var(--btn-primario-tinta);
+}
+
+.btn--primario:hover:not(:disabled) { background-color: var(--btn-primario-fondo-hover); }
+.btn--primario:active:not(:disabled) { background-color: var(--btn-primario-fondo); }
 
 /* El borde va en box-shadow inset y no en border para que no desplace el
    layout cuando aparece o cambia de grosor. */
@@ -483,7 +586,7 @@ a {
   width: min(100% - var(--esp-5) * 2, 460px);
   padding: var(--esp-5);
   border: 0;
-  border-radius: var(--radio-lg);
+  border-radius: var(--radio-xl);
   background-color: var(--superficie);
   box-shadow: var(--sombra-modal);
   color: var(--tinta);
@@ -532,15 +635,43 @@ a {
 }
 
 /* ---- Barra superior compartida -------------------------------------------
-   La misma en la Principal y en Inventario. Consistencia como afordancia: el
-   usuario no debe reaprender dónde está la navegación al cambiar de pantalla. */
+   La misma en las cuatro pantallas de la aplicación. Consistencia como
+   afordancia: el usuario no debe reaprender dónde está la navegación al
+   cambiar de pantalla.
+
+   VA EN TINTA, y es la decisión que más se ve de todo el sistema. El porqué:
+   esta barra no es contenido, es el mueble donde se apoya el contenido. En
+   superficie clara competía con el papel que tiene debajo —dos blancos casi
+   iguales separados por una raya de 1px— y no se leía como otra capa. En
+   tinta se lee de un vistazo qué es herramienta y qué es documento, y el
+   morado de marca por fin tiene dónde destacar.
+
+   Es además LA MISMA superficie que la columna de marca del acceso
+   (--tinta-panel). Quien entra por el login ve la tinta a la izquierda; al
+   pasar, la tinta se queda arriba. El producto se lee como uno solo.
+
+   OJO: el alto NO cambia. --alto-barra son 60px = esp-2 arriba + esp-2 abajo
+   + los 44px del enlace, y el thead pegajoso de Inventario y el panel de
+   Selección de la Principal se paran justo debajo de ese número.
+
+   @media print la oculta entera (style-orden.css), así que la tinta nunca
+   llega al papel ni se come un cartucho. */
 
 .barra-app {
   position: sticky;
   top: 0;
   z-index: var(--z-barra);
-  background-color: var(--superficie);
-  border-bottom: 1px solid var(--filete);
+  /* Sobre tinta el morado de papel no llega a 3:1: el anillo de foco de todo
+     lo que hay aquí dentro pasa al claro. */
+  --color-foco: var(--marca-clara);
+  /* Y el primario se invierte: tinta sobre tinta no se ve. */
+  --btn-primario-fondo:       var(--sobre-tinta);
+  --btn-primario-tinta:       var(--tinta-fuerte);
+  --btn-primario-fondo-hover: var(--superficie);
+  background-color: var(--tinta-panel);
+  /* Se apoya sobre el papel en vez de estar dibujada encima. Nivel 2, el de
+     un objeto que descansa: la barra no flota, sostiene. */
+  box-shadow: var(--sombra-2);
 }
 
 /* Cada hoja de página fija --ancho-pagina para que la barra, el contenido y la
@@ -565,14 +696,20 @@ a {
   color: inherit;
 }
 
-/* El logo es un JPG con fondo gris texturizado incrustado. Sin sombra y con un
-   filete: así se lee como marca enmarcada y no como una caja gris flotando
-   sobre el papel. */
+/* El logo es un JPG con fondo gris texturizado INCRUSTADO: no tiene canal
+   alfa, así que sobre tinta aparece como un cuadrado claro se haga lo que se
+   haga. En vez de disimularlo, se declara: va sobre una placa de papel
+   hundido con 3px de margen, que es el tono más parecido al fondo del propio
+   JPG y hace que la costura entre placa e imagen no se vea.
+
+   El día que llegue un logo con transparencia (SVG o PNG), esto se queda en
+   `background: none` y una línea menos. */
 .barra-app__logo {
   width: 34px;
   height: 34px;
+  padding: 3px;
   border-radius: var(--radio-md);
-  box-shadow: inset 0 0 0 1px var(--filete);
+  background-color: var(--papel-hundido);
   flex-shrink: 0;
 }
 
@@ -580,7 +717,7 @@ a {
   font-size: var(--texto-sm);
   font-weight: var(--peso-fuerte);
   letter-spacing: var(--tracking-titulo);
-  color: var(--tinta-fuerte);
+  color: var(--sobre-tinta);
   line-height: 1.2;
 }
 
@@ -599,22 +736,24 @@ a {
   border-radius: var(--radio-md);
   font-size: var(--texto-sm);
   font-weight: var(--peso-medio);
-  color: var(--tinta-tenue);
+  color: var(--sobre-tinta-tenue);
   text-decoration: none;
   transition: color var(--dur-media) var(--curva),
               background-color var(--dur-media) var(--curva);
 }
 
 .barra-app__enlace:hover {
-  color: var(--tinta-fuerte);
-  background-color: var(--papel-hundido);
+  color: var(--sobre-tinta);
+  background-color: var(--tinta-panel-alta);
 }
 
-/* La pantalla actual: peso, tinta plena y la regla de marca debajo. */
+/* La pantalla actual: peso, tinta plena y la regla de marca debajo. Sobre
+   tinta el morado va en su versión clara — el de papel mediría 2.4:1 y esta
+   regla es lo ÚNICO que dice dónde estás. */
 .barra-app__enlace[aria-current='page'] {
-  color: var(--tinta-fuerte);
+  color: var(--sobre-tinta);
   font-weight: var(--peso-fuerte);
-  box-shadow: inset 0 -2px 0 var(--marca);
+  box-shadow: inset 0 -2px 0 var(--marca-clara);
   border-radius: var(--radio-md) var(--radio-md) 0 0;
 }
 
@@ -632,13 +771,13 @@ a {
   gap: var(--esp-2);
   margin-left: auto;
   padding-left: var(--esp-3);
-  border-left: 1px solid var(--filete);
+  border-left: 1px solid var(--filete-tinta);
 }
 
 .barra-app__usuario {
   font-size: var(--texto-sm);
   font-weight: var(--peso-medio);
-  color: var(--tinta-tenue);
+  color: var(--sobre-tinta-suave);
   /* Un nombre largo no puede empujar "Salir" fuera de la pantalla. */
   max-width: 12ch;
   overflow: hidden;
@@ -653,21 +792,29 @@ a {
   align-items: center;
   min-height: var(--objetivo-tactil);
   padding: 0 var(--esp-3);
-  border: 1px solid var(--filete-fuerte);
+  /* --borde-control-tinta y no --filete-tinta: este borde es la única señal
+     de que "Salir" se pulsa, y WCAG 1.4.11 pide 3:1 para eso. */
+  border: 1px solid var(--borde-control-tinta);
   border-radius: var(--radio-md);
   background-color: transparent;
   font-family: inherit;
   font-size: var(--texto-sm);
   font-weight: var(--peso-medio);
-  color: var(--tinta-suave);
+  color: var(--sobre-tinta-suave);
   cursor: pointer;
   transition: color var(--dur-media) var(--curva),
-              background-color var(--dur-media) var(--curva);
+              background-color var(--dur-media) var(--curva),
+              transform var(--dur-pulsado) var(--curva);
 }
 
 .barra-app__salir:hover {
-  color: var(--tinta-fuerte);
-  background-color: var(--papel-hundido);
+  color: var(--sobre-tinta);
+  background-color: var(--tinta-panel-alta);
+}
+
+/* Mismo hundido que .btn: es un botón, aunque no lleve la clase. */
+.barra-app__salir:active {
+  transform: scale(.97);
 }
 
 /* ---- La barra en el teléfono ----------------------------------------------
@@ -693,7 +840,7 @@ a {
     justify-content: space-between;
     gap: 0;
     padding-top: var(--esp-1);
-    border-top: 1px solid var(--filete);
+    border-top: 1px solid var(--filete-tinta);
   }
 
   .barra-app__enlace {

@@ -235,10 +235,15 @@
 
 /* ---------- Tabla ---------- */
 
+/* Nivel 2, el del objeto que descansa sobre el papel. Iba plano y se leía
+   como un rectángulo dibujado encima, no como una superficie: el filete solo
+   no basta cuando el fondo (papel) y la caja (superficie) se diferencian en
+   1.4% de luminosidad. La sombra no lo hace flotar, lo apoya. */
 .table-container {
   background-color: var(--superficie);
   border: 1px solid var(--filete);
   border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-2);
   /* El scroll horizontal de la tabla es intencional; el del <body> no. */
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -519,7 +524,10 @@
   overflow-y: auto;
   padding: var(--esp-5);
   background-color: var(--superficie);
-  border-radius: var(--radio-lg);
+  /* Radio XL, el mismo que la primitiva `.dialogo` de base.css: los dos son
+     modales y tienen que verse iguales aunque uno sea <dialog> nativo y el
+     otro un overlay con JS. */
+  border-radius: var(--radio-xl);
   box-shadow: var(--sombra-modal);
   /* Al pasar de display:none a flex los descendientes se renderizan de nuevo,
      así que la animación se dispara en cada apertura sin una línea de JS. */

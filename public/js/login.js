@@ -11,11 +11,18 @@
   const campoUsuario = document.getElementById('usuario');
   const campoClave = document.getElementById('clave');
   const btnEntrar = document.getElementById('btnEntrar');
+  const btnVerClave = document.getElementById('btnVerClave');
+  const iconoVer = document.getElementById('iconoVer');
+  const iconoOcultar = document.getElementById('iconoOcultar');
   const aviso = document.getElementById('avisoAcceso');
 
-  function mostrarAviso(texto) {
+  // `campo` no es opcional por comodidad: sin llevar el foco al campo que hay
+  // que corregir, tras un fallo el foco se queda en el botón de enviar y quien
+  // navega con teclado tiene que volver a subir a ciegas hasta el formulario.
+  function mostrarAviso(texto, campo) {
     aviso.textContent = texto;
     aviso.hidden = false;
+    if (campo) campo.focus();
   }
 
   function limpiarAviso() {
@@ -30,6 +37,37 @@
     boton.disabled = activo;
     boton.textContent = activo ? 'Un momento…' : textoOriginal;
   }
+
+  // Ver la contraseña que se está tecleando. En el almacén se escribe desde un
+  // teléfono, de pie y con una mano: la contraseña se entrega en papel y se
+  // teclea mal con más frecuencia de la que se olvida.
+  //
+  // El tipo del input se cambia en su sitio en vez de tener dos campos: un
+  // segundo <input> haría que el gestor de contraseñas del navegador viera dos
+  // credenciales distintas en la misma página.
+  function alternarClave() {
+    const visible = campoClave.type === 'text';
+    // Cambiar `type` descoloca el cursor, así que se guarda y se repone: quien
+    // pulsa "ver" casi siempre va a seguir escribiendo donde estaba.
+    const desde = campoClave.selectionStart;
+    const hasta = campoClave.selectionEnd;
+
+    campoClave.type = visible ? 'password' : 'text';
+    btnVerClave.setAttribute('aria-pressed', String(!visible));
+    btnVerClave.setAttribute(
+      'aria-label',
+      visible ? 'Mostrar la contraseña' : 'Ocultar la contraseña'
+    );
+    iconoVer.hidden = !visible;
+    iconoOcultar.hidden = visible;
+
+    campoClave.focus();
+    if (desde !== null) {
+      campoClave.setSelectionRange(desde, hasta);
+    }
+  }
+
+  btnVerClave.addEventListener('click', alternarClave);
 
   async function leerRespuesta(respuesta) {
     try {
@@ -53,7 +91,10 @@
     const clave = campoClave.value;
 
     if (!usuario || !clave) {
-      return mostrarAviso('Escribe tu usuario y tu contraseña.');
+      return mostrarAviso(
+        'Escribe tu usuario y tu contraseña.',
+        usuario ? campoClave : campoUsuario
+      );
     }
 
     ocupado(btnEntrar, true, 'Entrar');
@@ -68,7 +109,12 @@
       const datos = await leerRespuesta(respuesta);
 
       if (!respuesta.ok) {
-        return mostrarAviso(datos?.error || 'No se pudo entrar. Inténtalo de nuevo.');
+        // Al campo de la contraseña y no al de usuario: el nombre casi siempre
+        // estaba bien, y volver a teclearlo es trabajo de más.
+        return mostrarAviso(
+          datos?.error || 'No se pudo entrar. Inténtalo de nuevo.',
+          campoClave
+        );
       }
 
       entrar();

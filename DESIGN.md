@@ -25,6 +25,14 @@ colors:
   exito-texto: "oklch(39% 0.1 152)"
   aviso-lavado: "oklch(95.2% 0.03 75)"
   aviso-texto: "oklch(44% 0.083 75)"
+  tinta-panel: "oklch(21.5% 0.023 338)"
+  tinta-panel-alta: "oklch(27% 0.025 338)"
+  filete-tinta: "oklch(34% 0.025 338)"
+  borde-control-tinta: "oklch(52% 0.02 338)"
+  sobre-tinta: "oklch(97% 0.005 338)"
+  sobre-tinta-suave: "oklch(82% 0.012 338)"
+  sobre-tinta-tenue: "oklch(69% 0.015 338)"
+  marca-clara: "oklch(76% 0.145 338)"
 typography:
   display:
     fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
@@ -58,9 +66,10 @@ typography:
     lineHeight: 1.4
     fontFeature: "tnum 1, lnum 1"
 rounded:
-  sm: "3px"
-  md: "5px"
-  lg: "8px"
+  sm: "4px"
+  md: "7px"
+  lg: "12px"
+  xl: "16px"
   full: "9999px"
 spacing:
   "1": "0.25rem"
@@ -137,12 +146,28 @@ firma. El sistema visual asume eso literalmente: la pantalla es el **antecedente
 documento**, no un tablero de control que casualmente puede imprimir.
 
 En la práctica eso significa tinta sobre papel. El fondo es un blanco cálido apenas tintado
-hacia el morado de la marca; el texto es un casi-negro de la misma familia. La estructura la
-llevan **filetes de 1px y espacio en blanco**, no tarjetas flotando con sombra. Las
-cantidades van en cifras tabulares alineadas a la derecha, porque en un inventario el número
-es el contenido y no un adorno del contenido. La única superficie que se permite parecer una
-hoja levantada del escritorio es el formato de Orden del día, y se lo gana porque de verdad
-es una hoja.
+hacia el morado de la marca; el texto es un casi-negro de la misma familia. Las cantidades
+van en cifras tabulares alineadas a la derecha, porque en un inventario el número es el
+contenido y no un adorno del contenido.
+
+**Y la tinta no es sólo el color del texto: también es una superficie.** La barra superior de
+las cuatro pantallas de la aplicación y la columna de marca del acceso van en tinta, y son
+literalmente la misma superficie (`--tinta-panel`). Es la mitad que faltaba de la metáfora:
+si el contenido es papel, la herramienta que lo sostiene es el escritorio sobre el que se
+apoya. Antes la barra iba en superficie clara y el resultado era honesto pero inerte — dos
+blancos casi idénticos separados por una raya de 1px, sin decir cuál era mueble y cuál
+documento. En tinta se distingue de un vistazo, y el morado de marca por fin tiene un fondo
+donde destacar en vez de competir.
+
+Eso tiene una consecuencia que se ve al entrar: quien abre el login ve la tinta a la
+izquierda; al pasar, esa misma tinta se queda arriba. El acceso y la aplicación se leen como
+un solo producto.
+
+La estructura del CONTENIDO la siguen llevando **filetes de 1px y espacio en blanco**. Lo que
+cambió es que un contenedor con superficie propia ya puede apoyarse en el papel con una
+sombra de nivel 2: iba plano y se leía como un rectángulo dibujado encima, porque papel y
+superficie se diferencian en 1.4% de luminosidad y el filete solo no llegaba. Filas, celdas y
+secciones siguen planas.
 
 El morado #ae3592 del logo sigue vivo, pero deja de ser el color de los botones. La acción
 primaria va en tinta —el movimiento de Stripe y Notion— y el morado queda reservado para
@@ -154,11 +179,15 @@ que este proyecto viene, y la **app de consumo llamativa**.
 
 **Key Characteristics:**
 
-- Documento antes que tablero: filetes y espacio, no tarjetas ni sombras.
-- Tinta como color de acción; morado como marca, estado y foco, nunca como relleno de botón.
+- Documento antes que tablero: el contenido lo estructuran filetes y espacio, no tarjetas.
+- Tinta como color de acción **y como superficie**: el mueble es oscuro, el documento claro.
+- Morado como marca, estado y foco, nunca como relleno de botón.
 - Cifras tabulares en toda cantidad, existencia o total.
 - Densidad elegida por contexto: Inventario denso para monitor, Principal holgada para pulgar.
-- Plano en reposo; la elevación solo aparece cuando algo de verdad flota (modal, barra fija).
+- Elevación en escala de cuatro pasos, todas de dos capas, y se gana: sólo la tienen los
+  objetos que descansan o flotan, nunca una fila ni una sección.
+- Radios anidados: cuanto mayor la caja, mayor su radio, para que las curvas se vean
+  concéntricas.
 - Sin webfont: la tipografía del sistema, porque esto corre en un almacén.
 
 ## 2. Colors
@@ -200,7 +229,8 @@ resolución en sRGB, no una segunda fuente de verdad.
 - **Superficie** (`oklch(99.6% 0.0015 338)` → #fefdfe): la hoja, el modal, la fila de tabla.
   Se separa del papel por tono, no por sombra.
 - **Papel Hundido** (`oklch(96.2% 0.005 338)` → #f5f1f4): cabecera de tabla, fila inactiva,
-  fondo de control secundario.
+  fondo de control secundario y la columna de marca del acceso. En los cuatro casos hace el
+  mismo trabajo: separar lo que se lee de lo que se opera, por tono y no por sombra.
 - **Filete** (`oklch(91.2% 0.006 338)` → #e5e0e3) y **Filete Fuerte**
   (`oklch(84.5% 0.009 338)` → #d0cace): los divisores de 1px que llevan toda la estructura.
 - **Borde de Control** (`oklch(64.5% 0.013 338)` → #938b90): el borde de inputs y selects.
@@ -210,7 +240,43 @@ resolución en sRGB, no una segunda fuente de verdad.
   (`oklch(52.8% 0.016 338)` → #72686e): texto secundario y terciario. La tenue está calculada
   al filo: 4.80:1 sobre papel hundido, que es su fondo más oscuro. No aclararla.
 
+### Sobre tinta
+
+Siete tokens que sólo existen dentro de una superficie oscura: la barra superior y la columna
+de marca del acceso. **Ninguno de los colores de papel vale ahí** —están medidos contra papel
+y sobre tinta se caen—, así que esto no es una paleta alternativa: es la misma medida repetida
+contra el otro fondo. Los contrastes de abajo están medidos contra `--tinta-panel`.
+
+- **Panel de Tinta** (`oklch(21.5% 0.023 338)` → #21151d): la superficie. Un pelo más clara
+  que Tinta de Imprenta a propósito — el texto y el botón primario invertido necesitan un
+  fondo que no sea su mismo valor.
+- **Panel Alto** (`oklch(27% 0.025 338)` → #2f222b): el hover de lo que se pulsa ahí dentro.
+- **Filete de Tinta** (`oklch(34% 0.025 338)` → #41333c): el divisor. 1.48:1 — es decorativo
+  y no pretende otra cosa.
+- **Borde de Control sobre Tinta** (`oklch(52% 0.02 338)` → #71656d): el borde del botón
+  "Salir", el único control con borde que vive sobre tinta. 3.18:1, porque WCAG 1.4.11 pide
+  3:1 en el borde que es la única señal de que algo se pulsa. Va aparte del filete por
+  exactamente la misma razón que `--borde-control` en el papel.
+- **Sobre Tinta** (16.16:1), **Suave** (10.06:1) y **Tenue** (6.33:1): la escala de texto.
+- **Morado Claro** (`oklch(76% 0.145 338)` → #eb8bd1): el morado de marca **no sirve sobre
+  tinta** — mide 2.4:1 y desaparece. Éste es el mismo tono subido de luminosidad hasta
+  7.69:1, y hace los mismos trabajos que su hermano oscuro: la regla de sección, el subrayado
+  de la pantalla actual y el anillo de foco.
+
 ### Named Rules
+
+**La Regla del Contexto que se Declara.** Un componente que puede vivir sobre papel Y sobre
+tinta no lleva sus colores escritos dentro: los lee de variables que la superficie redefine.
+Hoy son cuatro — `--color-foco` y los tres `--btn-primario-*`. El coste de saltársela ya se
+pagó una vez: al pasar la barra a tinta, "Imprimir y descontar" —un `.btn--primario`, es
+decir, fondo de tinta— se volvió **invisible** sobre el fondo de tinta de la barra. El botón
+seguía ahí; sólo se leía su rótulo. Con tokens, la barra declara su inversión una vez y
+cualquier primario que caiga dentro se ajusta solo.
+
+Corolario, también aprendido a golpes: quien saque un elemento de una superficie oscura
+**visualmente** sin sacarlo del DOM tiene que devolver los tokens a mano. Es lo que hace
+`.btn-imprimir` por debajo de 1060px, cuando se va al pulgar con `position: fixed` pero sigue
+siendo hijo de la barra.
 
 **La Regla del Acento Escaso.** El morado ocupa ≤10% de píxeles de cualquier pantalla. Si en
 una captura el morado se lee como "el color de la app", está mal aplicado: el color de la
@@ -222,6 +288,18 @@ precisamente porque nada más lo lleva.
 
 **La Regla del Blanco Prohibido.** Ni #000 ni #fff aparecen en este sistema. Todo neutro está
 tintado al tono 338. Si un valor sale en gris puro, viene de código viejo.
+
+### Radios anidados
+
+La escala es una **progresión**, no un valor único: `sm 4` (badge, chip) → `md 7` (botón,
+campo, control) → `lg 12` (contenedor con superficie) → `xl 16` (hoja, modal, panel de
+acceso). Un control de 7px dentro de una hoja de 16px se ve concéntrico; los dos al mismo
+valor hacen que la hoja parezca una caja con las esquinas limadas.
+
+El sistema tenía antes un techo de 8px "para no parecer una app de consumo". El techo estaba
+mal puesto: lo que abarata una interfaz es el radio grande en el CONTROL, no en la superficie
+que lo contiene. Un botón de 16px parece un juguete; una hoja de 16px con botones de 7px
+dentro parece material.
 
 ## 3. Typography
 
@@ -265,33 +343,90 @@ está prohibido; el peso y la escala ya llevan toda la jerarquía que hace falta
 
 ## 4. Elevation
 
-**Plano en reposo.** La profundidad la dan tono y filete, no sombra. Una fila de tabla se
-distingue de su cabecera porque la cabecera es papel hundido y hay una línea entre ellas, no
-porque la fila esté "levantada". Las secciones se separan con un filete de 1px y espacio.
-Esto es deliberado: la sombra difusa bajo cada bloque es exactamente lo que hace que un
-panel de administración parezca una plantilla de 2015.
+**La elevación se gana, no se reparte.** Filas, celdas y secciones van planas: las separa el
+filete y el tono, no la sombra. Una fila de tabla se distingue de su cabecera porque la
+cabecera es papel hundido y hay una línea entre ellas, no porque esté "levantada". La sombra
+difusa bajo CADA bloque es exactamente lo que hace que un panel de administración parezca una
+plantilla de 2015, y eso no ha cambiado.
 
-La sombra queda para lo que de verdad flota sobre el contenido: el modal, la barra de acción
-fija, y la hoja imprimible (que representa un papel físico sobre un escritorio).
+Lo que cambió: **un contenedor con superficie propia sí llega al nivel 2.** Antes iba
+completamente plano, y el resultado no era sobriedad: era un rectángulo dibujado encima del
+papel. Papel (98.2% L) y superficie (99.6% L) se diferencian en 1.4%, y un filete de 1px no
+basta para que eso se lea como un objeto. El nivel 2 no lo hace flotar; lo apoya.
+
+**Todas las sombras son de dos capas**, y ésa es la diferencia entre material y mancha: una
+capa de contacto corta y opaca que ancla el objeto al plano, más una difusa y larga que le da
+el aire. Con una sola capa siempre se acaba viendo el rectángulo gris debajo.
 
 ### Shadow Vocabulary
 
-- **Fija** (`0 -1px 0 var(--filete), 0 -8px 24px oklch(20.5% 0.021 338 / .05)`): la barra de
-  acción pegada al borde inferior en móvil. El filete hace el trabajo; la sombra solo evita
-  que el contenido parezca cortado.
-- **Hoja** (`0 1px 2px oklch(20.5% 0.021 338 / .04), 0 8px 24px oklch(20.5% 0.021 338 / .05)`):
-  el formato de Orden del día en pantalla. Desaparece por completo en `@media print`.
-- **Modal** (`0 16px 48px oklch(20.5% 0.021 338 / .22)`): los diálogos. Sombra franca,
-  porque tapar el fondo es su función.
+Una escala numerada de cuatro pasos. El CSS de las pantallas usa los ALIAS con nombre y no los
+números: nombran la intención ("esto es una hoja"), no una medida.
+
+| Nivel | Para qué | Quién lo usa |
+|---|---|---|
+| `--sombra-1` | El roce mínimo. Reservado. | — |
+| `--sombra-2` | Lo que **descansa** sobre el papel. | Barra superior, contenedor de tabla, panel de Selección |
+| `--sombra-3` = **Hoja** | Un papel suelto sobre el escritorio. | Formato de Orden del día, hoja de acceso |
+| `--sombra-4` = **Modal** | Lo que **flota** y tapa. | Los cuatro diálogos, el botón fijo al pulgar |
+
+Más **Fija** (`0 -1px 0 var(--filete)` y una difusa hacia arriba), que es su propio caso: la
+barra de acción pegada al borde inferior en móvil. Ahí el filete hace el trabajo y la sombra
+sólo evita que el contenido parezca cortado.
+
+La sombra Hoja desaparece por completo en `@media print`, igual que el radio y el borde: un
+papel real no tiene las esquinas redondeadas.
 
 ### Named Rules
 
-**La Regla de Nada Flota.** Contenedores, secciones, filas y tarjetas van sin sombra. Si un
-elemento necesita sombra para leerse como grupo, el problema es que le falta filete o espacio.
-Prueba de auditoría en una frase: si al quitar todas las sombras la jerarquía sigue clara,
-las sombras sobraban — y en esta interfaz sobran en todas partes menos en tres.
+**La Regla de la Elevación Ganada.** Secciones, filas y celdas van sin sombra, siempre. Un
+contenedor con superficie propia puede llegar al nivel 2, y a ninguno más. Si un elemento
+necesita sombra para leerse como GRUPO, lo que le falta es filete o espacio: la sombra dice
+que algo está en otro plano, no que unas cosas van juntas.
 
-## 5. Components
+Prueba de auditoría en una frase: cuenta las sombras de una pantalla. Si pasan de tres,
+alguna está agrupando en vez de elevar.
+
+**La Regla de las Dos Capas.** Ninguna sombra del sistema es de una sola capa. Una sombra
+suelta y difusa se ve como una mancha gris debajo de la caja; lo que la convierte en material
+es la capa de contacto de 1–8px que la ancla al plano.
+
+## 5. Motion
+
+**Todo movimiento informa de un cambio de estado. Ninguno entretiene.** Cuatro duraciones y
+una sola curva —`cubic-bezier(.25, 1, .5, 1)`, un ease-out-quart— para que todo el sistema
+tenga el mismo ritmo. Sin rebote ni elástico: esto es una herramienta de trabajo.
+
+| Token | Valor | Para qué |
+|---|---|---|
+| `--dur-pulsado` | 80ms | El hundido de un botón bajo el dedo |
+| `--dur-rapida` | 120ms | Cambios pequeños de color |
+| `--dur-media` | 180ms | Hover, foco, transiciones de estado |
+| `--dur-lenta` | 260ms | Entrada de modal y diálogo |
+
+**El hundido al pulsar** (`transform: scale(.97)` en `:active`) es la única respuesta táctil
+del sistema y está en la primitiva `.btn`, así que la heredan los botones de las cinco
+pantallas. Va en `transform` y no en `padding` ni en `top` a propósito: escala sobre su
+propio centro y no mueve nada de alrededor, de modo que una fila de botones no tiembla cuando
+se pulsa uno. El `.97` está medido sobre el objetivo táctil de 44px — por debajo se percibe
+como un salto, por encima no se percibe.
+
+Los 80ms no son un número redondo elegido al azar: por encima de ~100ms la respuesta deja de
+sentirse causada por el dedo y empieza a sentirse como una animación que le sigue.
+
+### Named Rules
+
+**La Regla del Estado que Sobrevive.** El bloque `prefers-reduced-motion` de `base.css` anula
+todas las duraciones, y eso NO desactiva el hundido: lo que anula es el tiempo que tarda, no
+el estado en sí. Quien pide menos movimiento sigue necesitando saber que su pulsación llegó.
+Al escribir una interacción nueva, separa siempre las dos cosas — el estado se queda, la
+transición se va.
+
+**La Regla de la Animación que se Gana.** Sólo hay dos animaciones con `@keyframes` en todo
+el proyecto, y las dos son la entrada de un modal. Cualquier tercera tiene que justificar qué
+cambio de estado está explicando.
+
+## 6. Components
 
 ### Buttons
 
@@ -309,10 +444,19 @@ las sombras sobraban — y en esta interfaz sobran en todas partes menos en tres
 
 ### Cards / Containers
 
-No hay tarjetas. Las secciones se delimitan con un filete superior o inferior de 1px y
-espacio vertical de la escala. El único contenedor con superficie propia y radio es la
-**hoja** de Orden del día (8px, sombra Hoja) y el **modal** (8px, sombra Modal). Las tarjetas
-anidadas están prohibidas y no existe ningún caso que las necesite.
+No hay tarjetas, y una sección nunca es una caja. Las secciones se delimitan con un filete
+superior o inferior de 1px y espacio vertical de la escala. Las tarjetas anidadas están
+prohibidas y no existe ningún caso que las necesite.
+
+Los contenedores con superficie propia son cinco, y cada uno con su nivel:
+
+| Contenedor | Radio | Sombra |
+|---|---|---|
+| Contenedor de tabla (Inventario, Cuentas) | 12px | nivel 2 |
+| Panel de Selección (Principal, escritorio) | 12px | nivel 2 |
+| Hoja de Orden del día | 16px | Hoja |
+| Hoja de acceso | 16px | Hoja |
+| Modal / diálogo | 16px | Modal |
 
 "Recibir devolución", en Inventario, es el caso de prueba de esta regla: es una sección con
 su propio título, formulario, panel de resultado y aviso, y aun así **no lleva caja**. Se
@@ -322,14 +466,33 @@ sola fila —rótulo y ayuda a la izquierda, campo y botón a la derecha—, no 
 trabajo principal de esa pantalla es el catálogo, y apilada se llevaba el tercio superior de
 la ventana antes de que se viera un producto.
 
-**Las dos cajas con superficie que sí existen, y por qué no contradicen la regla.** El panel
-de Selección (Principal, sólo en escritorio) y el contenedor de la tabla (Inventario y
-Cuentas) llevan superficie, radio de 8px y filete de 1px — pero **ninguna lleva sombra**: no
-flotan, se separan del papel por tono. Hubo una tercera, la tarjeta de rol de Cuentas, y se
-fue con la rejilla de roles que la pantalla ya no tiene; llevaba `--sombra-hoja`, que es la
-del papel sobre el escritorio, y se le había quitado por esta misma regla. Si a alguna de las
-dos que quedan le hace falta sombra para leerse como grupo, lo que le falta es filete o
-espacio.
+**La hoja de acceso es la excepción con nombre.** El login es la única pantalla que se sirve
+sin sesión y la única que no tiene nada alrededor contra lo que apoyarse: un filete de 1px
+sobre papel casi del mismo tono no llega a leerse como objeto cuando es lo ÚNICO que hay en
+la ventana. Por eso lleva sombra Hoja —la del papel impreso, no la de modal— y por eso la
+lleva **una sola caja**: la hoja entera, con sus dos columnas dentro. Partirla en dos
+tarjetas, una de marca y otra de formulario, añadiría una segunda superficie flotante y
+convertiría la excepción en costumbre.
+
+Dentro, la columna de marca va **en tinta** — la misma superficie que la barra superior de
+las otras cuatro pantallas — y la del formulario en papel. No hace falta filete entre ellas:
+las separa el salto de superficie. Las tres líneas de uso las abre un rótulo con la regla de
+morado CLARO debajo (el de papel no se vería sobre tinta), el mismo gesto que `.titulo-area`
+en la Principal, no uno nuevo. Se probó una franja vertical de 2px a la izquierda de la lista
+y se descartó por el Don't del `border-left` de color: la salida que ese Don't propone es
+precisamente el rótulo. En el teléfono el rótulo, las tres líneas y la nota de la bitácora no
+se sirven — empujarían el formulario, que es a lo que se viene, por debajo del pliegue.
+
+**Las dos cajas de nivel 2, y por qué ya no van planas.** El panel de Selección (Principal,
+sólo en escritorio) y el contenedor de la tabla (Inventario y Cuentas) llevan superficie,
+radio de 12px, filete de 1px y sombra de nivel 2. Iban completamente planos, y ahí el sistema
+se equivocaba en la dirección contraria a la habitual: papel y superficie se diferencian en
+1.4% de luminosidad, así que sin sombra esas cajas no se leían como objetos apoyados sino
+como rectángulos dibujados sobre el papel. El nivel 2 no las hace flotar.
+
+Hubo una tercera, la tarjeta de rol de Cuentas, y se fue con la rejilla de roles que la
+pantalla ya no tiene. Llevaba sombra Hoja, que es dos niveles por encima de lo que le tocaba:
+una tarjeta dentro de una rejilla no es un papel suelto sobre el escritorio.
 
 ### Diálogo de confirmación
 
@@ -354,14 +517,42 @@ equivocado es el error que ningún diálogo genérico atrapa.
 - **Etiqueta:** siempre visible o `visualmente-oculto` con `for`; nunca solo placeholder.
 - **Foco:** el borde pasa a morado Ok y se añade un anillo de 3px al 30%. `outline: none`
   solo cuando hay sustituto visible, nunca a secas.
-- **Error:** borde rojo de corrección más texto bajo el campo. El color nunca va solo.
+- **Error:** borde rojo de corrección más texto bajo el campo. El color nunca va solo, y el
+  foco se lleva al campo que hay que corregir: sin eso, tras un fallo el foco se queda en el
+  botón de enviar y quien navega con teclado tiene que volver a subir a ciegas.
+- **Ver / ocultar contraseña:** botón de icono de 44px DENTRO de la caja del campo, con el
+  padding derecho del input reservándole el hueco. Va dentro y no en la fila de la etiqueta
+  porque ahí los 44px de objetivo táctil harían la fila tan alta como el propio campo.
+  Alterna `type` en su sitio —dos `<input>` distintos le enseñarían al gestor de contraseñas
+  dos credenciales en la misma página—, lleva `aria-pressed`, cambia su `aria-label`, y
+  cuando está pulsado se pinta en morado: la contraseña a la vista es un estado, y el estado
+  es uno de los cuatro trabajos del morado.
 
 ### Navigation
 
 Una barra superior compartida por las cuatro pantallas: marca a la izquierda, enlaces a la
-derecha. Fondo superficie, filete inferior de 1px, sin sombra. El enlace de la pantalla
-actual va en tinta de imprenta con peso 600 y una regla de 2px en morado bajo el texto; los
-demás en tinta tenue con peso 500.
+derecha. **Va en tinta** (`--tinta-panel`), con sombra de nivel 2 y sin filete inferior — la
+sombra ya la separa del papel. El enlace de la pantalla actual va en `--sobre-tinta` con peso
+600 y una regla de 2px en **morado claro** bajo el texto; los demás en `--sobre-tinta-tenue`
+con peso 500, y su hover pasa a Panel Alto.
+
+**El porqué de la tinta.** Esta barra no es contenido, es el mueble donde se apoya el
+contenido. En superficie clara competía con el papel que tiene debajo —dos blancos casi
+iguales separados por una raya de 1px— y no se leía como otra capa. Es además la MISMA
+superficie que la columna de marca del acceso, y eso hace que el login y la aplicación se
+lean como un solo producto: la tinta que estaba a la izquierda al entrar se queda arriba al
+pasar.
+
+Tres cosas que arrastra ese cambio, y que hay que respetar al editarla:
+
+- **El primario se invierte dentro** (papel sobre tinta), vía los tokens `--btn-primario-*`.
+  Ver "La Regla del Contexto que se Declara".
+- **El anillo de foco pasa a morado claro** (`--color-foco`), porque el de papel mide 2.4:1
+  sobre tinta y WCAG 1.4.11 pide 3:1 en un indicador de foco.
+- **El alto no cambia.** `--alto-barra` son 60px, y el `thead` pegajoso de Inventario y el
+  panel de Selección de la Principal se paran justo debajo de ese número.
+
+`@media print` la oculta entera, así que la tinta nunca llega al papel ni gasta un cartucho.
 
 **En móvil el nav baja a una fila propia, y sigue sin colapsarse en un menú.** La regla
 original decía "son dos, y esconderlos detrás de una hamburguesa costaría un toque de más".
@@ -464,12 +655,16 @@ pestaña no tenía forma de saber si el material ya había salido del almacén, 
 "Imprimir y descontar" en los dos casos. Al aplicarse la orden, esta línea se esconde: ahí
 habla el recuadro verde, que dice algo distinto y más importante.
 
-## 6. Do's and Don'ts
+## 7. Do's and Don'ts
 
 ### Do:
 
 - **Do** usar tinta de imprenta (`oklch(20.5% 0.021 338)`) como fondo del botón primario, y
   morado Ok solo en regla de sección, estado seleccionado, foco y enlaces.
+- **Do** leer el color de un token cuando el componente pueda caer sobre papel o sobre tinta
+  (`--color-foco`, `--btn-primario-*`), en vez de escribirlo dentro del componente.
+- **Do** usar el morado CLARO sobre superficie oscura: el de papel mide 2.4:1 ahí.
+- **Do** subir el radio con el tamaño de la caja: control 7px, contenedor 12px, hoja 16px.
 - **Do** separar secciones con un filete de 1px y espacio de la escala.
 - **Do** poner `font-variant-numeric: tabular-nums` en toda cantidad.
 - **Do** mantener 44×44 px de objetivo táctil y `font-size: 16px` en inputs.
@@ -485,12 +680,17 @@ habla el recuadro verde, que dice algo distinto y más importante.
 - **Don't** volver al **panel de admin genérico tipo Bootstrap**: nada de botones
   azul/verde/rojo saturados en la misma fila, tabla rayada, ni badges de colores por todas
   partes.
-- **Don't** derivar hacia una **app de consumo llamativa**: nada de ilustraciones, esquinas
-  por encima de 8px, ni animación decorativa.
+- **Don't** derivar hacia una **app de consumo llamativa**: nada de ilustraciones, ni
+  animación decorativa, ni radios de contenedor en un control — un botón de 16px parece un
+  juguete. El techo por elemento lo fija la escala de radios anidados, no un número único.
 - **Don't** usar `border-left` o `border-right` de más de 1px como franja de color en
   tarjetas, filas o avisos. Nunca es intencional; se resuelve con fondo lavado o con rótulo.
 - **Don't** usar `background-clip: text` con degradado. Jamás.
-- **Don't** poner sombra a un contenedor, sección o fila. Solo modal, barra fija y hoja.
+- **Don't** poner sombra a una sección, fila o celda. Un contenedor con superficie propia
+  llega al nivel 2 y a ninguno más; el resto de la escala es para lo que descansa o flota.
+- **Don't** escribir una sombra de una sola capa. Todas las del sistema son de dos.
+- **Don't** poner un color de papel sobre tinta ni al revés sin volver a medirlo: las dos
+  escalas están calculadas contra su propio fondo y ninguna vale en el otro.
 - **Don't** usar #000 ni #fff.
 - **Don't** atenuar con `opacity` lo que debe seguir siendo legible; usar un token de texto
   medido.

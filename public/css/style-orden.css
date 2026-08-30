@@ -60,6 +60,13 @@ body {
     bottom: var(--esp-4);
     z-index: var(--z-barra);
     box-shadow: var(--sombra-modal);
+    /* Sale visualmente de la barra pero sigue siendo su hijo en el DOM, así
+       que heredaría el primario INVERTIDO que la barra declara para su fondo
+       de tinta — y aquí abajo el fondo es papel: saldría un botón blanco
+       sobre blanco. Se devuelven los tres tokens a sus valores de papel. */
+    --btn-primario-fondo:       var(--tinta-fuerte);
+    --btn-primario-tinta:       var(--superficie);
+    --btn-primario-fondo-hover: var(--tinta);
   }
 
   /* Hueco para que el botón fijo no tape la firma de la hoja. */
@@ -207,7 +214,10 @@ body {
   padding: clamp(var(--esp-5), 5vw, var(--esp-7)) clamp(var(--esp-4), 6vw, var(--esp-7));
   background-color: var(--superficie);
   border: 1px solid var(--filete);
-  border-radius: var(--radio-lg);
+  /* Radio XL: es la caja más grande de la pantalla y representa un papel
+     físico. El @media print de abajo lo devuelve a 0 — un papel real no tiene
+     las esquinas redondeadas. */
+  border-radius: var(--radio-xl);
   box-shadow: var(--sombra-hoja);
   color: var(--tinta-fuerte);
 }
