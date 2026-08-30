@@ -1,12 +1,12 @@
 // Sesión en el frontend: quién eres, cómo salir, y qué pasa cuando caduca.
 //
 // Lo cargan las TRES pantallas de la aplicación, y siempre PRIMERO, antes que
-// logica.js / edit.js / orden.js. El orden importa: este archivo envuelve
+// principal.js / inventario.js / orden.js. El orden importa: este archivo envuelve
 // `window.fetch`, y sólo cubre a quien pida después de que la envoltura esté
 // puesta.
 //
 // EN IIFE POR OBLIGACIÓN, igual que devolucion.js. Los classic scripts comparten
-// el ámbito global: `edit.js` y `logica.js` declaran los dos `const buscarInput`
+// el ámbito global: `inventario.js` y `principal.js` declaran los dos `const buscarInput`
 // en el nivel superior, así que repetir aquí un nombre suyo no rompería una
 // línea, rompería el archivo entero al parsear — antes de ejecutar nada.
 (() => {

@@ -1,5 +1,5 @@
 // Lógica de la pantalla "Orden del Día" (formato imprimible).
-// Lee la selección hecha en index.html desde sessionStorage, arma el
+// Lee la selección hecha en principal.html desde sessionStorage, arma el
 // formato agrupado por área y controla la impresión + descuento real
 // de inventario contra la API.
 //
@@ -109,7 +109,7 @@
     return Number.isSafeInteger(numero) && numero > 0 ? numero : null;
   }
 
-  // Mismo contrato que la Principal (logica.js): quien escribe la selección
+  // Mismo contrato que la Principal (principal.js): quien escribe la selección
   // borra `ordenAplicada` Y `ordenId`. Si las líneas cambian, la orden es otra y
   // su descuento sigue pendiente; dejar la marca en "true" haría imprimir papel
   // por material que nunca se descontó, y dejar el número haría que el papel

@@ -6,13 +6,13 @@
    porque su usuario está de pie con el pulgar. La misma tabla no sirve para
    los dos, y por eso aquí la escala baja a --texto-sm.
 
-   Contrato con edit.js — no renombrar, lo emite el JS:
+   Contrato con inventario.js — no renombrar, lo emite el JS:
      .no-results, .no-results--error, .fila-inactiva, .badge,
      .badge-activo, .badge-inactivo, .actions, .btn-action,
      .btn-detail, .btn-edit, .btn-toggle, .btn-delete
    Y los 3 modales se abren con `style.display = 'flex'` inline desde el JS,
    así que .modal se queda en `display:none` y deja que el inline gane. No
-   migrar a clases: son 8 puntos de edit.js.
+   migrar a clases: son 8 puntos de inventario.js.
    ============================================================================ */
 
 /* La barra superior lee esta variable, así que la tabla y la barra comparten
@@ -500,7 +500,7 @@
 
 /* ============================================================================
    MODALES
-   `display:none` es contrato con edit.js. El centrado queda preparado para
+   `display:none` es contrato con inventario.js. El centrado queda preparado para
    cuando el JS ponga `display:flex` inline.
    ============================================================================ */
 
@@ -516,7 +516,7 @@
 }
 
 /* El fondo oscuro DEBE seguir siendo .modal y el contenido un hijo menor:
-   edit.js cierra comparando `e.target === modal`. Si .modal-content cubriera
+   inventario.js cierra comparando `e.target === modal`. Si .modal-content cubriera
    todo el overlay, el cierre al pulsar fuera dejaría de funcionar. */
 .modal-content {
   width: min(100%, 460px);

@@ -5,7 +5,7 @@
   <title>Elegir material — Ok-producciones</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="/css/base.css">
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/principal.css">
 </head>
 
 <body>
@@ -20,7 +20,7 @@
       <nav class="barra-app__nav" aria-label="Principal">
         <a class="barra-app__enlace" href="/" aria-current="page">Elegir</a>
         <a class="barra-app__enlace" href="/html/inventario.html">Inventario</a>
-        <a class="barra-app__enlace" href="/html/orden_del_dia.html">Orden del día</a>
+        <a class="barra-app__enlace" href="/html/orden.html">Orden del día</a>
       </nav>
     </div>
   </header>
@@ -64,7 +64,7 @@
         <div class="buscador">
           <div class="buscador__campo">
             <label class="visualmente-oculto" for="buscar">Buscar producto</label>
-            <!-- SVG en línea, como los iconos de edit.js: sin build step y sin
+            <!-- SVG en línea, como los iconos de inventario.js: sin build step y sin
                  depender de la red para dibujarse. aria-hidden porque la
                  etiqueta del campo ya dice lo que hace. -->
             <svg class="buscador__lupa" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -78,11 +78,11 @@
           <p class="buscador__conteo cifra" id="conteoResultados" role="status"></p>
         </div>
 
-        <!-- logica.js monta aquí un botón por área existente. Vacío hasta que
+        <!-- principal.js monta aquí un botón por área existente. Vacío hasta que
              responda la API: no hay lista de áreas escrita a mano. -->
         <div class="filtros" id="filtrosArea" role="group" aria-label="Filtrar por área"></div>
 
-        <!-- logica.js monta aquí .grupo-area > .rejilla-productos > .producto -->
+        <!-- principal.js monta aquí .grupo-area > .rejilla-productos > .producto -->
         <div id="resultados" class="resultados"></div>
       </div>
 
@@ -94,7 +94,7 @@
           </div>
           <p id="listaVacia" class="lista__vacia">Todavía no has elegido nada.</p>
           <ul id="lista" class="lista__items"></ul>
-          <a id="ctaOrden" href="/html/orden_del_dia.html"
+          <a id="ctaOrden" href="/html/orden.html"
              class="btn btn--primario panel-seleccion__cta" hidden>Ver orden del día</a>
           <!-- El botón dice "Ver", que suena a mirar; detrás hay un descuento
                que no se deshace. Se avisa aquí, no sólo en el diálogo. -->
@@ -118,13 +118,13 @@
         <span data-resumen></span>
         <span class="barra-seleccion__nota">Se descuenta al imprimir</span>
       </p>
-      <a href="/html/orden_del_dia.html" class="btn btn--primario">Ver orden del día</a>
+      <a href="/html/orden.html" class="btn btn--primario">Ver orden del día</a>
     </div>
   </div>
 
   <!-- sesion.js va PRIMERO: envuelve fetch para tratar la sesión caducada, y
        sólo cubre lo que se pida después de estar cargado. -->
   <script src="/js/sesion.js"></script>
-  <script src="/js/logica.js"></script>
+  <script src="/js/principal.js"></script>
 </body>
 </html>

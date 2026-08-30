@@ -2,13 +2,13 @@
    Pantalla "Cuentas y roles" (centro de gestión del superadministrador).
    Requiere base.css antes.
 
-   Por qué esta hoja existe en vez de reutilizar style-inventario.css, que ya
+   Por qué esta hoja existe en vez de reutilizar inventario.css, que ya
    trae .table y .modal: aquella tiene reglas atadas al ORDEN de las columnas
    del inventario — td:nth-child(4) trunca la descripción, td:nth-child(6)
    alinea la cantidad a la derecha— y aquí esas posiciones son otras cosas. El
    resultado sería una tabla con la columna equivocada truncada. Cada pantalla
-   con su hoja es además lo que ya hacen style.css, style-inventario.css y
-   style-orden.css.
+   con su hoja es además lo que ya hacen principal.css, inventario.css y
+   orden.css.
 
    Densidad: la del inventario. Quien mira esto está sentado, no de pie con el
    pulgar, así que la escala baja a --texto-sm igual que allí.
@@ -193,7 +193,7 @@
    aplicaciones de consumo que este diseño rechaza por su nombre.
 
    Sólo se declaran las dos variantes de color, con los mismos valores que
-   style-inventario.css.
+   inventario.css.
 
    "De baja" NO es un error: es un estado normal. Por eso va en neutro y no en
    rojo — el rojo de este sistema es exclusivo de lo irreversible. */

@@ -528,7 +528,7 @@ app.get('/login', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  enviarPantalla(res, 'index.html');
+  enviarPantalla(res, 'principal.html');
 });
 
 // ---------------------------------------------------------------------------

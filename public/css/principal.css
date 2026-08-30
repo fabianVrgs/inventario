@@ -2,7 +2,7 @@
    Pantalla principal: elegir qué material sale hoy y en qué cantidad.
    Requiere base.css cargado antes (tokens, reset, primitivas).
 
-   Contrato con logica.js — no renombrar, lo emite el JS:
+   Contrato con principal.js — no renombrar, lo emite el JS:
      .grupo-area, .titulo-area, .rejilla-productos, .producto,
      .producto--elegido, .producto__info, .producto__nombre, .producto__marca,
      .producto__meta, .producto__disponible, .contador, .contador__btn,
@@ -159,7 +159,7 @@ body {
 
 /* ---------- Filtro por área ----------
    El catálogo ya venía agrupado por área, pero para llegar a la última había
-   que recorrer todas las de arriba. Los rótulos los emite logica.js a partir
+   que recorrer todas las de arriba. Los rótulos los emite principal.js a partir
    de las áreas que existen: no hay lista escrita a mano en ningún sitio. */
 
 .filtros {
@@ -210,7 +210,7 @@ body {
 }
 
 /* ---------- Resultados ----------
-   Estructura que monta logica.js:
+   Estructura que monta principal.js:
      #resultados > section.grupo-area > h3.titulo-area + ul.rejilla-productos
                                                           > li.producto */
 

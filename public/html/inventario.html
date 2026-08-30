@@ -5,7 +5,7 @@
   <title>Inventario — Ok-producciones</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="/css/base.css" />
-  <link rel="stylesheet" href="/css/style-inventario.css" />
+  <link rel="stylesheet" href="/css/inventario.css" />
 </head>
 
 <body>
@@ -20,7 +20,7 @@
     <nav class="barra-app__nav" aria-label="Principal">
       <a class="barra-app__enlace" href="/">Elegir</a>
       <a class="barra-app__enlace" href="/html/inventario.html" aria-current="page">Inventario</a>
-      <a class="barra-app__enlace" href="/html/orden_del_dia.html">Orden del día</a>
+      <a class="barra-app__enlace" href="/html/orden.html">Orden del día</a>
     </nav>
   </div>
 </header>
@@ -32,7 +32,7 @@
     <p class="cabecera-pantalla__sub">Catálogo completo, incluido lo desactivado.</p>
   </div>
 
-  <!-- Qué hay en el catálogo, en una frase. Lo rellena edit.js tras cargar los
+  <!-- Qué hay en el catálogo, en una frase. Lo rellena inventario.js tras cargar los
        productos; hasta entonces no ocupa sitio. Es una línea de texto y no una
        rejilla de tarjetas con cifrones: ese es exactamente el tablero que este
        sistema visual rechaza. -->
@@ -78,7 +78,7 @@
     </div>
   </div>
 
-  <!-- TABLA: edit.js rellena #tablaInventario -->
+  <!-- TABLA: inventario.js rellena #tablaInventario -->
   <div class="table-container">
     <table class="table">
       <thead>
@@ -87,7 +87,7 @@
           <!-- Dos columnas ordenables: por nombre para encontrar algo, por
                cantidad para ver qué se está acabando. El <button> es lo que
                hace que se llegue con el tabulador; `aria-sort` lo pone y lo
-               quita edit.js sobre el <th>, que es donde lo espera ARIA. -->
+               quita inventario.js sobre el <th>, que es donde lo espera ARIA. -->
           <th scope="col" aria-sort="ascending">
             <button type="button" class="orden" data-ordenar="nombre">
               Nombre
@@ -175,7 +175,7 @@
     <!-- Las acciones del producto viven también aquí, y no sólo en la fila.
          En el teléfono son las ÚNICAS: allí la fila deja un solo botón —el que
          abre esta ventana— porque cuatro objetivos de 44px no caben junto al
-         nombre. El rótulo del de activar/desactivar lo pone edit.js según el
+         nombre. El rótulo del de activar/desactivar lo pone inventario.js según el
          estado que tenga el producto. -->
     <div class="detalle__acciones">
       <button type="button" class="btn btn--secundario" id="btnDetalleEditar">Editar</button>
@@ -234,7 +234,7 @@
 <!-- sesion.js va PRIMERO: envuelve fetch para tratar la sesión caducada, y
      sólo cubre lo que se pida después de estar cargado. -->
 <script src="/js/sesion.js"></script>
-<script src="/js/edit.js"></script>
+<script src="/js/inventario.js"></script>
 <script src="/js/devolucion.js"></script>
 </body>
 </html>

@@ -9,7 +9,7 @@
    compartida por las pantallas de la aplicación, y ésta es la única que se
    sirve SIN sesión. Mantenerla aparte deja claro qué CSS ve un desconocido.
 
-   `.form-group` no se reutiliza a propósito: vive en style-inventario.css, que
+   `.form-group` no se reutiliza a propósito: vive en inventario.css, que
    es la hoja de otra pantalla, y cargarla entera aquí traería consigo modales,
    tablas y barras de herramientas que en el login no existen.
 

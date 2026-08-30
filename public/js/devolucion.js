@@ -5,10 +5,10 @@
 // lleva impreso y se repone de una vez TODO lo que salió — la devolución es todo
 // o nada, igual que la salida.
 //
-// Vive en su propio archivo y no dentro de edit.js por dos razones. La primera
-// es que edit.js ya hace cinco cosas. La segunda es de mecánica y es la que
+// Vive en su propio archivo y no dentro de inventario.js por dos razones. La primera
+// es que inventario.js ya hace cinco cosas. La segunda es de mecánica y es la que
 // obliga al IIFE: los classic scripts comparten el ámbito léxico de nivel
-// superior, así que declarar aquí un `const` que ya exista en edit.js rompería
+// superior, así que declarar aquí un `const` que ya exista en inventario.js rompería
 // este archivo ENTERO al parsear, sin más señal que un error en consola.
 //
 // Este archivo NO escribe `ordenSeleccion`, `ordenAplicada` ni `ordenId`.
@@ -367,7 +367,7 @@
       mostrarAviso(mensajeDeExito(datos), tonoDeExito(datos));
 
       // El stock que acaba de subir tiene que verse en la tabla de abajo sin
-      // recargar la página. `cargarProductos` es de edit.js y relee desde la
+      // recargar la página. `cargarProductos` es de inventario.js y relee desde la
       // API, que es el patrón de esa pantalla: nunca mutar el array local.
       if (typeof cargarProductos === "function") await cargarProductos();
 

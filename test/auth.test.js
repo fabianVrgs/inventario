@@ -204,10 +204,48 @@ test('la pantalla de login y sus recursos sí se sirven sin sesión', async () =
 });
 
 test('el resto del JavaScript de la aplicación NO se sirve sin sesión', async () => {
-  for (const ruta of ['/js/edit.js', '/js/logica.js', '/js/orden.js', '/js/sesion.js']) {
+  for (const ruta of ['/js/inventario.js', '/js/principal.js', '/js/orden.js', '/js/sesion.js']) {
     const respuesta = await fetch(`${base}${ruta}`, { redirect: 'manual' });
     assert.equal(respuesta.status, 302, `${ruta} no tiene por qué leerlo un desconocido`);
   }
+});
+
+// El test de arriba comprueba que esos scripts NO se sirven sin sesión, y por sí
+// solo no basta como red: un archivo RENOMBRADO también da 302 —no es público,
+// así que el guardia lo manda al login antes de que nadie mire si existe—. Es
+// decir, pasaría verde con las cinco pantallas rotas. Éste es el complemento:
+// con sesión, cada trío html+css+js tiene que existir de verdad y responder 200.
+test('con sesión, cada pantalla se sirve y sus enlaces resuelven', async () => {
+  const superadmin = await iniciarSesion(base, 'superadmin');
+  const pantallas = [
+    '/',
+    '/html/principal.html',
+    '/html/inventario.html',
+    '/html/orden.html',
+    '/html/cuentas.html',
+  ];
+
+  for (const pantalla of pantallas) {
+    const respuesta = await conCookie(superadmin, pantalla);
+    assert.equal(respuesta.status, 200, `${pantalla} tendría que servirse con sesión`);
+
+    // No basta con que la página exista: hay que SEGUIR sus enlaces. Un
+    // renombrado a medias deja el archivo nuevo en su sitio y el <link> del
+    // HTML apuntando al viejo, y eso da una pantalla en blanco que ningún
+    // 200 delata. Aquí se pide cada hoja y cada script que la página nombra.
+    const html = await respuesta.text();
+    const recursos = [...html.matchAll(/(?:href|src)="(\/(?:css|js)\/[^"]+)"/g)].map((m) => m[1]);
+    assert.ok(recursos.length >= 2, `${pantalla} tendría que enlazar CSS y JS`);
+
+    for (const recurso of new Set(recursos)) {
+      const pedido = await conCookie(superadmin, recurso);
+      assert.equal(pedido.status, 200, `${pantalla} enlaza ${recurso}, que no se sirve`);
+    }
+  }
+
+  // devolucion.js lo carga Inventario, así que ya entra por el bucle. Éste es
+  // el único que no enlaza ninguna pantalla de arriba: lo pide login.html.
+  assert.equal((await conCookie(superadmin, '/js/login.js')).status, 200);
 });
 
 // ---------------------------------------------------------------------------

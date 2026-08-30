@@ -482,7 +482,7 @@ a {
 
    Quien saque un primario de una superficie oscura sin sacarlo del DOM tiene
    que devolver los tokens a mano: es exactamente lo que hace .btn-imprimir en
-   style-orden.css cuando por debajo de 1060px se va al pulgar. */
+   orden.css cuando por debajo de 1060px se va al pulgar. */
 :root {
   --btn-primario-fondo:       var(--tinta-fuerte);
   --btn-primario-tinta:       var(--superficie);
@@ -654,7 +654,7 @@ a {
    + los 44px del enlace, y el thead pegajoso de Inventario y el panel de
    Selección de la Principal se paran justo debajo de ese número.
 
-   @media print la oculta entera (style-orden.css), así que la tinta nunca
+   @media print la oculta entera (orden.css), así que la tinta nunca
    llega al papel ni se come un cartucho. */
 
 .barra-app {
@@ -819,7 +819,7 @@ a {
 
 /* ---- La barra en el teléfono ----------------------------------------------
    Excepción a la convención mobile-first, igual que las columnas que oculta
-   style-inventario.css: esto RESTA (aprieta y reordena lo que ya cabía en
+   inventario.css: esto RESTA (aprieta y reordena lo que ya cabía en
    escritorio), y eso se expresa con max-width.
 
    El comentario de más arriba decía "son dos" enlaces y por eso se envolvían

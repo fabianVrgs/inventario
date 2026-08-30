@@ -51,7 +51,7 @@
 
   const $ = (id) => document.getElementById(id);
 
-  // Mismo escapado que edit.js: lo que teclea una persona no entra en innerHTML
+  // Mismo escapado que inventario.js: lo que teclea una persona no entra en innerHTML
   // sin pasar por aquí. La CSP es la segunda capa, no la primera.
   //
   // Las comillas también: `div.innerHTML` no las escapa, y aquí hay texto de
