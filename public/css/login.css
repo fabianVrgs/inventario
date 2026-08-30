@@ -2,8 +2,8 @@
    login.css — la pantalla de acceso.
 
    Se carga después de base.css, de donde salen TODOS los tokens y las
-   primitivas (.btn, .campo, .cifra). Aquí sólo está lo que no existe en
-   ninguna otra pantalla: centrar una tarjeta en la ventana.
+   primitivas (.btn, .campo, .cifra, .etiqueta-sistema). Aquí sólo está lo que
+   no existe en ninguna otra pantalla.
 
    Por qué una hoja propia y no un bloque en base.css: base.css es la capa
    compartida por las pantallas de la aplicación, y ésta es la única que se
@@ -12,6 +12,25 @@
    `.form-group` no se reutiliza a propósito: vive en style-inventario.css, que
    es la hoja de otra pantalla, y cargarla entera aquí traería consigo modales,
    tablas y barras de herramientas que en el login no existen.
+
+   ---- La hoja sobre el escritorio -------------------------------------------
+   Las dos columnas son las dos mitades de esa metáfora, y no un adorno:
+
+   · La de marca va en --tinta-panel, LA MISMA superficie que la barra superior
+     de las otras cuatro pantallas. Es el escritorio. Quien entra ve la tinta a
+     la izquierda; al pasar, esa misma tinta se queda arriba. Es lo que hace
+     que el login y la aplicación se lean como un solo producto y no como dos.
+   · La del formulario se queda en papel. Es la hoja. Es donde se teclea.
+
+   La sombra la lleva UNA sola caja —la hoja entera, no cada columna—: dos
+   superficies flotando por separado convertirían la excepción en costumbre.
+
+   Sobre tinta hay dos cosas que NO se pueden heredar del papel y por eso se
+   redeclaran abajo: el color del texto (la escala --sobre-tinta-*) y el morado
+   (--marca-clara; el de papel mide 2.4:1 ahí y desaparece). El anillo de foco
+   sale solo, porque la columna redefine --color-foco.
+
+   Lo demás no cambia: tinta para la acción, cero webfont, una sola familia.
    ============================================================================ */
 
 .pagina-login {
@@ -26,57 +45,132 @@
   padding: var(--esp-pagina);
 }
 
-/* Tarjeta: la única de la aplicación que va con sombra sin ser modal ni barra.
-   Es deliberado — aquí no hay nada más en pantalla contra lo que apoyarse, y
-   un filete de 1px sobre papel casi del mismo tono no llega a leerse como
-   objeto. Se usa --sombra-hoja, la de la orden impresa, no la de modal. */
-.acceso__tarjeta {
+/* `overflow: hidden` es obligatorio: sin él, la tinta de la columna de marca
+   se sale por las esquinas del radio y la hoja queda con dos picos cuadrados
+   arriba a la izquierda. Con una columna oscura eso no es un detalle, se ve
+   desde la otra punta de la habitación.
+
+   Radio XL (16px) y no LG: es la caja más grande de todo el sistema, y el
+   radio va con el tamaño. Dentro, los campos siguen en 7px — la progresión
+   anidada es lo que hace que las curvas se vean concéntricas. */
+.acceso__hoja {
   width: 100%;
-  max-width: 380px;
+  max-width: 420px;
+  overflow: hidden;
   background-color: var(--superficie);
   border: 1px solid var(--filete);
-  border-radius: var(--radio-lg);
+  border-radius: var(--radio-xl);
   box-shadow: var(--sombra-hoja);
-  padding: var(--esp-6) var(--esp-5);
 }
 
+/* ----------------------------------------------------------------------------
+   Columna de marca
+   ---------------------------------------------------------------------------- */
+
+/* El escritorio. El `inset 0 1px 0` de arriba es un filo de luz de una sola
+   línea: es lo que hace que una superficie oscura parezca material y no un
+   rectángulo relleno. Al 7% no se ve como raya, se ve como borde biselado. */
 .acceso__marca {
+  --color-foco: var(--marca-clara);
+  padding: var(--esp-5);
+  color: var(--sobre-tinta-suave);
+  background-color: var(--tinta-panel);
+  box-shadow: inset 0 1px 0 oklch(100% 0 0 / .07);
+}
+
+.acceso__lockup {
   display: flex;
   align-items: center;
   gap: var(--esp-3);
-  padding-bottom: var(--esp-5);
-  margin-bottom: var(--esp-5);
-  border-bottom: 1px solid var(--filete);
 }
 
+/* El logo es un JPG con fondo gris texturizado INCRUSTADO: no tiene canal
+   alfa, así que sobre tinta sale como un cuadrado claro se haga lo que se
+   haga. Se declara en vez de disimularse — placa de papel hundido con 3px de
+   margen, que es el tono más parecido al fondo del propio JPG y hace que la
+   costura entre placa e imagen no se vea. Mismo tratamiento que
+   .barra-app__logo, y por la misma razón.
+
+   El día que llegue un logo con transparencia esto se queda en
+   `background: none` y sobra media regla. */
 .acceso__logo {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radio-md);
-  object-fit: cover;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
+  padding: 3px;
+  border-radius: var(--radio-md);
+  background-color: var(--papel-hundido);
+  object-fit: cover;
 }
 
 .acceso__nombre {
-  margin: 0;
   font-size: var(--texto-sm);
   font-weight: var(--peso-fuerte);
   line-height: var(--interlineado-titulo);
-  color: var(--tinta-fuerte);
+  color: var(--sobre-tinta);
 }
 
-.acceso__nombre span {
-  font-weight: var(--peso-normal);
-  color: var(--tinta-tenue);
+/* .etiqueta-sistema ya trae tamaño, peso, tracking y mayúsculas; aquí se la
+   baja a su propia línea y se le cambia el color, porque el suyo
+   (--tinta-tenue) está medido contra papel y sobre tinta mide 1.9:1. */
+.acceso__nombre .etiqueta-sistema {
+  display: block;
+  margin-top: 0.125rem;
+  color: var(--sobre-tinta-tenue);
 }
 
-.acceso__titulo {
-  margin: 0;
-  font-size: var(--texto-headline);
+/* Tamaño de Title, no de Display: el h1 de la pantalla es "Entrar" y tiene que
+   seguir siendo lo más grande que hay. */
+.acceso__lema {
+  margin-top: var(--esp-5);
+  font-size: var(--texto-titulo);
   font-weight: var(--peso-fuerte);
   line-height: var(--interlineado-titulo);
   letter-spacing: var(--tracking-titulo);
-  color: var(--tinta-fuerte);
+  color: var(--sobre-tinta);
+  text-wrap: balance;
+}
+
+/* Rótulo con la regla de marca DEBAJO, exactamente el mismo gesto que abre
+   cada sección de área en la Principal (.titulo-area). Se probó una franja
+   vertical de 2px a la izquierda de la lista y se descartó: DESIGN.md prohíbe
+   por su nombre el `border-left` de color, y la salida que propone es
+   justamente ésta, un rótulo. Reutilizar el gesto que ya existe es además lo
+   que hace que esta pantalla se lea como parte de la aplicación. */
+.acceso__rotulo {
+  display: none;
+  margin-top: var(--esp-6);
+  padding-bottom: var(--esp-2);
+  border-bottom: 2px solid var(--marca-clara);
+  color: var(--sobre-tinta-tenue);
+}
+
+.acceso__usos {
+  display: none;
+  gap: var(--esp-3);
+  margin-top: var(--esp-4);
+  font-size: var(--texto-sm);
+  color: var(--sobre-tinta-suave);
+}
+
+.acceso__nota {
+  display: none;
+  margin-top: var(--esp-5);
+  font-size: var(--texto-etiqueta);
+  line-height: 1.5;
+  color: var(--sobre-tinta-tenue);
+}
+
+/* ----------------------------------------------------------------------------
+   Columna del formulario
+   ---------------------------------------------------------------------------- */
+
+.acceso__panel {
+  padding: var(--esp-5);
+}
+
+.acceso__titulo {
+  font-size: var(--texto-display);
 }
 
 /* Una línea que diga de qué va esto antes de pedir nada. Quien abre esta
@@ -99,8 +193,47 @@
   color: var(--tinta);
 }
 
-.acceso__campo .campo {
-  width: 100%;
+/* ---- Ver / ocultar la contraseña ------------------------------------------
+   El botón se superpone dentro de la caja del campo. El padding derecho del
+   input reserva su hueco: sin él, una contraseña larga se lee por debajo del
+   icono. No se pone --objetivo-tactil a secas porque el borde del input es de
+   1px y el botón tiene que quedar dentro, no encima. */
+.acceso__clave {
+  position: relative;
+}
+
+.acceso__clave .campo {
+  padding-right: calc(var(--objetivo-tactil) + var(--esp-1));
+}
+
+.acceso__ver {
+  position: absolute;
+  top: 50%;
+  right: 1px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--objetivo-tactil);
+  height: var(--objetivo-tactil);
+  border-radius: var(--radio-md);
+  color: var(--tinta-tenue);
+  transition: color var(--dur-media) var(--curva);
+}
+
+.acceso__ver:hover {
+  color: var(--tinta-fuerte);
+}
+
+/* Estado pulsado = la contraseña está a la vista. Va en morado porque es un
+   estado, que es uno de los cuatro trabajos del morado en este sistema. */
+.acceso__ver[aria-pressed='true'] {
+  color: var(--marca-fuerte);
+}
+
+.acceso__ojo {
+  width: 20px;
+  height: 20px;
 }
 
 /* El botón ocupa el ancho: es la única acción de la pantalla y no compite con
@@ -109,6 +242,19 @@
   width: 100%;
   margin-top: var(--esp-2);
   min-height: var(--objetivo-tactil);
+}
+
+/* El aviso NO usa el rojo de --peligro a secas: aquí el mensaje más frecuente
+   es "usuario o contraseña incorrectos", que es un tropiezo normal y no una
+   alarma. El lavado con su texto medido da el contraste sin gritar. */
+.acceso__aviso {
+  margin: var(--esp-4) 0 0;
+  padding: var(--esp-3);
+  border-radius: var(--radio-md);
+  background-color: var(--peligro-lavado);
+  color: var(--peligro-texto);
+  font-size: var(--texto-sm);
+  line-height: var(--interlineado);
 }
 
 /* La salida cuando no se puede entrar. Esta pantalla no tiene registro ni
@@ -125,15 +271,52 @@
   color: var(--tinta-tenue);
 }
 
-/* El aviso NO usa el rojo de --peligro a secas: aquí el mensaje más frecuente
-   es "usuario o contraseña incorrectos", que es un tropiezo normal y no una
-   alarma. El lavado con su texto medido da el contraste sin gritar. */
-.acceso__aviso {
-  margin: var(--esp-4) 0 0;
-  padding: var(--esp-3);
-  border-radius: var(--radio-md);
-  background-color: var(--peligro-lavado);
-  color: var(--peligro-texto);
-  font-size: var(--texto-sm);
-  line-height: var(--interlineado);
+/* ----------------------------------------------------------------------------
+   Escritorio: la hoja se parte en dos.
+
+   1024px y no 640: entre medias hay tablets en vertical donde dos columnas
+   dejarían el formulario en 240px de ancho. La convención del proyecto es
+   mobile-first con cortes en 640 y 1024, y aquí sólo hace falta el segundo —
+   lo que cambia es el reparto, y eso no ocurre hasta que hay ancho de verdad.
+
+   El rótulo, las tres líneas de uso y la nota de la bitácora aparecen SÓLO
+   aquí. En el teléfono empujarían el formulario —que es a lo que se viene— por
+   debajo del pliegue, y quien entra desde el almacén ya sabe qué es esto.
+   ---------------------------------------------------------------------------- */
+@media (min-width: 1024px) {
+  .acceso__hoja {
+    max-width: 880px;
+    display: grid;
+    /* La columna de marca es la menor: es contexto, no la tarea. */
+    grid-template-columns: 5fr 6fr;
+  }
+
+  .acceso__marca {
+    display: flex;
+    flex-direction: column;
+    padding: var(--esp-6);
+  }
+
+  .acceso__rotulo {
+    display: block;
+  }
+
+  .acceso__usos {
+    display: grid;
+  }
+
+  /* `margin-top: auto` la fija al pie de la columna, alineada con la letra
+     pequeña de la otra mitad. Sólo funciona con el flex de arriba. */
+  .acceso__nota {
+    display: block;
+    margin-top: auto;
+    padding-top: var(--esp-5);
+  }
+
+  .acceso__panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: var(--esp-6);
+  }
 }

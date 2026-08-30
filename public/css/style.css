@@ -640,6 +640,7 @@ body {
     background-color: var(--superficie);
     border: 1px solid var(--filete);
     border-radius: var(--radio-lg);
+    box-shadow: var(--sombra-2);
   }
 
   .panel-seleccion__resumen {

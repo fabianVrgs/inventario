@@ -13,48 +13,105 @@
 
 <!-- Sin .barra-app: no hay adónde navegar desde aquí, y una barra con enlaces
      que llevan todos de vuelta al login es ruido. La marca se queda, porque es
-     lo que dice de quién es esta pantalla antes de escribir nada. -->
-<main class="acceso">
+     lo que dice de quién es esta pantalla antes de escribir nada.
 
-  <div class="acceso__tarjeta">
-    <div class="acceso__marca">
-      <img src="/img/logo.jpg" alt="" class="acceso__logo">
-      <p class="acceso__nombre">Ok-producciones<br><span>Almacén</span></p>
+     La hoja es UNA sola caja con dos columnas, no dos tarjetas: en el sistema
+     sólo hay una superficie con sombra permitida fuera de modal y barra, y es
+     ésta. Partirla en dos añadiría una segunda. -->
+<main class="acceso">
+  <div class="acceso__hoja">
+
+    <!-- Columna de marca. En escritorio llena la mitad que antes era papel
+         vacío; en el teléfono se encoge a una cabecera con el logo y el lema,
+         y las tres líneas de abajo no se sirven (ver login.css). -->
+    <aside class="acceso__marca">
+      <div class="acceso__lockup">
+        <img src="/img/logo.jpg" alt="" class="acceso__logo">
+        <p class="acceso__nombre">
+          Ok-producciones
+          <span class="etiqueta-sistema">Almacén</span>
+        </p>
+      </div>
+
+      <p class="acceso__lema">El inventario de equipos y la orden del día, en una sola hoja.</p>
+
+      <!-- Qué se hace aquí dentro. No es relleno: quien abre esta URL sin
+           haberla visto antes no tiene ninguna otra pista de qué es esto.
+
+           El rótulo va en <p> y no en <h2>: el <h1> de la pantalla es "Entrar"
+           y aparece DESPUÉS en el DOM, así que un <h2> aquí dejaría la jerarquía
+           de encabezados al revés para un lector de pantalla. -->
+      <p class="acceso__rotulo etiqueta-sistema">Qué se hace aquí</p>
+      <ul class="acceso__usos">
+        <li>Consultar las existencias de cada área</li>
+        <li>Emitir la orden del día e imprimirla</li>
+        <li>Recibir devoluciones y reponer el stock</li>
+      </ul>
+
+      <p class="acceso__nota">
+        Uso interno. Cada intento de entrada queda registrado en la bitácora de accesos.
+      </p>
+    </aside>
+
+    <!-- Columna del formulario: usuario y contraseña, un solo paso. -->
+    <div class="acceso__panel">
+      <form class="acceso__form" id="formAcceso" novalidate>
+        <h1 class="acceso__titulo">Entrar</h1>
+        <p class="acceso__intro">Usa la cuenta que te entregaron en el almacén.</p>
+
+        <div class="acceso__campo">
+          <label for="usuario">Usuario</label>
+          <input type="text" id="usuario" class="campo" autocomplete="username"
+                 autocapitalize="none" spellcheck="false" required autofocus>
+        </div>
+
+        <div class="acceso__campo">
+          <label for="clave">Contraseña</label>
+          <!-- El botón va DENTRO de la caja del campo y mide 44px: es la única
+               forma de darle objetivo táctil sin que la fila de la etiqueta
+               crezca hasta el mismo alto que el propio input. -->
+          <div class="acceso__clave">
+            <input type="password" id="clave" class="campo" autocomplete="current-password" required>
+            <button type="button" class="acceso__ver" id="btnVerClave"
+                    aria-controls="clave" aria-pressed="false" aria-label="Mostrar la contraseña">
+              <svg class="acceso__ojo" id="iconoVer" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true" focusable="false">
+                <path d="M2.1 12.3a.9.9 0 0 1 0-.6 10.8 10.8 0 0 1 19.8 0 .9.9 0 0 1 0 .6 10.8 10.8 0 0 1-19.8 0"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+              <svg class="acceso__ojo" id="iconoOcultar" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true" focusable="false" hidden>
+                <path d="M10.7 5.1A10.5 10.5 0 0 1 12 5c7 0 10 7 10 7a13.2 13.2 0 0 1-1.7 2.7"/>
+                <path d="M6.6 6.6A13.5 13.5 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/>
+                <path d="M14.1 14.1a3 3 0 1 1-4.2-4.2"/>
+                <path d="m2 2 20 20"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn--primario acceso__enviar" id="btnEntrar">Entrar</button>
+      </form>
+
+      <!-- role="alert" para que un lector de pantalla anuncie el fallo sin que
+           haya que ir a buscarlo: quien no ve la pantalla no sabe que apareció.
+           Va DEBAJO del botón a propósito: apareciendo encima empujaría hacia
+           abajo el mismo botón que se acaba de pulsar. -->
+      <p class="acceso__aviso" id="avisoAcceso" role="alert" hidden></p>
+
+      <!-- Aquí no hay registro ni "olvidé mi contraseña": las cuentas se crean
+           desde /html/cuentas.html y la contraseña se entrega en persona. Sin
+           esta línea, quien no puede entrar se queda mirando una pantalla que no
+           le ofrece ninguna salida. -->
+      <p class="acceso__pie">
+        ¿Sin cuenta o contraseña olvidada? Pídesela a quien administra el almacén:
+        desde aquí no se crea ni se recupera.
+      </p>
     </div>
 
-    <!-- Usuario y contraseña. -->
-    <form class="acceso__form" id="formAcceso" novalidate>
-      <h1 class="acceso__titulo">Entrar</h1>
-      <p class="acceso__intro">Usa la cuenta que te entregaron en el almacén.</p>
-
-      <div class="acceso__campo">
-        <label for="usuario">Usuario</label>
-        <input type="text" id="usuario" class="campo" autocomplete="username"
-               autocapitalize="none" spellcheck="false" required autofocus>
-      </div>
-
-      <div class="acceso__campo">
-        <label for="clave">Contraseña</label>
-        <input type="password" id="clave" class="campo" autocomplete="current-password" required>
-      </div>
-
-      <button type="submit" class="btn btn--primario acceso__enviar" id="btnEntrar">Entrar</button>
-    </form>
-
-    <!-- role="alert" para que un lector de pantalla anuncie el fallo sin que
-         haya que ir a buscarlo: quien no ve la pantalla no sabe que apareció. -->
-    <p class="acceso__aviso" id="avisoAcceso" role="alert" hidden></p>
-
-    <!-- Aquí no hay registro ni "olvidé mi contraseña": las cuentas se crean
-         desde /html/cuentas.html y la contraseña se entrega en persona. Sin
-         esta línea, quien no puede entrar se queda mirando una pantalla que no
-         le ofrece ninguna salida. -->
-    <p class="acceso__pie">
-      ¿Sin cuenta o contraseña olvidada? Pídesela a quien administra el almacén:
-      desde aquí no se crea ni se recupera.
-    </p>
   </div>
-
 </main>
 
 <script src="/js/login.js"></script>

@@ -91,10 +91,13 @@
 
 /* ---------- Tablas ---------- */
 
+/* Nivel 2, igual que la tabla de Inventario y por la misma razón: apoyada
+   sobre el papel, no dibujada encima. */
 .table-container {
   background-color: var(--superficie);
   border: 1px solid var(--filete);
   border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-2);
   /* El scroll horizontal de la tabla es intencional; el del <body> no. */
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -326,7 +329,10 @@
   overflow-y: auto;
   padding: var(--esp-5);
   background-color: var(--superficie);
-  border-radius: var(--radio-lg);
+  /* Radio XL, el mismo que la primitiva `.dialogo` de base.css: los dos son
+     modales y tienen que verse iguales aunque uno sea <dialog> nativo y el
+     otro un overlay con JS. */
+  border-radius: var(--radio-xl);
   box-shadow: var(--sombra-modal);
 }
 
