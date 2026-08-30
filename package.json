@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node --env-file=.env src/server.js",
-    "pretest": "node --env-file=.env scripts/limpiar-esquemas-de-prueba.js",
+    "pretest": "node --env-file=.env test/helpers/limpiar-esquemas.js",
     "test": "node --env-file=.env --test \"test/**/*.test.js\""
   },
   "keywords": [],

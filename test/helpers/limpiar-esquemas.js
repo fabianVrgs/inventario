@@ -1,6 +1,6 @@
 // Si un proceso de test revienta o se corta con Ctrl-C, su esquema queda.
 // Esto los barre antes de cada corrida.
-const { pool } = require('../src/db.js');
+const { pool } = require('../../src/db.js');
 // Este script corre como `pretest`: serializado, y ANTES de que arranquen los
 // cuatro archivos de test en paralelo. Bajo un solo `npm test` su propio
 // DROP SCHEMA nunca puede chocar con el de otro proceso —no hay "otro
@@ -11,7 +11,7 @@ const { pool } = require('../src/db.js');
 // envuelve de todos modos para que «todo el DDL de esquema pasa por el
 // candado» sea un invariante sin excepciones: uno con una excepción
 // documentada en otro archivo no sobrevive al próximo refactor.
-const { conCandadoDeDDL } = require('../test/helpers/candado.js');
+const { conCandadoDeDDL } = require('./candado.js');
 
 // Un esquema sólo es huérfano si el proceso que lo creó ya no existe. El
 // nombre lleva su PID (`inventario_test_<pid>`, `db_test_<pid>`), así que se
